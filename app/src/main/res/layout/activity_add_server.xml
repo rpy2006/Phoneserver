@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/home_bg">
+
+    <!-- Top bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_back_arrow" />
+
+        <TextView
+            android:id="@+id/screen_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Add Server"
+            android:textColor="@color/home_text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Server Name"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_input_outline"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="18dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_server_stack" />
+                <EditText
+                    android:id="@+id/input_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="My Server"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:singleLine="true" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Host"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_input_outline"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="18dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_globe" />
+                <EditText
+                    android:id="@+id/input_ip"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="192.168.1.50"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:singleLine="true"
+                    android:inputType="text" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Port"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_input_outline"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="18dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_port" />
+                <EditText
+                    android:id="@+id/input_port"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="8080"
+                    android:text="8080"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:singleLine="true"
+                    android:inputType="number" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Username (optional)"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_input_outline"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="18dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_person" />
+                <EditText
+                    android:id="@+id/input_username"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="admin"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:singleLine="true" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Password (optional)"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_input_outline"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="6dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_lock" />
+                <EditText
+                    android:id="@+id/input_password"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Leave blank if none"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:singleLine="true"
+                    android:inputType="textPassword" />
+                <ImageView
+                    android:id="@+id/toggle_password_visibility"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_eye_off" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Not used for login - this device checks a single shared password, not per-user accounts."
+                android:textColor="@color/home_text_secondary"
+                android:textSize="11sp"
+                android:layout_marginBottom="18dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Description (optional)"
+                android:textColor="@color/home_text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_input_outline"
+                android:padding="14dp"
+                android:layout_marginBottom="24dp">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="top"
+                    android:src="@drawable/ic_description" />
+                <EditText
+                    android:id="@+id/input_description"
+                    android:layout_width="match_parent"
+                    android:layout_height="80dp"
+                    android:hint="Enter description..."
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:paddingStart="12dp"
+                    android:gravity="top"
+                    android:inputType="textMultiLine" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <TextView
+                    android:id="@+id/cancel_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CANCEL"
+                    android:textColor="@color/home_accent"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:padding="14dp"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/save_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SAVE"
+                    android:textColor="@color/home_surface"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_fab_circle"
+                    android:paddingStart="28dp"
+                    android:paddingEnd="28dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

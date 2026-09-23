@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <FrameLayout
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_home_icon_circle">
+        <TextView
+            android:id="@+id/client_os_initial"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="A"
+            android:textColor="@color/home_accent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp">
+
+        <TextView
+            android:id="@+id/client_ip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="192.168.1.25"
+            android:textColor="@color/home_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/client_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Android - Chrome"
+            android:textColor="@color/home_text_secondary"
+            android:textSize="12sp"
+            android:layout_marginTop="1dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/client_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="10:29:58"
+            android:textColor="@color/home_text_secondary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/client_active_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Active"
+            android:textColor="@color/home_accent"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+</LinearLayout>

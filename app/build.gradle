@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.yadaventerprise.phoneserver'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.yadaventerprise.phoneserver"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        // Only arm64-v8a is bundled right now (that's the .so you have).
+        // Once you build/download the armeabi-v7a version too, add it
+        // back here: abiFilters "arm64-v8a", "armeabi-v7a"
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.4.2'
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    implementation 'androidx.core:core:1.9.0'
+    implementation 'androidx.viewpager2:viewpager2:1.1.0'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'com.google.zxing:core:3.5.2'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+}

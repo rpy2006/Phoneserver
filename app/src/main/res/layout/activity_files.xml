@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Files"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="14dp">
+
+        <TextView
+            android:id="@+id/current_path"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Served at /files"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:ellipsize="start"
+            android:singleLine="true" />
+
+        <TextView
+            android:id="@+id/up_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Up"
+            android:textColor="@color/accent"
+            android:padding="8dp" />
+
+        <TextView
+            android:id="@+id/add_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+ Add"
+            android:textColor="@color/accent"
+            android:padding="8dp" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/files_recycler"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/empty_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Empty. Tap + Add to share a file or make a folder."
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginTop="40dp"
+        android:visibility="gone" />
+
+</LinearLayout>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Full device storage access, so uploads land in real Pictures/Movies/Music/
+         Download folders (visible to Gallery, Music, and Video apps) and browsing
+         can reach the whole device, not just this app's private folder. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.PhoneServer"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:requestLegacyExternalStorage="true"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:theme="@style/Theme.PhoneServer.Home"
+            android:exported="true">
+        </activity>
+
+        <!-- Two launcher entries pointing at the same MainActivity, each with a
+             different icon. Only one is ever enabled at a time (see IconSwitcher),
+             which is what makes the home screen icon appear to change based on
+             whether the server is running. -->
+        <activity-alias
+            android:name=".AliasOnline"
+            android:targetActivity=".MainActivity"
+            android:icon="@drawable/ps_online"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AliasOffline"
+            android:targetActivity=".MainActivity"
+            android:icon="@drawable/ps_offline"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity android:name=".WebsiteFilesActivity" android:exported="false" />
+        <activity android:name=".FilesActivity" android:exported="false" />
+        <activity android:name=".ApiEditorActivity" android:exported="false" />
+        <activity android:name=".ApiEndpointEditorActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ServersListActivity" android:exported="false" />
+        <activity android:name=".AddServerActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".AccountSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".AdvancedSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".RemoteBrowseActivity" android:exported="false" />
+        <activity android:name=".ImageViewerActivity" android:exported="false" />
+        <activity android:name=".VideoPlayerActivity" android:exported="false" />
+        <activity android:name=".MusicPlayerActivity" android:exported="false" />
+        <activity android:name=".TextFileViewerActivity" android:exported="false" />
+        <activity android:name=".PdfViewerActivity" android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".ServerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+</manifest>

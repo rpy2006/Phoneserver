@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PhoneServer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:colorBackground">@color/bg_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/bg_dark</item>
+        <item name="colorAccent">@color/accent</item>
+    </style>
+
+    <!-- Applied only to MainActivity (Home) in the manifest, so the rest of
+         the app keeps its dark theme unchanged. -->
+    <style name="Theme.PhoneServer.Home" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:colorBackground">@color/home_bg</item>
+        <item name="android:textColorPrimary">@color/home_text_primary</item>
+        <item name="android:textColorSecondary">@color/home_text_secondary</item>
+        <item name="android:statusBarColor">@color/home_bg</item>
+        <item name="android:navigationBarColor">@color/home_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/home_bg</item>
+        <item name="colorPrimary">@color/home_accent</item>
+        <item name="colorPrimaryDark">@color/home_bg</item>
+        <item name="colorAccent">@color/home_accent</item>
+        <item name="colorOnPrimary">@color/home_surface</item>
+        <item name="colorSurface">@color/home_surface</item>
+    </style>
+</resources>

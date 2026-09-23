@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/home_bg"
+    android:gravity="center"
+    android:padding="32dp">
+
+    <TextView
+        android:id="@+id/qr_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Scan to connect"
+        android:textColor="@color/home_text_primary"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/qr_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start the server to generate a QR code"
+        android:textColor="@color/home_text_secondary"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:layout_marginBottom="28dp" />
+
+    <FrameLayout
+        android:layout_width="260dp"
+        android:layout_height="260dp"
+        android:background="@drawable/bg_home_card">
+
+        <ImageView
+            android:id="@+id/qr_image"
+            android:layout_width="220dp"
+            android:layout_height="220dp"
+            android:layout_gravity="center"
+            android:contentDescription="Server QR code" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/qr_address_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/home_accent"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginTop="24dp" />
+
+</LinearLayout>

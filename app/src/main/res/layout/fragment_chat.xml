@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/home_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AI Chat"
+        android:textColor="@color/home_text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:id="@+id/model_status_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Checking for a model..."
+        android:textColor="@color/home_text_secondary"
+        android:textSize="12sp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="10dp" />
+
+    <Button
+        android:id="@+id/import_model_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="10dp"
+        android:backgroundTint="@color/home_accent"
+        android:textColor="@color/home_surface"
+        android:text="Import Model File (.gguf)"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/conversation_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
+
+        <TextView
+            android:id="@+id/conversation_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/home_text_primary"
+            android:textSize="14sp"
+            android:lineSpacingMultiplier="1.2"
+            android:text="" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp">
+
+        <EditText
+            android:id="@+id/prompt_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Ask something..."
+            android:background="@drawable/bg_input_outline"
+            android:textColor="@color/home_text_primary"
+            android:textColorHint="@color/home_text_secondary"
+            android:padding="12dp"
+            android:maxLines="4"
+            android:layout_marginEnd="10dp" />
+
+        <Button
+            android:id="@+id/send_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:backgroundTint="@color/home_accent"
+            android:textColor="@color/home_surface"
+            android:text="Send" />
+    </LinearLayout>
+
+</LinearLayout>

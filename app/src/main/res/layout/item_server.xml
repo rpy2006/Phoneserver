@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@color/surface"
+    android:padding="16dp"
+    android:layout_marginBottom="8dp">
+
+    <View
+        android:id="@+id/status_dot"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_marginEnd="12dp"
+        android:background="@color/text_secondary" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/server_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:text="Living Room Phone" />
+
+        <TextView
+            android:id="@+id/server_address"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:layout_marginTop="2dp"
+            android:text="192.168.1.47:8080" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/edit_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Edit"
+        android:textColor="@color/accent"
+        android:padding="8dp" />
+
+    <TextView
+        android:id="@+id/delete_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Delete"
+        android:textColor="@color/offline_red"
+        android:padding="8dp" />
+
+</LinearLayout>

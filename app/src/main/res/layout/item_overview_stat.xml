@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="150dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_home_card"
+    android:padding="16dp"
+    android:layout_marginEnd="10dp">
+
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_home_icon_circle">
+        <ImageView
+            android:id="@+id/stat_icon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_server_stack" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/stat_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textColor="@color/home_text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginTop="10dp" />
+
+    <TextView
+        android:id="@+id/stat_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Servers"
+        android:textColor="@color/home_text_primary"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/stat_sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="● Running"
+        android:textColor="@color/home_accent"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Server Password"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="6dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Anyone connecting to this phone from the Files/API/upload endpoints will need this password. Leave blank to allow open access on your local Wi-Fi."
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:layout_marginBottom="20dp" />
+
+    <EditText
+        android:id="@+id/password_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="No password (open access)"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:background="@color/surface"
+        android:padding="14dp"
+        android:inputType="textVisiblePassword" />
+
+    <Button
+        android:id="@+id/save_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="@color/accent"
+        android:textColor="@color/text_primary"
+        android:text="Save" />
+
+</LinearLayout>

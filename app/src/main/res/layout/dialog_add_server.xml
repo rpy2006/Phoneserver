@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/surface"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Name"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+    <EditText
+        android:id="@+id/input_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Living Room Phone"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:background="@color/surface_2"
+        android:padding="12dp"
+        android:layout_marginBottom="14dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IP Address"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+    <EditText
+        android:id="@+id/input_ip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="192.168.1.47"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:background="@color/surface_2"
+        android:padding="12dp"
+        android:inputType="text"
+        android:layout_marginBottom="14dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Port"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+    <EditText
+        android:id="@+id/input_port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="8080"
+        android:text="8080"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:background="@color/surface_2"
+        android:padding="12dp"
+        android:inputType="number"
+        android:layout_marginBottom="14dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Password (if that server set one)"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+    <EditText
+        android:id="@+id/input_password"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Leave blank if none"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:background="@color/surface_2"
+        android:padding="12dp"
+        android:inputType="textVisiblePassword" />
+
+</LinearLayout>

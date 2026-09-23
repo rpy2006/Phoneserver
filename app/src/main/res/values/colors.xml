@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_dark">#0D0F14</color>
+    <color name="surface">#161923</color>
+    <color name="surface_2">#1E2230</color>
+    <color name="accent">#2979FF</color>
+    <color name="accent_dim">#1B4FA0</color>
+    <color name="text_primary">#F2F4F8</color>
+    <color name="text_secondary">#8A93A6</color>
+    <color name="online_green">#2ECC71</color>
+    <color name="offline_red">#FF5252</color>
+    <color name="divider">#262B3A</color>
+
+    <!-- Home screen redesign - light Material palette, kept separate from the
+         dark theme colors above so the rest of the app is unaffected. -->
+    <color name="home_bg">#FAFAFA</color>
+    <color name="home_surface">#FFFFFF</color>
+    <color name="home_border">#E6E8E6</color>
+    <color name="home_accent">#2E7D32</color>
+    <color name="home_accent_light">#E8F5E9</color>
+    <color name="home_text_primary">#1B1F1B</color>
+    <color name="home_text_secondary">#6E756E</color>
+    <color name="home_divider">#EDEFED</color>
+</resources>
