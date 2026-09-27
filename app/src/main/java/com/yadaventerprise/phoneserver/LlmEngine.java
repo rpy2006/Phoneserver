@@ -54,70 +54,129 @@ public class LlmEngine {
         return modelLoaded;
     }
 
-    public synchronized boolean loadModel(String ggufFilePath) {
+    /**
+     * Replaces the loaded model. Holds generationLock for the whole swap: the native
+     * unload frees the llama_context and model, so running it while a generation is
+     * still decoding from that context reads freed memory and segfaults. loadModel used
+     * to take only the instance monitor, which generate() never took, so a re-import
+     * from the AI tab could free the context underneath a running answer.
+     */
+    public boolean loadModel(String ggufFilePath) {
         if (!nativeLibraryAvailable) {
             Log.w(TAG, "loadModel() called but native library isn't available");
             return false;
         }
-        if (modelLoaded) {
-            nativeUnloadModel(nativeHandle);
-            modelLoaded = false;
-        }
+        generationLock.lock();
         try {
-            nativeHandle = nativeLoadModel(ggufFilePath);
-            modelLoaded = nativeHandle != 0;
-        } catch (Throwable t) {
-            Log.e(TAG, "loadModel() failed", t);
-            modelLoaded = false;
+            if (modelLoaded) {
+                // Keep the unload inside a try: an abort here would kill the process
+                // with no log line at all, and unlike unloadModel() this was unwrapped.
+                try {
+                    nativeUnloadModel(nativeHandle);
+                } catch (Throwable t) {
+                    Log.e(TAG, "Unloading the previous model failed", t);
+                }
+                modelLoaded = false;
+                nativeHandle = 0;
+            }
+            try {
+                nativeHandle = nativeLoadModel(ggufFilePath);
+                modelLoaded = nativeHandle != 0;
+            } catch (Throwable t) {
+                Log.e(TAG, "loadModel() failed", t);
+                modelLoaded = false;
+            }
+            return modelLoaded;
+        } finally {
+            generationLock.unlock();
         }
-        return modelLoaded;
     }
 
-    public synchronized void unloadModel() {
+    public void unloadModel() {
         if (!nativeLibraryAvailable || !modelLoaded) return;
+        generationLock.lock();
         try {
-            nativeUnloadModel(nativeHandle);
-        } catch (Throwable t) {
-            Log.e(TAG, "unloadModel() failed", t);
+            try {
+                nativeUnloadModel(nativeHandle);
+            } catch (Throwable t) {
+                Log.e(TAG, "unloadModel() failed", t);
+            } finally {
+                modelLoaded = false;
+                nativeHandle = 0;
+            }
         } finally {
-            modelLoaded = false;
-            nativeHandle = 0;
+            generationLock.unlock();
         }
     }
 
     public void generate(String prompt, GenerationCallback callback) {
         if (!nativeLibraryAvailable) {
-            mainHandler.post(() -> callback.onError("LLM features aren't available on this build"));
+            mainHandler.post(() -> deliverError(callback, "LLM features aren't available on this build"));
             return;
         }
-        if (!modelLoaded) {
-            mainHandler.post(() -> callback.onError("No model loaded"));
-            return;
-        }
+        // The handle is read inside the lock below, not here. Checking modelLoaded
+        // up front and only using the field later left a window in which a
+        // concurrent loadModel() had already freed the native context.
         executor.execute(() -> {
             generationLock.lock();
             try {
+                if (!modelLoaded) {
+                    mainHandler.post(() -> deliverError(callback, "No model loaded"));
+                    return;
+                }
+                final long handle = nativeHandle;
                 StringBuilder full = new StringBuilder();
-                nativeGenerate(nativeHandle, prompt, token -> {
+                nativeGenerate(handle, prompt, token -> {
                     full.append(token);
-                    mainHandler.post(() -> callback.onToken(token));
+                    mainHandler.post(() -> deliverToken(callback, token));
                 });
                 String result = full.toString();
-                mainHandler.post(() -> callback.onComplete(result));
+                mainHandler.post(() -> deliverComplete(callback, result));
             } catch (Throwable t) {
                 Log.e(TAG, "generate() failed", t);
-                mainHandler.post(() -> callback.onError(String.valueOf(t.getMessage())));
+                mainHandler.post(() -> deliverError(callback, String.valueOf(t.getMessage())));
             } finally {
                 generationLock.unlock();
             }
         });
     }
 
+    /**
+     * These callbacks run on the main thread and touch the chat fragment's views.
+     * A token stream outlives the view that started it, so an exception thrown by a
+     * stale or already-destroyed fragment would otherwise propagate out of the
+     * Handler and take down the whole process - the server UI included. Swallow it
+     * here; the callback's own null-guards are the real fix, this is the backstop.
+     */
+    private void deliverToken(GenerationCallback callback, String token) {
+        try {
+            callback.onToken(token);
+        } catch (Throwable t) {
+            Log.w(TAG, "onToken callback threw - ignored", t);
+        }
+    }
+
+    private void deliverComplete(GenerationCallback callback, String fullText) {
+        try {
+            callback.onComplete(fullText);
+        } catch (Throwable t) {
+            Log.w(TAG, "onComplete callback threw - ignored", t);
+        }
+    }
+
+    private void deliverError(GenerationCallback callback, String message) {
+        try {
+            callback.onError(message);
+        } catch (Throwable t) {
+            Log.w(TAG, "onError callback threw - ignored", t);
+        }
+    }
+
     public String generateBlocking(String prompt) throws Exception {
         if (!nativeLibraryAvailable) throw new IllegalStateException("LLM features aren't available on this build");
-        if (!modelLoaded) throw new IllegalStateException("No model loaded");
         generationLock.lock();
         try {
+            if (!modelLoaded) throw new IllegalStateException("No model loaded");
             StringBuilder full = new StringBuilder();
             nativeGenerate(nativeHandle, prompt, full::append);
             return full.toString();

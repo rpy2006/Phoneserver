@@ -10,8 +10,11 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String STATE_SELECTED_PAGE = "state_selected_page";
+
     private ViewPager2 viewPager;
     private BottomNavigationView bottomNav;
+    private MainPagerAdapter pagerAdapter;
     private boolean suppressNavCallback = false;
 
     @Override
@@ -22,7 +25,8 @@ public class MainActivity extends AppCompatActivity {
         viewPager = findViewById(R.id.view_pager);
         bottomNav = findViewById(R.id.bottom_nav);
 
-        viewPager.setAdapter(new MainPagerAdapter(this));
+        pagerAdapter = new MainPagerAdapter(this);
+        viewPager.setAdapter(pagerAdapter);
         viewPager.setOffscreenPageLimit(4);
 
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
@@ -42,6 +46,25 @@ public class MainActivity extends AppCompatActivity {
             }
             return true;
         });
+
+        // Without this, every activity recreation (rotation, theme/font change, or
+        // the system reclaiming this process while a large model is mapped) started a
+        // fresh adapter at page 0, so the user was dropped back on Home and the tab
+        // they were using looked like it had closed itself.
+        if (savedInstanceState != null) {
+            int restored = savedInstanceState.getInt(STATE_SELECTED_PAGE, MainPagerAdapter.PAGE_HOME);
+            if (restored > MainPagerAdapter.PAGE_HOME && restored < pagerAdapter.getItemCount()) {
+                viewPager.setCurrentItem(restored, false);
+            }
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (viewPager != null) {
+            outState.putInt(STATE_SELECTED_PAGE, viewPager.getCurrentItem());
+        }
     }
 
     public void goToPage(int page) {
