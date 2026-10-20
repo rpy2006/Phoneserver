@@ -2,6 +2,7 @@ package com.yadaventerprise.phoneserver;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -12,6 +13,9 @@ import java.io.File;
 public class AdvancedSettingsActivity extends AppCompatActivity {
 
     private TextView cacheSizeText;
+    private EditText dataRootInput;
+    private EditText allowedOriginsInput;
+    private EditText rateLimitInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -19,12 +23,52 @@ public class AdvancedSettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_advanced_settings);
 
         cacheSizeText = findViewById(R.id.cache_size_text);
+        dataRootInput = findViewById(R.id.data_root_input);
+        allowedOriginsInput = findViewById(R.id.allowed_origins_input);
+        rateLimitInput = findViewById(R.id.rate_limit_input);
 
         findViewById(R.id.back_button).setOnClickListener(v -> finish());
         findViewById(R.id.row_clear_cache).setOnClickListener(v -> confirmClearCache());
         findViewById(R.id.row_reset_endpoints).setOnClickListener(v -> confirmResetEndpoints());
+        findViewById(R.id.save_data_root).setOnClickListener(v -> saveDataRoot());
+        findViewById(R.id.save_allowed_origins).setOnClickListener(v -> saveAllowedOrigins());
+        findViewById(R.id.save_rate_limit).setOnClickListener(v -> saveRateLimit());
 
+        loadDataPlatformSettings();
         refreshCacheSize();
+    }
+
+    private void loadDataPlatformSettings() {
+        dataRootInput.setText(ContentStore.getDataRoot(this).getAbsolutePath());
+        allowedOriginsInput.setText(ContentStore.getAllowedOrigins(this));
+        rateLimitInput.setText(String.valueOf(ContentStore.getApiRateLimitPerMinute(this)));
+    }
+
+    private void saveDataRoot() {
+        String path = dataRootInput.getText().toString().trim();
+        ContentStore.setDataRoot(this, path);
+        Toast.makeText(this, path.isEmpty()
+                ? "Data root reset to default" : "Data root saved", Toast.LENGTH_SHORT).show();
+        loadDataPlatformSettings();
+    }
+
+    private void saveAllowedOrigins() {
+        String origins = allowedOriginsInput.getText().toString().trim();
+        ContentStore.setAllowedOrigins(this, origins);
+        Toast.makeText(this, "Allowed origins saved", Toast.LENGTH_SHORT).show();
+    }
+
+    private void saveRateLimit() {
+        int value;
+        try {
+            value = Integer.parseInt(rateLimitInput.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "Enter a whole number", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ContentStore.setApiRateLimitPerMinute(this, value);
+        Toast.makeText(this, "Rate limit saved", Toast.LENGTH_SHORT).show();
+        loadDataPlatformSettings();
     }
 
     private void refreshCacheSize() {

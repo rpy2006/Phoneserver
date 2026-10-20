@@ -46,6 +46,10 @@ public class SettingsFragment extends Fragment {
         TextView portValue = view.findViewById(R.id.port_value);
         portValue.setText(String.valueOf(ServerService.PORT));
 
+        view.findViewById(R.id.menu_button).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).openDrawer();
+        });
+
         authSubtitle = view.findViewById(R.id.auth_subtitle);
         storageStatusIcon = view.findViewById(R.id.storage_status_icon);
         bootStatusIcon = view.findViewById(R.id.boot_status_icon);

@@ -103,12 +103,26 @@ public class SimpleHttpServer {
 
     // ---- request reading (byte-safe, so binary uploads survive intact) ----
 
-    private static class Request {
+    /**
+     * Cap for request bodies buffered into memory for the JSON data API. Larger
+     * bodies (file uploads) are streamed straight off the socket instead, so a
+     * phone is never asked to hold a big upload in RAM. Multipart uploads, which
+     * are parsed in memory, are rejected above this size.
+     */
+    static final int MAX_BUFFERED_API_BODY = 64 * 1024 * 1024;
+
+    static class Request {
         String method;
         String path;
+        String remoteIp = "unknown";
         Map<String, String> query = new HashMap<>();
         Map<String, String> headers = new HashMap<>();
         byte[] body = new byte[0];
+        /** When non-null the body was NOT buffered and must be read from here. */
+        java.io.InputStream bodyStream;
+        long contentLength = -1;
+        /** Set when a buffered body exceeded {@link #MAX_BUFFERED_API_BODY}. */
+        boolean bodyTooLarge = false;
     }
 
     private String readLine(InputStream in) throws IOException {
@@ -162,6 +176,22 @@ public class SimpleHttpServer {
                 contentLength = Integer.parseInt(cl.trim());
             } catch (NumberFormatException ignored) {
             }
+        }
+        req.contentLength = contentLength;
+
+        // Large binary uploads are streamed straight off the socket by the data
+        // API instead of being buffered, so the device never holds a whole
+        // multi-hundred-megabyte file in memory just to receive it.
+        if (DataApi.wantsStreamedBody(req.method, req.path, req.headers)) {
+            req.bodyStream = in;
+            return req;
+        }
+
+        int maxBuffered = req.path != null && req.path.startsWith(DataApi.BASE)
+                ? MAX_BUFFERED_API_BODY : Integer.MAX_VALUE;
+        if (contentLength > maxBuffered) {
+            req.bodyTooLarge = true;
+            return req;
         }
         if (contentLength > 0) {
             req.body = readExactly(in, contentLength);
@@ -239,9 +269,10 @@ public class SimpleHttpServer {
             if (req == null) return;
 
             CountingOutputStream out = new CountingOutputStream(s.getOutputStream());
+            req.remoteIp = s.getInetAddress() != null ? s.getInetAddress().getHostAddress() : "unknown";
             route(req, out);
 
-            String ip = s.getInetAddress() != null ? s.getInetAddress().getHostAddress() : "unknown";
+            String ip = req.remoteIp;
             String userAgent = req.headers.get("user-agent");
             ServerStats.get().recordRequest(ip, userAgent, req.path, req.body.length, (int) out.count);
         } catch (IOException e) {
@@ -279,6 +310,13 @@ public class SimpleHttpServer {
 
     private void route(Request req, OutputStream out) throws IOException {
         String path = req.path;
+
+        // The versioned data/storage API has its own authentication, rate
+        // limiting and CORS handling, so it is routed before anything else.
+        if (DataApi.isApiPath(path)) {
+            DataApi.handle(appContext, req, out);
+            return;
+        }
 
         if (path.equals("/") || path.equals("/index.html")) {
             serveWebsite(out);
@@ -601,11 +639,23 @@ public class SimpleHttpServer {
                 + "Content-Length: " + body.length + "\r\n"
                 + "WWW-Authenticate: Basic realm=\"PhoneServer\"\r\n"
                 + "Connection: close\r\n"
-                + "Access-Control-Allow-Origin: *\r\n"
+                + corsHeaderLine()
                 + "\r\n";
         out.write(headers.getBytes(StandardCharsets.UTF_8));
         out.write(body);
         out.flush();
+    }
+
+    /**
+     * The configured CORS origin line (may be empty). Credentials are never
+     * advertised, so a wildcard origin can never be combined with them.
+     */
+    private String corsHeaderLine() {
+        String origins = ContentStore.getAllowedOrigins(appContext);
+        if (origins == null) return "";
+        origins = origins.trim();
+        if (origins.isEmpty()) return "";
+        return "Access-Control-Allow-Origin: " + origins + "\r\n";
     }
 
     private void writeResponse(OutputStream out, int code, String contentType, byte[] body) throws IOException {
@@ -620,7 +670,8 @@ public class SimpleHttpServer {
         headers.append("Content-Type: ").append(contentType).append("\r\n");
         headers.append("Content-Length: ").append(body.length).append("\r\n");
         headers.append("Connection: close\r\n");
-        headers.append("Access-Control-Allow-Origin: *\r\n");
+        String cors = corsHeaderLine();
+        if (!cors.isEmpty()) headers.append(cors);
         if (extraHeaders != null) {
             for (KeyValue kv : extraHeaders) {
                 if (kv.key == null || kv.key.trim().isEmpty()) continue;

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_home_card"
+    android:padding="16dp"
+    android:layout_marginBottom="10dp">
+
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_home_icon_circle">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_server_stack"
+            android:tint="@color/home_accent" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp">
+
+        <TextView
+            android:id="@+id/project_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/home_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:text="Project name" />
+
+        <TextView
+            android:id="@+id/project_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/home_text_secondary"
+            android:textSize="12sp"
+            android:layout_marginTop="1dp"
+            android:text="No description"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/project_usage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/home_text_secondary"
+            android:textSize="12sp"
+            android:layout_marginTop="1dp"
+            android:text="0 databases, 0 files" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/project_menu"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="8dp"
+        android:layout_marginStart="6dp"
+        android:src="@drawable/ic_more_vert"
+        android:tint="@color/home_text_secondary" />
+
+</LinearLayout>

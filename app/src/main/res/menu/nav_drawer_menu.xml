@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_drawer_home"
+            android:icon="@drawable/ic_home"
+            android:title="Home" />
+        <item
+            android:id="@+id/nav_drawer_dashboard"
+            android:icon="@drawable/ic_dashboard_grid"
+            android:title="Dashboard" />
+        <item
+            android:id="@+id/nav_drawer_qr"
+            android:icon="@drawable/ic_qr"
+            android:title="QR Access" />
+        <item
+            android:id="@+id/nav_drawer_chat"
+            android:icon="@drawable/ic_chat"
+            android:title="AI Chat" />
+        <item
+            android:id="@+id/nav_drawer_settings"
+            android:icon="@drawable/ic_settings_gear"
+            android:title="Server Settings" />
+    </group>
+
+    <group android:id="@+id/group_drawer_tools">
+        <item
+            android:id="@+id/nav_drawer_files"
+            android:icon="@drawable/ic_folder"
+            android:title="Files" />
+        <item
+            android:id="@+id/nav_drawer_servers"
+            android:icon="@drawable/ic_server_stack"
+            android:title="Remote Servers" />
+        <item
+            android:id="@+id/nav_drawer_projects"
+            android:icon="@drawable/ic_description"
+            android:title="Projects &amp; Database" />
+        <item
+            android:id="@+id/nav_drawer_api"
+            android:icon="@drawable/ic_globe"
+            android:title="API Endpoints" />
+        <item
+            android:id="@+id/nav_drawer_api_docs"
+            android:icon="@drawable/ic_link"
+            android:title="API Docs" />
+        <item
+            android:id="@+id/nav_drawer_website"
+            android:icon="@drawable/ic_edit"
+            android:title="Website Editor" />
+    </group>
+
+    <group android:id="@+id/group_drawer_account">
+        <item
+            android:id="@+id/nav_drawer_account"
+            android:icon="@drawable/ic_person"
+            android:title="Account Settings" />
+    </group>
+
+</menu>

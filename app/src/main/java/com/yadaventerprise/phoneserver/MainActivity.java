@@ -1,12 +1,16 @@
 package com.yadaventerprise.phoneserver;
 
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -14,6 +18,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ViewPager2 viewPager;
     private BottomNavigationView bottomNav;
+    private DrawerLayout drawerLayout;
+    private NavigationView navDrawer;
     private MainPagerAdapter pagerAdapter;
     private boolean suppressNavCallback = false;
 
@@ -24,6 +30,8 @@ public class MainActivity extends AppCompatActivity {
 
         viewPager = findViewById(R.id.view_pager);
         bottomNav = findViewById(R.id.bottom_nav);
+        drawerLayout = findViewById(R.id.drawer_layout);
+        navDrawer = findViewById(R.id.nav_drawer);
 
         pagerAdapter = new MainPagerAdapter(this);
         viewPager.setAdapter(pagerAdapter);
@@ -34,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
             public void onPageSelected(int position) {
                 suppressNavCallback = true;
                 bottomNav.setSelectedItemId(pageToNavId(position));
+                navDrawer.setCheckedItem(pageToDrawerNavId(position));
                 suppressNavCallback = false;
             }
         });
@@ -47,6 +56,22 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
 
+        navDrawer.setNavigationItemSelectedListener(item -> {
+            int id = item.getItemId();
+            int page = drawerNavIdToPage(id);
+            if (page >= 0) {
+                viewPager.setCurrentItem(page, true);
+                item.setChecked(true);
+            } else {
+                Intent intent = drawerNavIdToIntent(id);
+                if (intent != null) {
+                    startActivity(intent);
+                }
+            }
+            drawerLayout.closeDrawer(GravityCompat.START);
+            return true;
+        });
+
         // Without this, every activity recreation (rotation, theme/font change, or
         // the system reclaiming this process while a large model is mapped) started a
         // fresh adapter at page 0, so the user was dropped back on Home and the tab
@@ -57,6 +82,8 @@ public class MainActivity extends AppCompatActivity {
                 viewPager.setCurrentItem(restored, false);
             }
         }
+
+        navDrawer.setCheckedItem(pageToDrawerNavId(viewPager.getCurrentItem()));
     }
 
     @Override
@@ -67,8 +94,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onBackPressed() {
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            return;
+        }
+        super.onBackPressed();
+    }
+
     public void goToPage(int page) {
         viewPager.setCurrentItem(page, true);
+    }
+
+    public void openDrawer() {
+        if (drawerLayout != null) {
+            drawerLayout.openDrawer(GravityCompat.START);
+        }
     }
 
     private int pageToNavId(int page) {
@@ -95,6 +137,57 @@ public class MainActivity extends AppCompatActivity {
         if (navId == R.id.nav_settings) return MainPagerAdapter.PAGE_SETTINGS;
         return -1;
     }
+
+    private int pageToDrawerNavId(int page) {
+        switch (page) {
+            case MainPagerAdapter.PAGE_DASHBOARD:
+                return R.id.nav_drawer_dashboard;
+            case MainPagerAdapter.PAGE_QR:
+                return R.id.nav_drawer_qr;
+            case MainPagerAdapter.PAGE_CHAT:
+                return R.id.nav_drawer_chat;
+            case MainPagerAdapter.PAGE_SETTINGS:
+                return R.id.nav_drawer_settings;
+            case MainPagerAdapter.PAGE_HOME:
+            default:
+                return R.id.nav_drawer_home;
+        }
+    }
+
+    private int drawerNavIdToPage(int drawerNavId) {
+        if (drawerNavId == R.id.nav_drawer_home) return MainPagerAdapter.PAGE_HOME;
+        if (drawerNavId == R.id.nav_drawer_dashboard) return MainPagerAdapter.PAGE_DASHBOARD;
+        if (drawerNavId == R.id.nav_drawer_qr) return MainPagerAdapter.PAGE_QR;
+        if (drawerNavId == R.id.nav_drawer_chat) return MainPagerAdapter.PAGE_CHAT;
+        if (drawerNavId == R.id.nav_drawer_settings) return MainPagerAdapter.PAGE_SETTINGS;
+        return -1;
+    }
+
+    private Intent drawerNavIdToIntent(int drawerNavId) {
+        if (drawerNavId == R.id.nav_drawer_files) {
+            return new Intent(this, FilesActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_servers) {
+            return new Intent(this, ServersListActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_projects) {
+            return new Intent(this, ProjectsActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_api) {
+            return new Intent(this, ApiEditorActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_api_docs) {
+            return new Intent(this, ApiDocsActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_website) {
+            return new Intent(this, WebsiteFilesActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_account) {
+            return new Intent(this, AccountSettingsActivity.class);
+        }
+        return null;
+    }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

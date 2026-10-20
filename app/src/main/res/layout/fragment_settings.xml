@@ -5,17 +5,31 @@
     android:orientation="vertical"
     android:background="@color/home_bg">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Server Settings"
-        android:textColor="@color/home_text_primary"
-        android:textSize="22sp"
-        android:textStyle="bold"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingStart="20dp"
         android:paddingEnd="20dp"
         android:paddingTop="18dp"
-        android:paddingBottom="10dp" />
+        android:paddingBottom="10dp">
+
+        <ImageView
+            android:id="@+id/menu_button"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_menu" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="Server Settings"
+            android:textColor="@color/home_text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"

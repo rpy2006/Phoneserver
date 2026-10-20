@@ -69,6 +69,13 @@
         <activity android:name=".AddServerActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".AccountSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".AdvancedSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ProjectsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ProjectDetailActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".SqlWorkspaceActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ProjectFilesActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ProjectBackupsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ApiTokensActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".RemoteBrowseActivity" android:exported="false" />
         <activity android:name=".ImageViewerActivity" android:exported="false" />
         <activity android:name=".VideoPlayerActivity" android:exported="false" />

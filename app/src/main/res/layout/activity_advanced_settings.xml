@@ -32,12 +32,19 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingStart="20dp"
-        android:paddingEnd="20dp">
+        android:paddingEnd="20dp"
+        android:paddingBottom="24dp">
 
         <LinearLayout
             android:id="@+id/row_clear_cache"
@@ -74,6 +81,138 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Data platform configuration -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_home_card"
+            android:padding="16dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Data root" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Folder holding all projects, databases, files and backups." android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+
+            <EditText
+                android:id="@+id/data_root_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_input_outline"
+                android:padding="10dp"
+                android:inputType="text"
+                android:singleLine="true"
+                android:fontFamily="monospace"
+                android:textColor="@color/home_text_primary"
+                android:textColorHint="@color/home_text_secondary"
+                android:textSize="12sp"
+                android:hint="/storage/..." />
+
+            <TextView
+                android:id="@+id/save_data_root"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_pill_light"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="Save"
+                android:textColor="@color/home_accent"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_home_card"
+            android:padding="16dp"
+            android:layout_marginBottom="10dp">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Allowed CORS origins" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="&quot;*&quot; allows any website. Empty disables cross-origin access (same-origin only). Otherwise a comma-separated list, e.g. https://app.example.com,https://site.example.com" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+
+            <EditText
+                android:id="@+id/allowed_origins_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_input_outline"
+                android:padding="10dp"
+                android:inputType="text"
+                android:singleLine="true"
+                android:fontFamily="monospace"
+                android:textColor="@color/home_text_primary"
+                android:textColorHint="@color/home_text_secondary"
+                android:textSize="12sp"
+                android:hint="*" />
+
+            <TextView
+                android:id="@+id/save_allowed_origins"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_pill_light"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="Save"
+                android:textColor="@color/home_accent"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_home_card"
+            android:padding="16dp"
+            android:layout_marginBottom="10dp">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="API rate limit per minute" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Maximum data API requests allowed per client IP each minute (minimum 10)." android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+
+            <EditText
+                android:id="@+id/rate_limit_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_input_outline"
+                android:padding="10dp"
+                android:inputType="number"
+                android:singleLine="true"
+                android:fontFamily="monospace"
+                android:textColor="@color/home_text_primary"
+                android:textColorHint="@color/home_text_secondary"
+                android:textSize="12sp"
+                android:hint="240" />
+
+            <TextView
+                android:id="@+id/save_rate_limit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_pill_light"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="Save"
+                android:textColor="@color/home_accent"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
     </LinearLayout>
+    </ScrollView>
 
 </LinearLayout>

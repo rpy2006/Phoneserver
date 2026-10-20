@@ -71,6 +71,10 @@ public class ChatFragment extends Fragment {
         promptInput = view.findViewById(R.id.prompt_input);
         viewAlive = true;
 
+        view.findViewById(R.id.menu_button).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).openDrawer();
+        });
+
         importModelButton.setOnClickListener(v -> filePickerLauncher.launch(new String[]{"*/*"}));
         sendButton.setOnClickListener(v -> onSendClicked());
 

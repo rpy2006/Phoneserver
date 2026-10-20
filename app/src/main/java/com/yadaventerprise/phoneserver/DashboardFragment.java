@@ -117,12 +117,19 @@ public class DashboardFragment extends Fragment {
         refs.clientsActiveText = view.findViewById(R.id.clients_active_text);
         refs.dashboardSubtitle = view.findViewById(R.id.dashboard_subtitle);
 
+        view.findViewById(R.id.menu_button).setOnClickListener(v -> openDrawer());
         view.findViewById(R.id.manage_all_button).setOnClickListener(v ->
                 startActivity(new Intent(getContext(), ServersListActivity.class)));
         view.findViewById(R.id.refresh_button).setOnClickListener(v -> pollAllServers());
         view.findViewById(R.id.fab_add).setOnClickListener(v -> showAddServerDialog());
 
         buildServerCards();
+    }
+
+    private void openDrawer() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).openDrawer();
+        }
     }
 
     @Override

@@ -21,15 +21,35 @@ android {
         }
     }
 
+    signingConfigs {
+        // Project-local debug keystore so every build (AndroidIDE, PC, any HOME)
+        // signs with the same key and can update the installed app in place.
+        // This is a debug-only key with the standard public password.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.returnDefaultValues = true
     }
 }
 
@@ -41,4 +61,7 @@ dependencies {
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'com.google.zxing:core:3.5.2'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
 }

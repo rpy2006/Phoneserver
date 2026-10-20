@@ -1,0 +1,473 @@
+================================================================================
+UPDATE MANIFEST
+PhoneServer — SQL & File Storage Update
+================================================================================
+
+1. PROJECT
+----------
+Name:    PhoneServer
+Repo:    https://github.com/rpy2006/Phoneserver
+Type:    Android application (Java), Gradle + Android Gradle Plugin
+Baseline: git branch "main", single prior commit (d9315c9). This update was
+          produced by diffing the working tree against that baseline.
+
+Archive: Phoneserver-SQL-Storage-Update.zip
+Layout:  original relative paths only (files drop straight back into the
+         project). No wrapper/nested project directory.
+Counts:  69 files = 8 modified + 61 added.
+         (feature to implement.txt is intentionally NOT included.)
+
+This archive contains ONLY files created or modified by this implementation.
+
+================================================================================
+2. IMPLEMENTATION SUMMARY
+================================================================================
+An incremental upgrade that turns PhoneServer into a local-first SQL database
+and file-storage platform, without removing or rewriting existing features.
+
+Added:
+  * Projects — isolated containers for databases, files and backups, with a
+    stable generated id used as the on-disk identifier.
+  * SQL database management — create/list/delete per-project SQLite databases;
+    schema/table/index inspection; parameterised queries; transactions;
+    export/import; a SQL workspace UI. Guarded by SqlGuard and bounded by row
+    limits and a time budget.
+  * Persistent file storage — streamed uploads with SHA-256 checksums, MIME
+    detection, folders, rename/move/delete, per-project quotas and per-file
+    limits, range downloads, orphan/missing-file detection.
+  * Backups — full project backups (databases + stored files + safe config),
+    validation, download, restore and import, with retention (max 25).
+  * HTTP API — a versioned JSON API under /api/v1 for apps and websites.
+  * API tokens — SHA-256 hashed, project-scoped, read-only capable.
+  * UI — project list/detail, SQL workspace, file browser, backups, API token
+    management, and an in-app API documentation screen, wired into the
+    existing Home/Advanced-Settings navigation.
+  * Tests — JUnit + Robolectric suites for the storage layer and the HTTP API.
+  * Documentation — web/API.md plus web/ (architecture, storage, security,
+    testing, platform compatibility).
+
+All data lives outside build directories under a configurable data root; file
+contents are stored on the filesystem and only metadata is stored in SQL.
+
+Also added a project-local debug keystore and signing config so every build
+(AndroidIDE, PC, any HOME) signs with the same key and can update the installed
+app in place, avoiding INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+
+================================================================================
+3. ADDED FILES (61)
+================================================================================
+
+-- Documentation / root ------------------------------------------------------
+web/API.md
+web/UPDATE_MANIFEST.txt
+web/architecture.md
+web/platform-compatibility.md
+web/security.md
+web/storage.md
+web/testing.md
+
+-- Signing -------------------------------------------------------------------
+app/debug.keystore
+
+-- HTTP API facade -----------------------------------------------------------
+app/src/main/java/com/yadaventerprise/phoneserver/DataApi.java
+
+-- Storage layer (app/src/main/java/com/yadaventerprise/phoneserver/data/) ---
+app/src/main/java/com/yadaventerprise/phoneserver/data/BackupArchive.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/BackupManager.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/ContentStoreBridge.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/DataException.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/DatabaseManager.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/FileStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/MimeTypes.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/PathGuard.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/ProjectStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/RateLimiter.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/Records.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/SqlGuard.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/StorageLayout.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/SystemDatabase.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/TokenStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/TokenUtil.java
+
+-- UI activities & adapters ---------------------------------------------------
+app/src/main/java/com/yadaventerprise/phoneserver/ApiDocsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectDetailActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectsAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/SqlWorkspaceActivity.java
+
+-- Layouts (app/src/main/res/layout/) ----------------------------------------
+app/src/main/res/layout/activity_api_docs.xml
+app/src/main/res/layout/activity_api_tokens.xml
+app/src/main/res/layout/activity_project_backups.xml
+app/src/main/res/layout/activity_project_detail.xml
+app/src/main/res/layout/activity_project_files.xml
+app/src/main/res/layout/activity_projects.xml
+app/src/main/res/layout/activity_sql_workspace.xml
+app/src/main/res/layout/item_backup.xml
+app/src/main/res/layout/item_project.xml
+app/src/main/res/layout/item_project_file.xml
+app/src/main/res/layout/item_token.xml
+
+-- Tests (app/src/test/java/...) ---------------------------------------------
+app/src/test/java/com/yadaventerprise/phoneserver/DataApiTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/BackupArchiveTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/BackupManagerTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/DataTestSupport.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/DatabaseManagerTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/FileStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/MimeTypesTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/PathGuardTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/ProjectStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/RateLimiterTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/SqlGuardTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/StorageLayoutTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/TokenStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/TokenUtilTest.java
+
+================================================================================
+4. MODIFIED FILES (8)
+================================================================================
+web/README.md
+app/build.gradle
+app/src/main/AndroidManifest.xml
+app/src/main/java/com/yadaventerprise/phoneserver/AdvancedSettingsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ContentStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/HomeFragment.java
+app/src/main/java/com/yadaventerprise/phoneserver/SimpleHttpServer.java
+app/src/main/res/layout/activity_advanced_settings.xml
+
+================================================================================
+5. EXPLANATION OF EACH CHANGE
+================================================================================
+
+Modified files
+--------------
+web/README.md
+  Added §1.7 (feature overview of the data platform), §5.3 (the /api/v1 API,
+  linking web/API.md), and updated §6 to describe the new SQLite-backed
+  persistence layer instead of the old "no SQLite" statement.
+
+app/build.gradle
+  Added `testOptions { unitTests { includeAndroidResources = true } }` and two
+  TEST-ONLY dependencies: junit 4.13.2 and Robolectric 4.14.1. No runtime
+  (non-test) dependency was added.
+  Added a `signingConfigs.debug` block pointing at the project-local
+  app/debug.keystore and wired it into the debug build type, so builds from any
+  environment sign identically and can update an installed app in place.
+
+app/debug.keystore
+  Project-local DEBUG signing key (alias androiddebugkey, standard public
+  password "android"). Not a secret in the security sense — it only signs debug
+  builds and exists purely to keep debug signatures stable across machines so
+  in-place updates work. See §12/§13.
+
+app/src/main/AndroidManifest.xml
+  Registered the new activities (Projects, ProjectDetail, SqlWorkspace,
+  ProjectFiles, ProjectBackups, ApiTokens, ApiDocs) so they can be launched.
+
+AdvancedSettingsActivity.java
+  Exposed the data-platform entry points (projects / API tokens / API docs)
+  and the data-root configuration in Advanced Settings.
+
+ContentStore.java
+  Added data-root resolution (getDataRoot / getStorageLayout), a CORS origin
+  accessor, and the API rate-limit default used by the new platform. Existing
+  behaviour is preserved.
+
+HomeFragment.java
+  Added a "data platform" entry to the home navigation that launches
+  ProjectsActivity.
+
+SimpleHttpServer.java
+  Routes /api/v1 requests to DataApi, streams large raw upload bodies instead
+  of buffering them, caps buffered bodies, and emits the CORS header.
+
+activity_advanced_settings.xml
+  Added the rows/controls for the data-platform sections.
+
+Added files — key ones
+----------------------
+DataApi.java
+  The HTTP facade. Implements auth (password/bearer), per-project
+  authorisation, CORS preflight, rate limiting, JSON framing, streaming
+  downloads/exports and the /api/v1 route table.
+
+data/SystemDatabase.java
+  Declares and creates system.db (versioned schema) and the singleton helper.
+
+data/StorageLayout.java, data/PathGuard.java
+  The data-root directory layout and all path validation/containment checks.
+
+data/ProjectStore.java, data/DatabaseManager.java, data/FileStore.java,
+data/BackupManager.java, data/TokenStore.java
+  The five stores implementing project, database, file, backup and token
+  behaviour respectively.
+
+data/SqlGuard.java, data/MimeTypes.java, data/TokenUtil.java,
+data/RateLimiter.java
+  Statement guard, MIME table, token hashing/compare, request rate limiter.
+
+data/BackupArchive.java, data/ContentStoreBridge.java, data/Records.java,
+data/DataException.java
+  Archive zip handling/validation, ContentStore<->mode bridge, data records,
+  and the safe HTTP-mapped exception type.
+
+UI activities/adapters and their layouts
+  Screens for projects, project detail, SQL workspace, files, backups, API
+  tokens and API documentation.
+
+Tests
+  JUnit + Robolectric coverage for the storage layer and the API (see §9).
+
+Docs
+  web/API.md (complete /api/v1 reference) and web/*.md.
+
+================================================================================
+6. DEPENDENCIES ADDED / CHANGED
+================================================================================
+Test-only, in app/build.gradle:
+
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.14.1'
+
+No runtime dependency was added or changed. The platform uses only the Android
+framework, org.json (already used by the project) and java.util.zip. SQLite is
+the device's built-in engine; no external database server is required.
+
+Non-dependency build change: a project-local debug keystore (app/debug.keystore)
+is now referenced by signingConfigs.debug. No new library is introduced.
+
+================================================================================
+7. DATABASE INITIALIZATION
+================================================================================
+Nothing manual is required. On first use:
+
+  1. The app creates the data root if it does not exist (app-private external
+     dir by default; see §13 for the configurable override).
+  2. system.db is created there under system/ with its schema (projects,
+     project_databases, files, folders, api_tokens, backups, operations) and a
+     schema version. Upgrades are applied additively via onUpgrade.
+  3. Each project database is a separate SQLite file created under
+     <root>/projects/<project-id>/databases/<name>.db on demand.
+
+To create the first project and database see §10.
+
+================================================================================
+8. BUILD / RUN
+================================================================================
+Build:
+  sh gradlew :app:assembleDebug
+
+Run tests:
+  sh gradlew :app:testDebugUnitTest
+
+Run:
+  Install/run the debug APK on an Android device, start the server from the
+  app's home screen (Start Server). The HTTP server listens on port 8080.
+  The API base URL is http://<device-ip>:8080/api/v1.
+  Verify with:  curl http://<device-ip>:8080/api/v1/health
+
+Requires JDK 21 and an Android SDK configured in local.properties
+(sdk.dir=<path>). local.properties is machine-specific and is NOT in this
+archive.
+
+================================================================================
+9. TEST RESULTS
+================================================================================
+Command:  sh gradlew :app:testDebugUnitTest
+Result:   88 tests total — 41 passed, 47 skipped, 0 failed, 0 errors.
+
+  Pure-JVM suites (always run): PathGuardTest, SqlGuardTest, MimeTypesTest,
+  TokenUtilTest, RateLimiterTest, StorageLayoutTest, BackupArchiveTest.
+
+  Robolectric suites (DB-backed; skipped on this host, see below):
+  ProjectStoreTest, DatabaseManagerTest, FileStoreTest, BackupManagerTest,
+  TokenStoreTest, DataApiTest.
+
+The 47 Robolectric tests are skipped on the development host because it is a
+Linux/aarch64 environment and Robolectric's native SQLite runtime ships no
+Linux/aarch64 binaries (nor does its legacy sqlite4java fallback). The suites
+skip themselves via JUnit Assume with a clear reason and run in full on
+x86_64 Linux/Windows and x86_64/arm64 macOS. See web/testing.md and
+web/platform-compatibility.md.
+
+Also run (both BUILD SUCCESSFUL):
+  sh gradlew :app:assembleDebug
+  sh gradlew :app:compileDebugJavaWithJavac
+
+Blocked from running here: instrumentation tests (no emulator/device), and
+Robolectric DB tests on linux-aarch64 as explained above.
+
+================================================================================
+10. INSTALLATION / INTEGRATION
+================================================================================
+1. Extract Phoneserver-SQL-Storage-Update.zip into the root of an existing
+   PhoneServer checkout. The archive preserves original relative paths and
+   contains no nested project directory, so files overwrite/add in place.
+2. Confirm local.properties points at a valid Android SDK.
+3. Build: sh gradlew :app:assembleDebug
+
+Creating the first project and database (in the app):
+  * Open Projects → "New project" → enter a name.
+  * Open the project → Databases → "New database" → enter a name.
+  * Open the database to create tables via the SQL workspace.
+
+In the app you can also switch the SQL workspace and file browser between your
+projects, and open API docs from Settings.
+
+================================================================================
+11. BACKUP / RESTORE
+================================================================================
+  * Create: project → Backups → "Create backup" (include files optional).
+    Backups are stored in <root>/projects/<id>/backups/ and keep at most 25
+    (oldest pruned).
+  * Download/Export: from the backups screen or
+    GET /api/v1/projects/<id>/backups/<backupId>/download.
+  * Validate: POST …/backups/<backupId>/validate (checks format/version and
+    rejects unsafe archive paths).
+  * Restore: POST …/backups/<backupId>/restore {"confirm":true} — replaces the
+    project's databases (and files if included) after a fully validated
+    extraction; the previous copy is preserved until the swap succeeds.
+  * Import: POST …/backups/import?confirm=true with a raw zip body.
+
+A backup includes the project's databases, stored files and a safe-to-export
+project-config.json. It NEVER includes the access password, API tokens or
+other secrets.
+
+================================================================================
+12. KNOWN LIMITATIONS
+================================================================================
+  * No TLS in the app. HTTP is plaintext; for any non-LAN access put it behind
+    an HTTPS reverse proxy or VPN. See web/security.md.
+  * No encryption at rest; data is stored unencrypted in the app-private data
+    root (device encryption aside).
+  * SQLite is single-file/single-node: do NOT share a database file over a
+    network filesystem or treat it as a distributed database.
+  * Robolectric DB tests cannot run on Linux/aarch64 hosts (see §9).
+  * Instrumentation tests were not run (no emulator/device available).
+  * Default rate limit, quotas and size caps are configurable but conservative;
+    tune per deployment.
+  * Debug signing key changed: an app previously installed and signed with a
+    different debug key must be uninstalled once before this build can be
+    installed (Android forbids replacing an app signed with a different key:
+    INSTALL_FAILED_UPDATE_INCOMPATIBLE). After that, app/debug.keystore keeps
+    signatures stable so updates apply in place. The debug keystore is not a
+    secret but should be replaced with a private release key for distribution.
+
+Explicit non-goals / production requirements are detailed in web/security.md.
+
+================================================================================
+13. REQUIRED CONFIGURATION CHANGES
+================================================================================
+  * Access password: set one in the app so /api/v1 admin access uses a password
+    (if unset, only API tokens work; anonymous admin is refused).
+  * Data root (optional): Advanced Settings → data root. Defaults to an
+    app-private persistent directory; no change needed for typical use.
+  * CORS origins (optional): the existing allowed-origins setting is honoured
+    by the API (default "*"). Set a comma-separated list to restrict it; leave
+    empty to disable CORS headers entirely.
+  * API rate limit (optional): api_rate_limit_per_minute (default 240,
+    minimum 10).
+  * local.properties: must contain sdk.dir=<Android SDK path>. Not included in
+    the archive.
+  * Debug signing: app/build.gradle now uses app/debug.keystore for debug
+    builds. No configuration is required; keep the keystore in the project and
+    do not delete it, or debug signatures will change again. For a distributable
+    release build, add your own release signingConfig and keep the private key
+    out of version control.
+
+================================================================================
+14. ARCHIVE CONTENTS (69 FILES)
+================================================================================
+Inventory:
+
+MODIFIED (8):
+  web/README.md
+  app/build.gradle
+  app/src/main/AndroidManifest.xml
+  app/src/main/java/com/yadaventerprise/phoneserver/AdvancedSettingsActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ContentStore.java
+  app/src/main/java/com/yadaventerprise/phoneserver/HomeFragment.java
+  app/src/main/java/com/yadaventerprise/phoneserver/SimpleHttpServer.java
+  app/src/main/res/layout/activity_advanced_settings.xml
+
+ADDED (61):
+  web/API.md
+  web/UPDATE_MANIFEST.txt
+  app/debug.keystore
+  web/architecture.md
+  web/platform-compatibility.md
+  web/security.md
+  web/storage.md
+  web/testing.md
+  app/src/main/java/com/yadaventerprise/phoneserver/DataApi.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ApiDocsActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensAdapter.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsAdapter.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectDetailActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesAdapter.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectsActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/ProjectsAdapter.java
+  app/src/main/java/com/yadaventerprise/phoneserver/SqlWorkspaceActivity.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/BackupArchive.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/BackupManager.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/ContentStoreBridge.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/DataException.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/DatabaseManager.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/FileStore.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/MimeTypes.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/PathGuard.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/ProjectStore.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/RateLimiter.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/Records.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/SqlGuard.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/StorageLayout.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/SystemDatabase.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/TokenStore.java
+  app/src/main/java/com/yadaventerprise/phoneserver/data/TokenUtil.java
+  app/src/main/res/layout/activity_api_docs.xml
+  app/src/main/res/layout/activity_api_tokens.xml
+  app/src/main/res/layout/activity_project_backups.xml
+  app/src/main/res/layout/activity_project_detail.xml
+  app/src/main/res/layout/activity_project_files.xml
+  app/src/main/res/layout/activity_projects.xml
+  app/src/main/res/layout/activity_sql_workspace.xml
+  app/src/main/res/layout/item_backup.xml
+  app/src/main/res/layout/item_project.xml
+  app/src/main/res/layout/item_project_file.xml
+  app/src/main/res/layout/item_token.xml
+  app/src/test/java/com/yadaventerprise/phoneserver/DataApiTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/BackupArchiveTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/BackupManagerTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/DataTestSupport.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/DatabaseManagerTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/FileStoreTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/MimeTypesTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/PathGuardTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/ProjectStoreTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/RateLimiterTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/SqlGuardTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/StorageLayoutTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/TokenStoreTest.java
+  app/src/test/java/com/yadaventerprise/phoneserver/data/TokenUtilTest.java
+
+EXCLUDED ON PURPOSE:
+  feature to implement.txt   (the task specification, not an implementation file)
+  local.properties           (machine-specific SDK path)
+  .git/, .gradle/, build/, *.apk, user databases and uploaded files,
+  secrets/credentials.
+
+================================================================================
+End of manifest
+================================================================================

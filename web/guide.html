@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="PhoneServer production guide — install, harden, share files, host sites and operate a local-network server on an Android phone">
+<title>PhoneServer — Production Guide</title>
+<style>
+/* ============================================================
+   Design tokens — from design.md (YouPI PG design system).
+   yp-* prefix is kept for every bespoke rule (design.md §6, rule 3).
+   ============================================================ */
+:root{
+  --yp-ink:#101827;
+  --yp-paper:#f7f9fc;
+  --yp-muted:#68758a;
+  --yp-blue:#526fe8;
+  --yp-blue-deep:#405ed8;
+  --yp-line:#e1e6ee;
+  --yp-soft:#edf1f7;
+  --yp-white:#fff;
+  --yp-ok:#31a77a;
+  --yp-warn:#4d8b79;
+  --yp-hl:#8fa2ff;
+  --yp-dark-copy:#aab5c7;
+  --yp-code:#0d1524;
+  --yp-card-line:#e3e8f0;
+  --radius:0.625rem;
+  --font-sans:'Space Grotesk','Avenir Next',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;color-scheme:light}
+html,body{margin:0;padding:0}
+body{
+  position:relative;
+  background:var(--yp-paper);
+  color:var(--yp-ink);
+  font-family:var(--font-sans);
+  font-size:15px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+/* fixed low-opacity dot-grid texture (design.md §5) */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(rgba(16,24,39,.13) 1px,transparent 1px);
+  background-size:26px 26px;opacity:.5;
+}
+img{max-width:100%}
+a{color:var(--yp-blue);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--yp-blue);outline-offset:2px;border-radius:4px}
+
+.yp-wrap{width:min(1190px,calc(100% - 64px));margin-inline:auto;position:relative;z-index:1}
+
+/* ---------- type ---------- */
+.yp-eyebrow{
+  font-family:var(--font-mono);font-size:10px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--yp-blue);
+  margin:0 0 18px;display:block;
+}
+.yp-eyebrow.dim{color:var(--yp-muted)}
+.yp-eyebrow.on-dark{color:var(--yp-hl)}
+h1,h2,h3,h4{margin:0;font-weight:540}
+.yp-h1{font-size:clamp(48px,5.1vw,70px);line-height:.99;letter-spacing:-.068em;font-weight:550}
+.yp-h2{font-size:clamp(40px,4.5vw,57px);line-height:1.02;letter-spacing:-.065em}
+.yp-h2.on-dark{font-size:clamp(42px,4.6vw,58px)}
+.hl{color:var(--yp-blue)}
+.on-dark .hl,.yp-h2.on-dark .hl{color:var(--yp-hl)}
+.yp-lead{font-size:15px;line-height:1.75;color:var(--yp-muted);margin:20px 0 0;max-width:56ch}
+.yp-copy{font-size:14px;line-height:1.75;color:var(--yp-muted);margin:18px 0 0;max-width:62ch}
+p{margin:.75em 0}
+code{font-family:var(--font-mono);font-size:.86em;background:var(--yp-soft);
+  border:1px solid var(--yp-line);padding:.1em .4em;border-radius:5px;overflow-wrap:anywhere}
+.on-dark code{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#dbe3f2}
+
+/* ---------- buttons (design.md §10) ---------- */
+.yp-btn-primary,.yp-btn-text,.yp-btn-light,.yp-nav-cta{
+  display:inline-flex;align-items:center;gap:8px;font-family:var(--font-sans);
+  font-size:13px;font-weight:550;cursor:pointer;border:0;text-decoration:none;
+  transition:transform .2s,box-shadow .2s,background .2s,border-color .2s,color .2s;
+}
+.yp-btn-primary{
+  background:var(--yp-blue);color:#fff;border-radius:7px;padding:14px 17px;
+  box-shadow:0 8px 20px rgba(82,111,232,.28);
+}
+.yp-btn-primary:hover{background:var(--yp-blue-deep);transform:translateY(-2px);
+  box-shadow:0 14px 28px rgba(82,111,232,.34);text-decoration:none}
+.yp-btn-primary:active{transform:scale(.98)}
+.yp-btn-primary[aria-disabled="true"]{opacity:.6;cursor:not-allowed}
+.yp-btn-text{background:transparent;color:var(--yp-muted);padding:14px 4px}
+.yp-btn-text:hover{color:var(--yp-blue);text-decoration:none}
+.yp-btn-light{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);
+  color:#fff;border-radius:7px;padding:13px 17px}
+.yp-btn-light:hover{background:rgba(255,255,255,.12);text-decoration:none}
+.yp-btn-light:active{transform:scale(.98)}
+.yp-nav-cta{background:var(--yp-white);color:var(--yp-ink);border:1px solid var(--yp-line);
+  border-radius:7px;padding:9px 13px}
+.yp-nav-cta:hover{border-color:#9baae5;transform:translateY(-1px);text-decoration:none}
+.yp-btn-primary .ico,.yp-nav-cta .ico,.yp-btn-light .ico,.yp-btn-text .ico{width:14px;height:14px}
+
+/* ---------- header (design.md §7) ---------- */
+.yp-nav{
+  position:relative;z-index:20;height:78px;
+  width:min(1440px,100%);margin-inline:auto;
+  padding-inline:clamp(24px,4.5vw,68px);
+  display:flex;align-items:center;gap:24px;
+  background:var(--yp-paper);border-bottom:1px solid var(--yp-line);
+}
+.yp-brand{display:flex;align-items:center;gap:10px;color:var(--yp-ink);font-weight:700;font-size:15px}
+.yp-brand:hover{text-decoration:none}
+.yp-mark{display:grid;grid-template-columns:repeat(2,9px);gap:3px;transform:rotate(-8deg)}
+.yp-mark i{display:block;width:9px;height:9px;background:var(--yp-blue);border-radius:3px 3px 3px 1px}
+.yp-mark i:nth-child(2){opacity:.55;border-radius:3px 1px 3px 3px}
+.yp-mark i:nth-child(3){opacity:.75;border-radius:1px 3px 3px 3px}
+.yp-mark i:nth-child(4){opacity:.35;border-radius:3px 3px 1px 3px}
+.yp-demo-tag{
+  font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--yp-muted);border:1px solid var(--yp-line);
+  border-radius:5px;padding:2px 6px;margin-left:2px;
+}
+/* nav links collapse into the hamburger drawer at every width (design.md §7) */
+.yp-nav-links{display:none}
+.yp-nav-actions{display:flex;align-items:center;gap:14px;margin-left:auto}
+.yp-status{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--yp-muted)}
+.yp-status i{width:7px;height:7px;border-radius:50%;background:var(--yp-ok);display:block}
+.yp-menu-btn{
+  display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;
+  background:var(--yp-white);border:1px solid var(--yp-line);border-radius:10px;
+  color:var(--yp-ink);cursor:pointer;transition:background .2s,border-color .2s,color .2s;
+}
+.yp-menu-btn:hover{border-color:var(--yp-blue);color:var(--yp-blue)}
+.yp-menu-btn .ico{width:20px;height:20px}
+body.nav-open{overflow:hidden}
+
+/* ---------- hamburger slider drawer (all widths) ---------- */
+.yp-drawer-scrim{position:fixed;inset:0;z-index:59;background:rgba(16,24,39,.5);
+  opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s}
+.yp-drawer-scrim.is-open{opacity:1;visibility:visible}
+.yp-drawer{
+  position:fixed;top:0;bottom:0;left:0;z-index:60;width:min(90vw,340px);
+  background:var(--yp-paper);border-right:1px solid var(--yp-line);
+  box-shadow:0 24px 60px rgba(16,24,39,.28);overflow-y:auto;overscroll-behavior:contain;
+  transform:translateX(-105%);visibility:hidden;
+  transition:transform .32s cubic-bezier(.3,.7,.2,1),visibility 0s linear .32s;
+  display:flex;flex-direction:column;padding:18px 16px 26px;
+}
+.yp-drawer.is-open{transform:none;visibility:visible;
+  transition:transform .32s cubic-bezier(.3,.7,.2,1),visibility 0s}
+.yp-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding-bottom:14px;margin-bottom:12px;border-bottom:1px solid var(--yp-line)}
+.yp-drawer-head .who{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;
+  color:var(--yp-ink);letter-spacing:-.02em}
+.yp-drawer-head .who .yp-mark{grid-template-columns:repeat(2,8px);gap:3px}
+.yp-drawer-head .who .yp-mark i{width:8px;height:8px}
+.yp-drawer-close{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;
+  background:var(--yp-white);border:1px solid var(--yp-line);border-radius:8px;
+  color:var(--yp-ink);cursor:pointer}
+.yp-drawer-close:hover{border-color:var(--yp-blue);color:var(--yp-blue)}
+.yp-drawer-close .ico{width:15px;height:15px}
+.yp-drawer nav{display:flex;flex-direction:column;gap:2px}
+.yp-drawer nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;
+  font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--yp-ink);
+  transition:background .18s,color .18s}
+.yp-drawer nav a:hover,.yp-drawer nav a:focus-visible{background:var(--yp-soft);
+  color:var(--yp-blue);text-decoration:none}
+.yp-drawer nav a .ico{flex:0 0 auto;width:20px;height:20px;color:var(--yp-blue)}
+.yp-drawer nav a .arrow{margin-left:auto;width:14px;height:14px;color:var(--yp-muted)}
+.yp-drawer nav a:hover .arrow{color:var(--yp-blue)}
+.yp-drawer .sep{height:1px;background:var(--yp-line);margin:12px 4px}
+.yp-drawer .cap{font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--yp-muted);padding:4px 12px 8px}
+.yp-drawer .meta{margin-top:auto;padding-top:20px;font-family:var(--font-mono);font-size:10px;
+  line-height:1.7;letter-spacing:.1em;text-transform:uppercase;color:var(--yp-muted)}
+
+/* ---------- hero (design.md §8.2) ---------- */
+.yp-hero{padding:91px 0 72px;position:relative;z-index:1}
+.yp-hero-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:clamp(28px,4vw,58px);align-items:center}
+.yp-hero-actions{display:flex;align-items:center;gap:14px;margin-top:34px;flex-wrap:wrap}
+.yp-safety{
+  display:flex;gap:10px;align-items:flex-start;margin-top:26px;max-width:52ch;
+  background:var(--yp-soft);border:1px solid var(--yp-line);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;line-height:1.7;color:var(--yp-warn);
+}
+.yp-safety .ico{flex:0 0 auto;width:16px;height:16px;margin-top:3px}
+
+/* app preview frame (decorative product frame, design.md §9 .yp-visual-frame) */
+.yp-frame{
+  position:relative;background:var(--yp-white);border:1px solid var(--yp-card-line);
+  border-radius:14px;padding:20px;box-shadow:0 24px 60px rgba(16,24,39,.10);
+}
+.yp-frame::after{
+  content:"";position:absolute;inset:-26px -26px auto auto;width:170px;height:170px;
+  border:1px solid var(--yp-line);border-radius:50%;z-index:-1;
+}
+.yp-frame-label{
+  position:absolute;top:-11px;left:20px;font-family:var(--font-mono);font-size:9.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--yp-muted);
+  background:var(--yp-paper);border:1px solid var(--yp-line);border-radius:5px;padding:2px 8px;
+}
+.yp-frame-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:14px;border-bottom:1px solid var(--yp-line)}
+.yp-frame-title{font-size:17px;font-weight:550;letter-spacing:-.02em}
+.yp-frame-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--yp-muted);letter-spacing:.06em}
+.yp-live{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--yp-ok)}
+.yp-live i{width:7px;height:7px;border-radius:50%;background:var(--yp-ok)}
+.yp-frame-addr{font-family:var(--font-mono);font-size:13px;color:var(--yp-ink);
+  background:var(--yp-soft);border:1px solid var(--yp-line);border-radius:8px;
+  padding:9px 12px;margin-top:14px;word-break:break-all}
+.yp-frame-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.yp-frame-stat{background:var(--yp-white);border:1px solid var(--yp-card-line);border-radius:10px;padding:11px 12px}
+.yp-frame-stat b{display:block;font-size:19px;font-weight:550;letter-spacing:-.04em}
+.yp-frame-stat span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--yp-muted)}
+.yp-frame-actions{display:flex;gap:10px;margin-top:16px}
+.yp-frame-actions span{flex:1;text-align:center;font-size:12.5px;font-weight:550;
+  border-radius:7px;padding:9px 0}
+.yp-frame-actions .ghost{border:1px solid var(--yp-blue);color:var(--yp-blue)}
+.yp-frame-actions .solid{background:var(--yp-blue);color:#fff}
+.yp-frame-foot{margin-top:14px;font-size:11.5px;color:var(--yp-muted)}
+
+/* ---------- proof strip (design.md §8.3) ---------- */
+.yp-proof{background:#eef2f7;border-block:1px solid var(--yp-line);position:relative;z-index:1}
+.yp-proof-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;padding:34px 0}
+.yp-proof-item{display:flex;gap:12px;align-items:flex-start}
+.yp-proof-item .ico{flex:0 0 auto;width:21px;height:21px;color:var(--yp-blue);margin-top:2px}
+.yp-proof-item b{display:block;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.yp-proof-item span{font-size:12.5px;line-height:1.65;color:var(--yp-muted)}
+
+/* ---------- sections ---------- */
+.yp-section{padding:125px 0;position:relative;z-index:1}
+.yp-section.tight{padding:96px 0}
+.yp-head{max-width:820px}
+.yp-head h2 .num{font-family:var(--font-mono);font-size:.44em;letter-spacing:.1em;
+  color:var(--yp-muted);vertical-align:middle;margin-left:.5em;font-weight:600}
+
+/* feature / step cards */
+.yp-grid-3{display:grid;grid-template-columns:1.06fr 1fr .94fr;gap:16px;margin-top:52px}
+.yp-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:52px}
+.yp-card{
+  background:var(--yp-white);border:1px solid var(--yp-card-line);border-radius:12px;
+  padding:26px 24px 22px;display:flex;flex-direction:column;min-height:100%;
+  box-shadow:0 1px 2px rgba(16,24,39,.04);
+}
+.yp-card .tag{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--yp-muted);margin-bottom:16px}
+.yp-card .ico{width:21px;height:21px;color:var(--yp-blue);margin-bottom:14px}
+.yp-card h3{font-size:19px;line-height:1.18;letter-spacing:-.03em;font-weight:550}
+.yp-card p{font-size:13px;line-height:1.7;color:var(--yp-muted);margin:10px 0 0}
+.yp-card .note{
+  margin-top:auto;padding-top:14px;font-family:var(--font-mono);font-size:11px;
+  line-height:1.6;color:var(--yp-muted);letter-spacing:.02em;
+}
+.yp-card.accent{background:#f0f3fb;border-color:#e1e6ef}
+
+/* workflow track (design.md §8.7) */
+.yp-track{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:52px;align-items:stretch}
+.yp-step{position:relative;background:var(--yp-white);border:1px solid var(--yp-card-line);
+  border-radius:12px;padding:22px 20px}
+.yp-step .idx{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.14em;
+  color:var(--yp-blue)}
+.yp-step h3{font-size:17px;letter-spacing:-.03em;font-weight:550;margin-top:12px}
+.yp-step p{font-size:12.5px;line-height:1.7;color:var(--yp-muted);margin:8px 0 0}
+.yp-step .arrow{position:absolute;top:50%;right:-19px;transform:translateY(-50%);
+  width:22px;height:22px;color:var(--yp-blue);background:var(--yp-paper);
+  border:1px solid var(--yp-line);border-radius:50%;padding:4px}
+.yp-step:last-child .arrow{display:none}
+
+/* ---------- dark band (design.md §8.6) ---------- */
+.yp-dark{background:var(--yp-ink);color:#f2f5fa;position:relative;z-index:1;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:64px 64px}
+.yp-dark .yp-copy,.yp-dark .yp-lead{color:var(--yp-dark-copy)}
+.yp-checklist{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 26px;margin-top:46px}
+.yp-check{display:flex;gap:12px;align-items:flex-start;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:16px 18px}
+.yp-check .ico{flex:0 0 auto;width:18px;height:18px;color:#39a67b;margin-top:3px}
+.yp-check b{display:block;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.yp-check span{display:block;font-size:12.5px;line-height:1.7;color:var(--yp-dark-copy);margin-top:4px}
+.yp-warn-card{
+  margin-top:34px;border:1px solid rgba(255,255,255,.14);border-radius:12px;
+  background:rgba(255,255,255,.05);padding:22px 24px;
+}
+.yp-warn-card h3{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+.yp-warn-card ul{margin:12px 0 0;padding-left:1.2em}
+.yp-warn-card li{font-size:13px;line-height:1.75;color:var(--yp-dark-copy);margin:.35em 0}
+.yp-warn-card li b{color:#f2f5fa;font-weight:600}
+
+/* ---------- code card (design.md §9 .yp-code-card) ---------- */
+.yp-code-card{position:relative;background:var(--yp-code);border:1px solid rgba(255,255,255,.14);
+  border-radius:12px;overflow:hidden;box-shadow:0 20px 44px rgba(16,24,39,.24)}
+.yp-code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.12)}
+.yp-code-head .file{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.1em;
+  text-transform:uppercase;color:#8fa2ff}
+.yp-copy-btn{font-family:var(--font-mono);font-size:11.5px;font-weight:500;letter-spacing:.06em;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);color:#e7edf7;
+  border-radius:6px;padding:6px 11px;cursor:pointer;transition:background .2s,color .2s}
+.yp-copy-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+.yp-copy-btn:focus-visible{outline:2px solid #8fa2ff;outline-offset:2px}
+/* readability first: larger type, roomy leading, wrapped lines instead of a side-scroll hunt */
+.yp-code-card pre{margin:0;padding:18px 16px;overflow-x:auto;overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  font-family:var(--font-mono);font-size:13.5px;line-height:1.85;color:#e2e9f6;
+  white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
+.yp-code-card pre code{font:inherit;color:inherit}
+.yp-code-card .cmt{color:#9aabc4;font-style:italic}
+.yp-code-card .cmd{color:#ffffff;font-weight:600}
+.yp-code-card .str{color:#9fe3c8}
+.yp-code-card .flg{color:#ffcf8f}
+.yp-code-card .ph{color:#8fa2ff}
+.yp-code-card pre::selection,.yp-code-card pre *::selection{background:rgba(143,162,255,.35)}
+.yp-code-foot{padding:11px 16px;border-top:1px solid rgba(255,255,255,.12);
+  font-family:var(--font-mono);font-size:11.5px;line-height:1.6;letter-spacing:.08em;
+  text-transform:uppercase;color:#9aabc4}
+
+/* ---------- operations ---------- */
+.yp-ops{display:grid;grid-template-columns:1.05fr .95fr;gap:26px;margin-top:52px;align-items:start}
+.yp-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.yp-list li{background:var(--yp-white);border:1px solid var(--yp-card-line);border-radius:12px;
+  padding:16px 18px}
+.yp-list b{display:block;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.yp-list span{display:block;font-size:12.5px;line-height:1.7;color:var(--yp-muted);margin-top:5px}
+.yp-table-wrap{margin-top:52px;overflow-x:auto;border:1px solid var(--yp-line);border-radius:12px}
+.yp-table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px;background:var(--yp-white)}
+.yp-table th,.yp-table td{border-bottom:1px solid var(--yp-line);padding:12px 15px;
+  text-align:left;vertical-align:top;line-height:1.65}
+.yp-table th{background:var(--yp-soft);font-weight:650;white-space:nowrap;font-size:12.5px}
+.yp-table tr:last-child td{border-bottom:0}
+.yp-table td:first-child{font-weight:600;white-space:nowrap}
+
+/* ---------- final cta ---------- */
+.yp-cta{padding:118px 0 125px;text-align:center;position:relative;z-index:1}
+.yp-cta .yp-mark{margin:0 auto 22px;transform:rotate(-8deg) scale(1.5)}
+.yp-cta .yp-h2{max-width:16ch;margin-inline:auto}
+.yp-cta .yp-copy{margin-inline:auto;text-align:center}
+.yp-cta-actions{display:flex;gap:14px;justify-content:center;margin-top:32px;flex-wrap:wrap}
+.yp-rings{position:absolute;left:50%;top:120px;width:520px;height:520px;transform:translateX(-50%);
+  border:1px solid var(--yp-line);border-radius:50%;z-index:-1;pointer-events:none}
+.yp-rings::after{content:"";position:absolute;inset:70px;border:1px solid var(--yp-line);border-radius:50%}
+
+/* ---------- footer ---------- */
+.yp-footer{border-top:1px solid var(--yp-line);background:var(--yp-white);
+  position:relative;z-index:1;padding:52px 0 40px}
+.yp-footer-grid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+.yp-footer p{font-size:13px;color:var(--yp-muted);max-width:44ch;margin:14px 0 0}
+.yp-footer-links{display:flex;gap:26px;flex-wrap:wrap}
+.yp-footer-links a{font-size:13px;font-weight:550;color:var(--yp-ink)}
+.yp-footer-links a:hover{color:var(--yp-blue);text-decoration:none}
+.yp-disclaimer{margin-top:34px;padding-top:22px;border-top:1px solid var(--yp-line);
+  font-size:12px;line-height:1.75;color:var(--yp-muted)}
+.yp-disclaimer b{color:var(--yp-ink);font-weight:600}
+
+/* ---------- reveal motion (design.md §14) ---------- */
+.yp-reveal{opacity:0;transform:translateY(18px);
+  transition:opacity .65s ease,transform .65s cubic-bezier(.2,.7,.2,1)}
+.yp-reveal.yp-in{opacity:1;transform:none}
+
+/* ---------- responsive: 1020 / 760 / 380 (design.md §13) ---------- */
+@media (max-width:1020px){
+  .yp-status{display:none}
+  .yp-hero{padding-top:64px}
+  .yp-hero-grid{gap:32px}
+  .yp-section{padding:96px 0}
+  .yp-grid-3{grid-template-columns:repeat(2,1fr)}
+  .yp-track{grid-template-columns:repeat(2,1fr)}
+  .yp-step .arrow{display:none}
+  .yp-proof-grid{grid-template-columns:repeat(2,1fr);gap:22px}
+}
+@media (max-width:760px){
+  .yp-wrap{width:min(100% - 36px,540px)}
+  .yp-nav-actions .yp-nav-cta,.yp-status{display:none}
+  .yp-hero{padding:56px 0 56px}
+  .yp-hero-grid{grid-template-columns:1fr;gap:38px}
+  .yp-h1{font-size:clamp(40px,10vw,52px)}
+  .yp-section,.yp-section.tight{padding:64px 0}
+  .yp-grid-3,.yp-grid-2,.yp-track,.yp-checklist,.yp-ops{grid-template-columns:1fr}
+  .yp-proof-grid{grid-template-columns:repeat(2,1fr)}
+  .yp-cta{padding:78px 0 84px}
+  .yp-rings{display:none}
+  .yp-footer-grid{flex-direction:column}
+}
+@media (max-width:380px){
+  .yp-wrap{width:calc(100% - 28px)}
+  .yp-h1{font-size:43px}
+  .yp-hero{padding-top:44px}
+  .yp-section,.yp-section.tight{padding:52px 0}
+  .yp-proof-grid{grid-template-columns:1fr}
+  .yp-card{padding:22px 18px 20px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .yp-reveal{opacity:1;transform:none}
+}
+@media print{
+  .yp-nav,.yp-menu-btn,.yp-drawer,.yp-drawer-scrim,.yp-copy-btn,.yp-rings{display:none!important}
+  body::before{display:none}
+  .yp-reveal{opacity:1;transform:none}
+  .yp-section{padding:28px 0}
+}
+</style>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<!-- icon sprite (design.md §12: one icon language, 14–22px usage sizes) -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <g id="i-arrow" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h14M13 6l6 6-6 6"/></g>
+    <g id="i-check" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></g>
+    <g id="i-menu" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></g>
+    <g id="i-server" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></g>
+    <g id="i-folder" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></g>
+    <g id="i-chart" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M8 15l4-6 3 4 4-7"/></g>
+    <g id="i-qr" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z"/></g>
+    <g id="i-globe" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></g>
+    <g id="i-db" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+    <g id="i-shield" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7.2-7 8.4C8 19.2 5 16 5 12V6z"/><path d="M9 12l2 2 4-4"/></g>
+    <g id="i-term" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></g>
+    <g id="i-clock" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 1.9"/></g>
+    <g id="i-lock" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 017 0v3"/></g>
+    <g id="i-chat" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9.5L4 20z"/><path d="M8 9.5h8M8 12.5h5"/></g>
+    <g id="i-grid" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></g>
+
+    <!-- heavy nav icons (bold, single-weight language for the drawer links) -->
+    <g id="n-menu" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></g>
+    <g id="n-close" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></g>
+    <g id="n-arrow" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h14M13 6.5l5.5 5.5L13 17.5"/></g>
+    <g id="n-book" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h5.5A3.5 3.5 0 0112 8.5V20H6.5A3.5 3.5 0 003 23.5z" transform="translate(0 -1.5)"/><path d="M21 5h-5.5A3.5 3.5 0 0012 8.5V20h5.5A3.5 3.5 0 0121 23.5z" transform="translate(0 -1.5)"/></g>
+    <g id="n-lock" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="10.2" width="14.8" height="10.3" rx="2.6"/><path d="M8 10.2V7.4a4 4 0 018 0v2.8"/></g>
+    <g id="n-folder" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 015.5 5h4l2.2 2.4h6.8A2.5 2.5 0 0121 9.9v7.6a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5z"/></g>
+    <g id="n-clock" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 6.8v5.5l3.6 2.1"/></g>
+    <g id="n-shield" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v6c0 4.3-3.2 7.7-7.5 9-4.3-1.3-7.5-4.7-7.5-9V6z"/><path d="M8.8 12l2.4 2.4 4-4.4"/></g>
+    <g id="n-server" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="4.6" width="17.2" height="5.6" rx="2.2"/><rect x="3.4" y="13.8" width="17.2" height="5.6" rx="2.2"/><path d="M7.2 7.4h.02M7.2 16.6h.02"/></g>
+    <g id="n-term" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M7.5 10l2.7 2.3-2.7 2.3M13.5 15h3.5"/></g>
+    <g id="n-db" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.5" rx="7.5" ry="3"/><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></g>
+    <g id="n-priv" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="10.2" width="14.8" height="10.3" rx="2.6"/><path d="M8 10.2V7.4a4 4 0 018 0v2.8"/></g>
+    <g id="n-terms" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.4h8.4L19 8v12.6H6z"/><path d="M14.2 3.6V8.2H19"/><path d="M9.4 12.6h6M9.4 16.2h4.2"/></g>
+    <g id="n-cookie" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><circle cx="9.4" cy="9.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.6" cy="12.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="10.6" cy="15" r="1.1" fill="currentColor" stroke="none"/></g>
+    <g id="n-scale" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v15M7 20.5h10M3.6 9h16.8M7.2 9l-3 5.6h6zM16.8 9l3 5.6h-6z"/></g>
+  </defs>
+</svg>
+
+<header class="yp-nav">
+  <a class="yp-brand" href="#home" aria-label="PhoneServer production guide home">
+    <span class="yp-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    PhoneServer
+    <span class="yp-demo-tag">Guide</span>
+  </a>
+
+  <nav class="yp-nav-links" aria-label="Main navigation">
+    <a href="#setup">Setup</a>
+    <a href="#everyday">Everyday use</a>
+    <a href="#hardening">Hardening</a>
+    <a href="#operations">Operations</a>
+    <a href="#developers">Developers</a>
+  </nav>
+
+  <div class="yp-nav-actions">
+    <span class="yp-status"><i aria-hidden="true"></i>LAN only · v1.0</span>
+    <a class="yp-nav-cta" href="docs.html">Docs<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+  </div>
+
+  <button class="yp-menu-btn" id="ypMenuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="ypDrawer">
+    <svg class="ico" aria-hidden="true"><use href="#n-menu"/></svg>
+  </button>
+</header>
+
+<!-- hamburger slider drawer -->
+<div class="yp-drawer-scrim" id="ypScrim"></div>
+<aside class="yp-drawer" id="ypDrawer" aria-label="Site navigation">
+  <div class="yp-drawer-head">
+    <span class="who">
+      <span class="yp-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      PhoneServer
+    </span>
+    <button class="yp-drawer-close" id="ypDrawerClose" aria-label="Close menu">
+      <svg class="ico" aria-hidden="true"><use href="#n-close"/></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Guide sections">
+    <a href="#setup"><svg class="ico" aria-hidden="true"><use href="#n-lock"/></svg>Setup</a>
+    <a href="#everyday"><svg class="ico" aria-hidden="true"><use href="#n-folder"/></svg>Everyday use</a>
+    <a href="#workflow"><svg class="ico" aria-hidden="true"><use href="#n-clock"/></svg>Daily loop</a>
+    <a href="#hardening"><svg class="ico" aria-hidden="true"><use href="#n-shield"/></svg>Hardening</a>
+    <a href="#operations"><svg class="ico" aria-hidden="true"><use href="#n-server"/></svg>Operations</a>
+    <a href="#developers"><svg class="ico" aria-hidden="true"><use href="#n-term"/></svg>Developers</a>
+  </nav>
+
+  <div class="sep"></div>
+  <div class="cap">Reference</div>
+
+  <nav aria-label="Documentation and legal">
+    <a href="docs.html"><svg class="ico" aria-hidden="true"><use href="#n-book"/></svg>Documentation &amp; API<svg class="ico arrow" aria-hidden="true"><use href="#n-arrow"/></svg></a>
+    <a href="privacy-policy.html"><svg class="ico" aria-hidden="true"><use href="#n-priv"/></svg>Privacy policy</a>
+    <a href="terms-of-service.html"><svg class="ico" aria-hidden="true"><use href="#n-terms"/></svg>Terms of Service</a>
+    <a href="cookies-policy.html"><svg class="ico" aria-hidden="true"><use href="#n-cookie"/></svg>Cookies policy</a>
+    <a href="legal.html"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
+  </nav>
+
+  <div class="meta">LAN only · port 8080 · v1.0</div>
+</aside>
+
+<main id="home">
+
+  <!-- ============ HERO ============ -->
+  <section class="yp-hero">
+    <div class="yp-wrap yp-hero-grid">
+      <div>
+        <span class="yp-eyebrow yp-reveal">Production guide · PhoneServer 1.0</span>
+        <h1 class="yp-h1 yp-reveal" style="transition-delay:80ms">Run a phone like <span class="hl">production infrastructure</span>.</h1>
+        <p class="yp-lead yp-reveal" style="transition-delay:160ms">
+          Install PhoneServer, put a real password in front of it, share files and databases across
+          the LAN, and verify every change. This is the operator tutorial — the documentation site
+          covers the reference material.
+        </p>
+
+        <div class="yp-hero-actions yp-reveal" style="transition-delay:220ms">
+          <a class="yp-btn-primary" href="#setup">Start the setup<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="yp-btn-text" href="docs.html">Open the docs<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+
+        <p class="yp-safety yp-reveal" style="transition-delay:280ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>
+          PhoneServer is a local-network service: plain HTTP on port 8080, no TLS, no cloud. It is
+          not hardened for the public internet — keep it on a network you trust.
+        </p>
+      </div>
+
+      <div class="yp-frame yp-reveal" style="transition-delay:180ms">
+        <span class="yp-frame-label">In-app preview · Home tab</span>
+        <div class="yp-frame-head">
+          <div>
+            <div class="yp-frame-title">Local Server</div>
+            <div class="yp-frame-sub">PhoneServer · port 8080</div>
+          </div>
+          <span class="yp-live"><i aria-hidden="true"></i>Running</span>
+        </div>
+
+        <div class="yp-frame-addr">http://192.168.1.24:8080</div>
+
+        <div class="yp-frame-stats">
+          <div class="yp-frame-stat"><b>42</b><span>Requests</span></div>
+          <div class="yp-frame-stat"><b>2</b><span>Clients</span></div>
+          <div class="yp-frame-stat"><b>61%</b><span>RAM</span></div>
+        </div>
+
+        <div class="yp-frame-actions">
+          <span class="ghost">Stop</span>
+          <span class="solid">Manage</span>
+        </div>
+        <div class="yp-frame-foot">Launcher icon switches to the online artwork while the foreground service is serving.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROOF STRIP ============ -->
+  <section class="yp-proof" aria-label="Capability summary">
+    <div class="yp-wrap yp-proof-grid">
+      <div class="yp-proof-item yp-reveal">
+        <svg class="ico" aria-hidden="true"><use href="#i-server"/></svg>
+        <div><b>No cloud, no account</b><span>Everything runs on the device and keeps working with the internet unplugged.</span></div>
+      </div>
+      <div class="yp-proof-item yp-reveal" style="transition-delay:90ms">
+        <svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg>
+        <div><b>Shared-account auth</b><span>One optional username and password gates <code>/files</code>, uploads and remote browsing.</span></div>
+      </div>
+      <div class="yp-proof-item yp-reveal" style="transition-delay:160ms">
+        <svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg>
+        <div><b>Real telemetry</b><span>Dashboard counters come from the live server — never simulated or demo data.</span></div>
+      </div>
+      <div class="yp-proof-item yp-reveal" style="transition-delay:200ms">
+        <svg class="ico" aria-hidden="true"><use href="#i-db"/></svg>
+        <div><b>Restorable backups</b><span>Validated zips with manifest, databases, stored files and metadata.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 01 SETUP ============ -->
+  <section class="yp-section" id="setup">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow yp-reveal">01 — Setup</span>
+        <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">From APK to first client<span class="num">five steps</span></h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          Work through these once, in order. Steps 3 and 5 are the ones people skip and regret:
+          an unauthenticated server on a shared Wi-Fi is open read/write access to the phone's
+          shared storage, including recursive delete.
+        </p>
+      </div>
+
+      <div class="yp-grid-3">
+        <article class="yp-card accent yp-reveal">
+          <span class="tag">Step 01 · Install</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-server"/></svg>
+          <h3>Install the APK</h3>
+          <p>Android 7.0+ (<code>minSdk 24</code>), <code>arm64-v8a</code> only. Build with
+             <code>./gradlew assembleDebug</code> or install the release APK signed with your own key —
+             the debug keystore is project-local so AndroidIDE, a PC, and CI all update the same install.</p>
+          <p class="note">app/build/outputs/apk/</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:90ms">
+          <span class="tag">Step 02 · Permissions</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg>
+          <h3>Grant what the server needs</h3>
+          <p><b>All files access</b> so uploads land in the real <code>Pictures/</code>,
+             <code>Movies/</code>, <code>Music/</code> and <code>Download/</code> folders;
+             <b>Notifications</b> on Android 13+ for the ongoing service notification; and
+             <b>Start on Boot</b> if the server should survive a reboot.</p>
+          <p class="note">Settings → Permissions</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:160ms">
+          <span class="tag">Step 03 · Authenticate</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg>
+          <h3>Set the access password</h3>
+          <p>Settings → Security → Authentication. The username is optional; the password protects
+             <code>/files</code>, the file APIs and remote browsing. Leave both blank and the row
+             says so plainly: <em>“No password set — open access on your Wi-Fi.”</em></p>
+          <p class="note">Do this before the first client connects</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:60ms">
+          <span class="tag">Step 04 · Start</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg>
+          <h3>Start the local server</h3>
+          <p>Home → <b>Local Server</b> card → <b>Start</b>. A foreground service keeps the socket
+             alive with an ongoing notification that shows the live address, and the launcher icon
+             swaps to the online artwork while it runs.</p>
+          <p class="note">Quick action: “Start Server” on Home</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:130ms">
+          <span class="tag">Step 05 · Connect</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>
+          <h3>Reach it from a client</h3>
+          <p>On the same Wi-Fi, open <code>http://&lt;phone-ip&gt;:8080</code> in any browser or
+             <code>curl</code>. <code>GET /status</code> is public — use it as the reachability ping.
+             Everything else answers with a 401 challenge until credentials are supplied.</p>
+          <p class="note">Or use the QR tab to onboard another phone</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:200ms">
+          <span class="tag">Step 05b · Verify</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-term"/></svg>
+          <h3>Prove it end to end</h3>
+          <p>Run the smoke test from a <em>second</em> device: hit <code>/status</code>, list a
+             folder with credentials, upload one file, then confirm the request and byte counters
+             moved on the Dashboard tab. If they did, the path is real.</p>
+          <p class="note">Full command list in Operations →</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02 EVERYDAY ============ -->
+  <section class="yp-section tight" id="everyday" style="background:var(--yp-white);border-block:1px solid var(--yp-line)">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow yp-reveal">02 — Everyday use</span>
+        <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">The workflows you run daily</h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          The app opens on a five-tab bottom bar — Home, Dashboard, QR, Chat, Settings — and the
+          hamburger in every screen's header opens the side drawer for everything that lives one
+          level deeper.
+        </p>
+      </div>
+
+      <div class="yp-grid-3">
+        <article class="yp-card yp-reveal">
+          <span class="tag">Drawer · Files</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg>
+          <h3>Share and browse files</h3>
+          <p>Upload, download, rename, move and delete from the phone or from a browser. Files open
+             in the built-in viewers for images, video, audio, text and PDF; anything else is handed
+             to the system chooser. Uploads are media-scanned immediately, so Gallery and Music see
+             them without a rescan.</p>
+          <p class="note">GET /files/&lt;path&gt; · POST /api/upload</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:90ms">
+          <span class="tag">Drawer · Remote Servers</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-qr"/></svg>
+          <h3>Pair other phones</h3>
+          <p>Save a profile (name, host, port, credentials, note) or scan the other phone's QR code
+             to prefill it. Each profile shows a live online/offline dot from the public
+             <code>/status</code> ping, and remote files open in the same built-in viewers.</p>
+          <p class="note">QR tab → “My QR” / “Scan QR”</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:160ms">
+          <span class="tag">Tab · Dashboard</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg>
+          <h3>Watch live traffic</h3>
+          <p>Request count, bytes up and down, connected clients parsed by OS and browser,
+             per-endpoint hits, RAM and app CPU, uptime, a 4-second-poll sparkline per metric and a
+             rolling activity feed — the local server plus every saved remote server in one view.</p>
+          <p class="note">GET /api/stats (password-gated)</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:60ms">
+          <span class="tag">Drawer · Website Editor</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>
+          <h3>Host a small website</h3>
+          <p>The served site is <code>files/website/index.html</code> plus the CSS, JS and images
+             next to it, delivered at <code>GET /</code>. The editor manages it as a real file tree:
+             upload several files, create folders, rename, delete, open.</p>
+          <p class="note">No build step, no deploy target</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:130ms">
+          <span class="tag">Drawer · API Endpoints</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-term"/></svg>
+          <h3>Define mock endpoints</h3>
+          <p>Map <code>(method, path) → JSON body</code> with custom response headers and documented
+             parameters — a tiny stub server for front-end work. Built-in paths win if they collide.</p>
+          <p class="note">Custom /api/* routes are public on the LAN — see Hardening</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:200ms">
+          <span class="tag">Drawer · Projects &amp; Database</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-db"/></svg>
+          <h3>Store data locally</h3>
+          <p>Projects isolate workspaces; each holds many SQLite databases with a guarded SQL
+             workspace (single statements, parameterised queries, row limits, time budget). Files
+             carry SHA-256 checksums, and scoped API tokens are stored only as hashes.</p>
+          <p class="note">Everything is reachable under /api/v1</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 03 WORKFLOW ============ -->
+  <section class="yp-section" id="workflow">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow yp-reveal">03 — Daily loop</span>
+        <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">Four stages, every time you go live</h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          The same sequence for a demo, a photo hand-off, or a weekend of internal tooling.
+        </p>
+      </div>
+
+      <div class="yp-track">
+        <div class="yp-step yp-reveal">
+          <span class="idx">01</span>
+          <h3>Configure</h3>
+          <p>Confirm the password row, CORS origins and the per-minute rate limit in Settings before
+             anything connects.</p>
+          <svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </div>
+        <div class="yp-step yp-reveal" style="transition-delay:90ms">
+          <span class="idx">02</span>
+          <h3>Start</h3>
+          <p>Home → Local Server → Start. The notification confirms the address; the icon confirms
+             the state.</p>
+          <svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </div>
+        <div class="yp-step yp-reveal" style="transition-delay:160ms">
+          <span class="idx">03</span>
+          <h3>Distribute</h3>
+          <p>Share the address, show your QR code, or let the other phone scan it to create a saved
+             profile.</p>
+          <svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </div>
+        <div class="yp-step yp-reveal" style="transition-delay:200ms">
+          <span class="idx">04</span>
+          <h3>Verify</h3>
+          <p><code>/status</code> answers from the client device and the Dashboard counters move.
+             Then the session is real.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 04 HARDENING (dark band) ============ -->
+  <section class="yp-section yp-dark" id="hardening">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow on-dark yp-reveal">04 — Hardening</span>
+        <h2 class="yp-h2 on-dark yp-reveal" style="transition-delay:60ms">Treat the LAN as <span class="hl">the trust boundary</span></h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          PhoneServer is deliberately local-first. What separates a demo you start by hand from a
+          service you can leave running is the checklist below — none of it takes more than five
+          minutes.
+        </p>
+      </div>
+
+      <div class="yp-checklist">
+        <div class="yp-check yp-reveal">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Set a password before the first client</b>
+            <span>Settings → Security → Authentication must not read “No password set”. With no
+              password the whole shared storage is writable by anyone on the Wi-Fi.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:70ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Prefer scoped API tokens for scripts</b>
+            <span>Projects → API tokens issues per-project and/or read-only bearer tokens,
+              stored only as SHA-256 hashes, instead of circulating the shared password.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:120ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Tighten CORS</b>
+            <span>Advanced Settings → Allowed CORS origins. Empty means same-origin only,
+              <code>*</code> lets any website call the API, or list exact origins such as
+              <code>https://app.example.com</code>.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:160ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Keep the rate limit on</b>
+            <span>Advanced Settings → API rate limit per minute, per client IP, minimum 10.
+              It is the only throttle between a runaway script and the device.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:60ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Verify from outside the phone</b>
+            <span>Run <code>/status</code> and one authenticated call from a second device on a
+              different network segment. Localhost success proves nothing about the LAN.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:100ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Schedule backups</b>
+            <span>Projects → Backups builds a validated zip (manifest, databases, stored files,
+              <code>metadata.json</code>) that can be re-validated, restored, or imported on
+              another device.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:140ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Decide the reboot policy</b>
+            <span>Settings → “Start server on boot” plus the boot receiver. For an unattended
+              device, enable it; for a phone you carry, leave it off and start on demand.</span></div>
+        </div>
+        <div class="yp-check yp-reveal" style="transition-delay:180ms">
+          <svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>
+          <div><b>Assume credentials are visible</b>
+            <span>The access password and saved server profiles live in plain
+              <code>SharedPreferences</code>. Treat the device — and anything that restores its
+              backups — as trusted.</span></div>
+        </div>
+      </div>
+
+      <div class="yp-warn-card yp-reveal">
+        <h3>Known limits you should plan around</h3>
+        <ul>
+          <li><b>Plaintext everywhere.</b> Cleartext HTTP on port 8080 with no TLS; anything on the
+              path can read it.</li>
+          <li><b>Password in a query string.</b> The client can pass <code>?pw=</code>, which lands in
+              server logs, browser history and proxy logs. Prefer the <code>X-Auth-Password</code>
+              header or HTTP Basic.</li>
+          <li><b>Custom endpoints bypass the gate.</b> A user-defined <code>/api/*</code> route is
+              reachable without the password — by design, and a foot-gun if you publish something
+              sensitive.</li>
+          <li><b>Shared-storage root.</b> The file browser covers the device's shared storage, not a
+              sandbox, so scope your client-side deletes carefully.</li>
+        </ul>
+        <p style="margin:16px 0 0;font-size:13px;color:var(--yp-dark-copy)">
+          Full analysis: <a href="docs.html#security" style="color:var(--yp-hl)">Security model in the docs</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 05 OPERATIONS ============ -->
+  <section class="yp-section" id="operations">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow yp-reveal">05 — Operations</span>
+        <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">Verify, troubleshoot, recover</h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          Keep this section open on the client machine. Every check below is observable from outside
+          the phone, which is the only vantage point that matters.
+        </p>
+      </div>
+
+      <div class="yp-ops">
+        <div class="yp-code-card yp-reveal">
+          <div class="yp-code-head">
+            <span class="file">smoke-test.sh</span>
+            <button class="yp-copy-btn" data-copy="smoke">Copy snippet</button>
+          </div>
+          <pre id="smoke"><code><span class="cmt"># 1. reachability — no password needed</span>
+<span class="cmd">curl</span> <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/status</span>
+
+<span class="cmt"># 2. protected read</span>
+<span class="cmd">curl</span> <span class="flg">-u</span> :mypassword \
+     <span class="str">"http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/browse?path=Pictures"</span>
+
+<span class="cmt"># 3. protected stats (header form)</span>
+<span class="cmd">curl</span> <span class="flg">-H</span> <span class="str">"X-Auth-Password: mypassword"</span> \
+     <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/stats</span>
+
+<span class="cmt"># 4. write: folder + upload</span>
+<span class="cmd">curl</span> <span class="flg">-X</span> POST <span class="flg">-H</span> <span class="str">"X-Auth-Password: mypassword"</span> \
+     <span class="flg">-H</span> <span class="str">"Content-Type: application/json"</span> \
+     <span class="flg">-d</span> <span class="str">'{"path":"","name":"TestFolder"}'</span> \
+     <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/mkdir</span>
+
+<span class="cmd">curl</span> <span class="flg">-X</span> POST <span class="flg">-H</span> <span class="str">"X-Auth-Password: mypassword"</span> \
+     <span class="flg">-F</span> <span class="str">"file=@./photo.jpg"</span> \
+     <span class="str">"http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/upload?path=TestFolder"</span>
+
+<span class="cmt"># 5. confirm the Dashboard counters moved</span></code></pre>
+          <div class="yp-code-foot">Illustrative values · replace the address and password</div>
+        </div>
+
+        <ul class="yp-list">
+          <li class="yp-reveal"><b>Client cannot reach the address</b>
+            <span>Both devices must be on the same Wi-Fi with client isolation/AP isolation off.
+              Use <code>/status</code> from the client as the test — the phone's own loopback
+              always works.</span></li>
+          <li class="yp-reveal" style="transition-delay:70ms"><b>401 on a call you expect to pass</b>
+            <span>Credentials travel as <code>X-Auth-Password: …</code>, <code>?pw=…</code>, or HTTP
+              Basic — the username is ignored, only the password is compared. If no password is set
+              the gate is removed entirely and every request is authorised.</span></li>
+          <li class="yp-reveal" style="transition-delay:120ms"><b>Uploads do not appear in Gallery</b>
+            <span>Grant All files access. Without it the server falls back to the app's private
+              sandbox folder, so files never reach the real <code>Pictures/</code> tree and no media
+              scan happens.</span></li>
+          <li class="yp-reveal" style="transition-delay:160ms"><b>Server stops when the screen locks</b>
+            <span>Keep the foreground service notification; it holds a partial wake lock while
+              serving. If a battery optimiser kills it, exempt the app.</span></li>
+          <li class="yp-reveal" style="transition-delay:200ms"><b>Chat reports “AI chat isn't available”</b>
+            <span>The native bridge failed to load, or the import was rejected. Model imports are
+              validated first: vision projectors (<code>mmproj</code>) and truncated files are
+              refused with a readable message.</span></li>
+        </ul>
+      </div>
+
+      <div class="yp-table-wrap yp-reveal">
+        <table class="yp-table">
+          <thead>
+            <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Connection refused</td>
+              <td>Server not started, or another app already holds port 8080</td>
+              <td>Start from Home; the port is fixed at 8080 in this build, so free the port</td>
+            </tr>
+            <tr>
+              <td>Icon stays “offline”</td>
+              <td>Foreground service not running</td>
+              <td>Check the ongoing notification; restart from the Local Server card</td>
+            </tr>
+            <tr>
+              <td>Remote profile shows offline</td>
+              <td>The other phone is asleep, off the Wi-Fi, or its <code>/status</code> is blocked</td>
+              <td>Wake it, confirm its server is running, then ping <code>/status</code> manually</td>
+            </tr>
+            <tr>
+              <td>Dashboard counters stay flat</td>
+              <td>Traffic is only being generated on the host phone</td>
+              <td>Drive a request from a second device, then re-check</td>
+            </tr>
+            <tr>
+              <td>Storage permission row is red</td>
+              <td>“All files access” revoked after an update</td>
+              <td>Re-grant it, then retry the upload</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 06 DEVELOPERS (dark band) ============ -->
+  <section class="yp-section yp-dark" id="developers">
+    <div class="yp-wrap yp-hero-grid">
+      <div>
+        <span class="yp-eyebrow on-dark yp-reveal">06 — Developers</span>
+        <h2 class="yp-h2 on-dark yp-reveal" style="transition-delay:60ms">Everything is <span class="hl">an HTTP endpoint</span></h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          Browse, mkdir, delete, rename, upload, stats and custom JSON routes on the classic API;
+          projects, databases, files, backups and tokens under <code>/api/v1</code>. A website
+          served from the phone can call the same API the app does.
+        </p>
+
+        <div class="yp-hero-actions yp-reveal" style="transition-delay:180ms">
+          <a class="yp-btn-primary" href="docs.html#api">Open the API reference<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="yp-btn-light" href="docs.html#testing">Testing notes</a>
+        </div>
+      </div>
+
+      <div class="yp-code-card yp-reveal" style="transition-delay:140ms">
+        <div class="yp-code-head">
+          <span class="file">api-v1.sh</span>
+          <button class="yp-copy-btn" data-copy="apiv1">Copy snippet</button>
+        </div>
+        <pre id="apiv1"><code><span class="cmt"># liveness — public</span>
+<span class="cmd">curl</span> <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/status</span>
+
+<span class="cmt"># list projects with a scoped token</span>
+<span class="cmd">curl</span> <span class="flg">-H</span> <span class="str">"Authorization: Bearer pst_..."</span> \
+     <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/v1/projects</span>
+
+<span class="cmt"># parameterised query against a project database</span>
+<span class="cmd">curl</span> <span class="flg">-X</span> POST <span class="flg">-H</span> <span class="str">"Authorization: Bearer pst_..."</span> \
+     <span class="flg">-H</span> <span class="str">"Content-Type: application/json"</span> \
+     <span class="flg">-d</span> <span class="str">'{"sql":"SELECT * FROM notes LIMIT ?","params":[20]}'</span> \
+     <span class="str">http://<span class="ph">&lt;phone-ip&gt;</span>:8080/api/v1/projects/<span class="ph">&lt;pid&gt;</span>/query</span></code></pre>
+        <div class="yp-code-foot">Tokens are per-project and optionally read-only</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL CTA ============ -->
+  <section class="yp-cta">
+    <span class="yp-rings" aria-hidden="true"></span>
+    <div class="yp-wrap">
+      <span class="yp-mark yp-reveal" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span class="yp-eyebrow dim yp-reveal">Ship it on a trusted network</span>
+      <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">A server you can <span class="hl">leave running</span>.</h2>
+      <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+        This guide covers the operator path. Architecture, the full HTTP API, storage layout,
+        security analysis and the test suite live in the documentation site.
+      </p>
+      <div class="yp-cta-actions yp-reveal" style="transition-delay:170ms">
+        <a class="yp-btn-primary" href="docs.html">Read the docs<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="yp-btn-text" href="#home">Back to top</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="yp-footer">
+  <div class="yp-wrap">
+    <div class="yp-footer-grid">
+      <div>
+        <a class="yp-brand" href="#home">
+          <span class="yp-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          PhoneServer
+          <span class="yp-demo-tag">Guide</span>
+        </a>
+        <p>Turn any Android phone into a local file server, website host, live-traffic monitor and
+           small on-device AI chat — one APK, no backend.</p>
+      </div>
+      <nav class="yp-footer-links" aria-label="Footer">
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API reference</a>
+        <a href="docs.html#security">Security model</a>
+        <a href="docs.html#storage">Storage layout</a>
+        <a href="docs.html#testing">Testing</a>
+        <a href="privacy-policy.html">Privacy</a>
+        <a href="terms-of-service.html">Terms</a>
+        <a href="cookies-policy.html">Cookies</a>
+        <a href="legal.html">Legal</a>
+      </nav>
+    </div>
+    <p class="yp-disclaimer">
+      <b>Scope:</b> PhoneServer 1.0 is a local-network service. This guide documents operating it on
+      a trusted LAN — it does not describe a cloud product: no accounts, no telemetry upload, no
+      internet exposure, and no TLS. Do not port-forward or otherwise expose port 8080 to the public
+      internet. All counters, addresses and credentials shown here are illustrative.
+    </p>
+  </div>
+</footer>
+
+<script>
+// hamburger slider drawer — opens over the page, closes on link, scrim, ✕ or Escape
+// (design.md §7: navigation collapses to a menu button).
+(function(){
+  var btn=document.getElementById('ypMenuBtn'),
+      drawer=document.getElementById('ypDrawer'),
+      scrim=document.getElementById('ypScrim'),
+      close=document.getElementById('ypDrawerClose');
+  if(!btn||!drawer)return;
+  function setOpen(open){
+    drawer.classList.toggle('is-open',open);
+    scrim.classList.toggle('is-open',open);
+    document.body.classList.toggle('nav-open',open);
+    btn.setAttribute('aria-expanded',open?'true':'false');
+    btn.setAttribute('aria-label',open?'Close menu':'Open menu');
+    if(open){ var first=drawer.querySelector('a,button'); if(first) first.focus(); }
+    else btn.focus();
+  }
+  function isOpen(){return drawer.classList.contains('is-open');}
+  btn.addEventListener('click',function(){setOpen(!isOpen());});
+  scrim.addEventListener('click',function(){setOpen(false);});
+  if(close) close.addEventListener('click',function(){setOpen(false);});
+  drawer.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){setOpen(false);});});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&isOpen())setOpen(false);});
+})();
+
+// copy buttons — label becomes "Copied" for 1800ms on success (design.md §9).
+document.querySelectorAll('.yp-copy-btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    var pre=document.getElementById(b.dataset.copy);
+    if(!pre||!navigator.clipboard)return;
+    navigator.clipboard.writeText(pre.innerText).then(function(){
+      b.textContent='Copied';
+      setTimeout(function(){b.textContent='Copy snippet';},1800);
+    }).catch(function(){ b.textContent='Copy snippet'; });
+  });
+});
+
+// scroll reveal — IntersectionObserver, with a reduced-motion / no-observer fallback that
+// leaves every target visible (design.md §14).
+(function(){
+  var targets=document.querySelectorAll('.yp-reveal');
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce||!('IntersectionObserver' in window)){
+    targets.forEach(function(t){t.classList.add('yp-in');});
+    return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){e.target.classList.add('yp-in');io.unobserve(e.target);}
+    });
+  },{rootMargin:'0px 0px -8% 0px',threshold:.08});
+  targets.forEach(function(t){io.observe(t);});
+})();
+</script>
+<script src="site.js"></script>
+</body>
+</html>

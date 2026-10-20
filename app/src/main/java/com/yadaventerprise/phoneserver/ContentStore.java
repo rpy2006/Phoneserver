@@ -14,6 +14,8 @@ import android.provider.Settings;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.yadaventerprise.phoneserver.data.StorageLayout;
+
 import java.io.File;
 
 /**
@@ -22,6 +24,11 @@ import java.io.File;
  * connections both use this same concept).
  */
 public class ContentStore {
+
+    /** Default per-file upload ceiling when a project does not set its own. */
+    public static final long DEFAULT_MAX_UPLOAD_BYTES = 512L * 1024 * 1024;
+    /** Default per-project API request rate. */
+    public static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 240;
 
     public static final String DEFAULT_HTML =
             "<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'><title>My Phone Server</title></head>\n" +
@@ -37,6 +44,9 @@ public class ContentStore {
     private static final String KEY_START_ON_BOOT = "start_on_boot";
     private static final String KEY_ALLOW_REMOTE_ACCESS = "allow_remote_access";
     private static final String KEY_SHOW_HIDDEN_FILES = "show_hidden_files";
+    private static final String KEY_DATA_ROOT = "data_root";
+    private static final String KEY_ALLOWED_ORIGINS = "allowed_origins";
+    private static final String KEY_RATE_LIMIT = "api_rate_limit_per_minute";
 
     /**
      * Folder holding everything served at "/" - index.html plus any CSS, JS,
@@ -148,6 +158,66 @@ public class ContentStore {
 
     public static void setShowHiddenFiles(Context context, boolean show) {
         getConfigPrefs(context).edit().putBoolean(KEY_SHOW_HIDDEN_FILES, show).apply();
+    }
+
+    // ---- Data platform configuration ----
+
+    /**
+     * Root directory for the SQL/file data platform. Defaults to an
+     * app-private directory on external storage (falling back to internal
+     * storage) so it survives app updates and is never world-readable.
+     * Overridable from Advanced Settings for advanced deployments.
+     */
+    public static File getDataRoot(Context context) {
+        String configured = getConfigPrefs(context).getString(KEY_DATA_ROOT, "");
+        if (configured != null && !configured.trim().isEmpty()) {
+            File custom = new File(configured.trim());
+            try {
+                if (!custom.exists()) custom.mkdirs();
+                if (custom.isDirectory() && custom.canWrite()) return custom;
+            } catch (Exception ignored) {
+                // fall through to the default below
+            }
+        }
+        File external = context.getExternalFilesDir("phoneserver-data");
+        if (external != null) {
+            if (!external.exists()) external.mkdirs();
+            return external;
+        }
+        File internal = new File(context.getFilesDir(), "phoneserver-data");
+        if (!internal.exists()) internal.mkdirs();
+        return internal;
+    }
+
+    public static void setDataRoot(Context context, String path) {
+        getConfigPrefs(context).edit().putString(KEY_DATA_ROOT, path == null ? "" : path.trim()).apply();
+    }
+
+    public static StorageLayout getStorageLayout(Context context) {
+        return new StorageLayout(getDataRoot(context));
+    }
+
+    /**
+     * Comma separated list of allowed browser origins for cross-origin API
+     * requests. "*" keeps the historic permissive behaviour; an empty value
+     * disables CORS headers entirely (same-origin only). Bearer/password
+     * credentials are never combined with {@code Access-Control-Allow-Credentials}.
+     */
+    public static String getAllowedOrigins(Context context) {
+        return getConfigPrefs(context).getString(KEY_ALLOWED_ORIGINS, "*");
+    }
+
+    public static void setAllowedOrigins(Context context, String origins) {
+        getConfigPrefs(context).edit().putString(KEY_ALLOWED_ORIGINS, origins == null ? "" : origins.trim()).apply();
+    }
+
+    /** Per-IP API requests allowed per minute. */
+    public static int getApiRateLimitPerMinute(Context context) {
+        return getConfigPrefs(context).getInt(KEY_RATE_LIMIT, DEFAULT_RATE_LIMIT_PER_MINUTE);
+    }
+
+    public static void setApiRateLimitPerMinute(Context context, int perMinute) {
+        getConfigPrefs(context).edit().putInt(KEY_RATE_LIMIT, Math.max(10, perMinute)).apply();
     }
 
     /**

@@ -91,6 +91,9 @@ public class QrFragment extends Fragment {
         recentScansContainer = view.findViewById(R.id.recent_scans_container);
         recentScansEmpty = view.findViewById(R.id.recent_scans_empty_text);
 
+        view.findViewById(R.id.menu_button).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).openDrawer();
+        });
         view.findViewById(R.id.tab_my_qr).setOnClickListener(v -> selectTab(true));
         view.findViewById(R.id.tab_scan_qr).setOnClickListener(v -> selectTab(false));
 

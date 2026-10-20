@@ -72,7 +72,7 @@ public class HomeFragment extends Fragment {
         localToggleButton.setOnClickListener(v -> onToggleClicked());
         localManageButton.setOnClickListener(v -> startActivity(new Intent(getContext(), FilesActivity.class)));
 
-        view.findViewById(R.id.menu_button).setOnClickListener(this::showOverflowMenu);
+        view.findViewById(R.id.menu_button).setOnClickListener(v -> openDrawer());
         view.findViewById(R.id.overflow_button).setOnClickListener(this::showOverflowMenu);
         view.findViewById(R.id.search_button).setOnClickListener(v ->
                 startActivity(new Intent(getContext(), FilesActivity.class)));
@@ -102,6 +102,12 @@ public class HomeFragment extends Fragment {
         handler.removeCallbacks(refreshRunnable);
     }
 
+    private void openDrawer() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).openDrawer();
+        }
+    }
+
     private void goToSettingsTab() {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).goToPage(MainPagerAdapter.PAGE_SETTINGS);
@@ -120,6 +126,7 @@ public class HomeFragment extends Fragment {
         PopupMenu menu = new PopupMenu(context, anchor);
         menu.getMenu().add("Edit Website");
         menu.getMenu().add("API Endpoints");
+        menu.getMenu().add("Database & Storage");
         menu.getMenu().add("Storage Access");
         menu.setOnMenuItemClickListener(item -> {
             String title = item.getTitle().toString();
@@ -127,6 +134,8 @@ public class HomeFragment extends Fragment {
                 startActivity(new Intent(context, WebsiteFilesActivity.class));
             } else if (title.equals("API Endpoints")) {
                 startActivity(new Intent(context, ApiEditorActivity.class));
+            } else if (title.equals("Database & Storage")) {
+                startActivity(new Intent(context, ProjectsActivity.class));
             } else if (title.equals("Storage Access")) {
                 if (ContentStore.hasFullStorageAccess(context)) {
                     Toast.makeText(context, "Already granted", Toast.LENGTH_SHORT).show();

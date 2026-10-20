@@ -74,6 +74,19 @@ Real (never simulated) telemetry: request count, bytes up/down, connected client
 - Launcher icon **swaps between online/offline artwork** by toggling two `activity-alias` components
 - DayNight theme support; a distinct light "Home" theme
 
+### 1.7 Local SQL & file storage platform
+
+A local-first storage layer that turns the phone into a small database + object-storage backend for other apps, websites, and scripts — still with no cloud dependency.
+
+- **Projects** — isolated workspaces, each with a generated ASCII-safe id used as its directory name
+- **Databases** — many SQLite databases per project, created/queried/inspected from the UI or the HTTP API, with a guarded SQL workspace (single statements, parameterised queries, row limits, time budget)
+- **Files** — streamed upload/download (range-capable) with per-file SHA-256 checksums, folders, rename/move, MIME detection, quota and per-file size limits
+- **Backups** — validated zip archives (manifest + databases + stored files + `metadata.json`) that can be downloaded, re-validated and restored, or imported from another device
+- **API tokens** — scoped (per-project and/or read-only) bearer tokens, stored only as SHA-256 hashes
+- **Storage insights** — real per-project database/file/folder counts, byte sizes, free space and a rolling operation log
+
+Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](architecture.md), [storage.md](storage.md), [security.md](security.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
+
 ---
 
 ## 2. Tech Stack & Requirements
@@ -544,11 +557,33 @@ Notes on the semantics:
 ```
 With `WWW-Authenticate: Basic realm="PhoneServer"`, which makes a browser show its native credential prompt.
 
+### 5.3 Data & storage API (`/api/v1`)
+
+The SQL/file/backup platform exposes a separate, versioned JSON API rooted at `/api/v1`. It is authenticated with either the interactive access password (admin) or a scoped bearer token, is rate-limited per client IP, honours the configured CORS origins, and streams binary resources (downloads/export/import) with HTTP range support.
+
+The **full reference — endpoints, request/response bodies, status codes, authentication, CORS and worked examples** — lives in [API.md](API.md). A short in-app summary is also available from **ApiDocsActivity** (Settings → Data platform → API documentation).
+
+Quick taste:
+
+```bash
+# Public liveness probe
+curl http://<phone-ip>:8080/api/v1/health
+
+# List projects using a scoped token
+curl -H "Authorization: Bearer pst_..." \
+     http://<phone-ip>:8080/api/v1/projects
+
+# Run a parameterised query against a project database
+curl -X POST -H "Authorization: Bearer pst_..." -H "Content-Type: application/json" \
+     -d '{"sql":"SELECT * FROM notes WHERE id = ?","params":[1]}' \
+     http://<phone-ip>:8080/api/v1/projects/<projectId>/databases/<db>/query
+```
+
 ---
 
 ## 6. Data & Persistence Model
 
-No Room, no SQLite, no DataStore. Every structured collection is a JSON array in a `SharedPreferences` string key.
+The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [architecture.md](architecture.md).
 
 | Prefs file | Key | Contents | Written by |
 |---|---|---|---|
