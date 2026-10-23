@@ -56,9 +56,12 @@ public class ServerService extends Service {
             ServerStats.get().logServerStarted();
             IconSwitcher.setOnline(this, true);
         }
+        // Ad Network Manager: opt-in, own port and database; does nothing unless enabled in its settings screen.
+        AdNetworkManager.startIfEnabled(this);
     }
 
     private void stopServer() {
+        AdNetworkManager.stop();
         if (server != null) {
             server.stop();
         }

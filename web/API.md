@@ -521,3 +521,53 @@ curl -s -X POST "$BASE/projects/$PID/backups/import?confirm=true" \
 - This is a local-first store, **not** a hardened multi-tenant SQL service. See
   [security.md](security.md) for the full threat model and production
   requirements (notably: put it behind HTTPS/VPN for any non-LAN access).
+
+---
+
+## 6. Ad Network API (port 8090)
+
+The optional ad network is a **separate origin** with its own API and auth. It is documented in full in [ad-network.md](ad-network.md); this section is the endpoint index.
+
+Base URL: `http://<phone-ip>:8090`. Management endpoints use `Authorization: Bearer <session-token>` from `/api/auth/login` (12-hour sessions). Public delivery has no account auth and is constrained by placement keys, site domains, signed tokens and rate limits.
+
+### 6.1 Public delivery
+
+| Method | Path | Behaviour |
+|---|---|---|
+| `GET` | `/health` | `{"status":"ok"}` |
+| `GET` | `/sdk.js` | Embed script, `Cache-Control: public, max-age=3600` |
+| `GET` | `/serve?p=<key>&u=<page>&l=<lang>` | JSON ad or `204` on no fill; requires `Origin`/`Referer` |
+| `POST` | `/imp?t=<token>` | Viewable impression beacon, always `204` |
+| `GET` | `/c?t=<token>` | Counts click then `302` to `click_url` |
+| `GET` | `/media/<creativeId>` | Approved creative image |
+| `OPTIONS` | public paths | CORS preflight |
+
+### 6.2 Auth and accounts
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/api/setup/status` | public |
+| `POST` | `/api/setup` | public, phone setup code required |
+| `POST` | `/api/auth/login` | public |
+| `POST` | `/api/auth/signup` | public only when enabled |
+| `GET` | `/api/auth/me` | any |
+| `POST` | `/api/auth/logout` | any |
+| `POST` | `/api/auth/password` | any |
+| `GET` | `/api/meta` | any |
+
+### 6.3 Management
+
+| Area | Endpoints |
+|---|---|
+| Users (admin) | `GET|POST /api/users`, `PATCH|DELETE /api/users/:id`, `POST /api/users/:id/credit`, `POST /api/users/:id/payout` |
+| Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
+| Campaigns | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST /api/campaigns/:id/{submit,approve,reject,pause,resume}` |
+| Creatives | `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST /api/creatives/:id/{image,approve,reject}` |
+| Reports | `GET /api/reports/{summary,breakdown,export}`, `GET /api/billing` |
+| Admin | `GET /api/admin/{overview,fraud,settings}`, `PUT /api/admin/settings` |
+
+Dates use `YYYY-MM-DD` UTC. Reports accept `from`, `to`, `campaign_id`, `site_id`; `/breakdown` and `/export` also accept `by` (`campaign`, `site`, `placement`, `creative`, `day`). The default range is 29 days back from `to`; the maximum is 366 days.
+
+### 6.4 Relationship to `/api/v1`
+
+Nothing is shared: different port, database, files, auth and rate limiter. `/api/v1` tokens and the access password do not work on port 8090, and ad sessions do not work on port 8080. Ad-network data is not included in `/api/v1` project backups.

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="PhoneServer production guide — install, harden, share files, host sites and operate a local-network server on an Android phone">
+<meta name="description" content="PhoneServer production guide — install, harden, share files, host sites and optionally run a self-hosted ad network on an Android phone">
 <title>PhoneServer — Production Guide</title>
 <style>
 /* ============================================================
@@ -14,21 +14,42 @@
   --yp-ink:#101827;
   --yp-paper:#f7f9fc;
   --yp-muted:#68758a;
-  --yp-blue:#526fe8;
-  --yp-blue-deep:#405ed8;
+  --yp-accent:#c23a00;
+  --yp-accent-deep:#a83200;
   --yp-line:#e1e6ee;
   --yp-soft:#edf1f7;
   --yp-white:#fff;
   --yp-ok:#31a77a;
   --yp-warn:#4d8b79;
-  --yp-hl:#8fa2ff;
+  --yp-hl:#ff7a45;
   --yp-dark-copy:#aab5c7;
   --yp-code:#0d1524;
   --yp-card-line:#e3e8f0;
+  --yp-hard:rgba(16,24,39,.16);
+  --yp-band:#101827;
   --radius:0.625rem;
   --font-sans:'Space Grotesk','Avenir Next',sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
+
+/* persistent dark theme — same ink palette as docs.html */
+html[data-theme="dark"]{
+  --yp-ink:#eef2f8;
+  --yp-paper:#101827;
+  --yp-muted:#9dabbe;
+  --yp-accent:#ff6a33;
+  --yp-accent-deep:#ff8a5c;
+  --yp-line:#27324a;
+  --yp-soft:#1a2334;
+  --yp-white:#131a28;
+  --yp-card-line:#27324a;
+  --yp-hl:#ff8a5c;
+  --yp-dark-copy:#9dabbe;
+  --yp-hard:rgba(238,242,248,.16);
+  --yp-band:#0a0f18;
+  color-scheme:dark;
+}
+html[data-theme="dark"] .yp-card.accent{background:#1a2334;border-color:#27324a}
 
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;color-scheme:light}
@@ -50,16 +71,16 @@ body::before{
   background-size:26px 26px;opacity:.5;
 }
 img{max-width:100%}
-a{color:var(--yp-blue);text-decoration:none}
+a{color:var(--yp-accent);text-decoration:none}
 a:hover{text-decoration:underline}
-:focus-visible{outline:2px solid var(--yp-blue);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--yp-accent);outline-offset:2px;border-radius:4px}
 
 .yp-wrap{width:min(1190px,calc(100% - 64px));margin-inline:auto;position:relative;z-index:1}
 
 /* ---------- type ---------- */
 .yp-eyebrow{
   font-family:var(--font-mono);font-size:10px;font-weight:600;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--yp-blue);
+  letter-spacing:.14em;text-transform:uppercase;color:var(--yp-accent);
   margin:0 0 18px;display:block;
 }
 .yp-eyebrow.dim{color:var(--yp-muted)}
@@ -68,7 +89,7 @@ h1,h2,h3,h4{margin:0;font-weight:540}
 .yp-h1{font-size:clamp(48px,5.1vw,70px);line-height:.99;letter-spacing:-.068em;font-weight:550}
 .yp-h2{font-size:clamp(40px,4.5vw,57px);line-height:1.02;letter-spacing:-.065em}
 .yp-h2.on-dark{font-size:clamp(42px,4.6vw,58px)}
-.hl{color:var(--yp-blue)}
+.hl{color:var(--yp-accent)}
 .on-dark .hl,.yp-h2.on-dark .hl{color:var(--yp-hl)}
 .yp-lead{font-size:15px;line-height:1.75;color:var(--yp-muted);margin:20px 0 0;max-width:56ch}
 .yp-copy{font-size:14px;line-height:1.75;color:var(--yp-muted);margin:18px 0 0;max-width:62ch}
@@ -84,22 +105,22 @@ code{font-family:var(--font-mono);font-size:.86em;background:var(--yp-soft);
   transition:transform .2s,box-shadow .2s,background .2s,border-color .2s,color .2s;
 }
 .yp-btn-primary{
-  background:var(--yp-blue);color:#fff;border-radius:7px;padding:14px 17px;
-  box-shadow:0 8px 20px rgba(82,111,232,.28);
+  background:var(--yp-accent);color:#fff;border-radius:7px;padding:14px 17px;
+  box-shadow:5px 5px 0 var(--yp-hard);
 }
-.yp-btn-primary:hover{background:var(--yp-blue-deep);transform:translateY(-2px);
-  box-shadow:0 14px 28px rgba(82,111,232,.34);text-decoration:none}
+.yp-btn-primary:hover{background:var(--yp-accent-deep);transform:translateY(-2px);
+  box-shadow:7px 7px 0 var(--yp-hard);text-decoration:none}
 .yp-btn-primary:active{transform:scale(.98)}
 .yp-btn-primary[aria-disabled="true"]{opacity:.6;cursor:not-allowed}
 .yp-btn-text{background:transparent;color:var(--yp-muted);padding:14px 4px}
-.yp-btn-text:hover{color:var(--yp-blue);text-decoration:none}
+.yp-btn-text:hover{color:var(--yp-accent);text-decoration:none}
 .yp-btn-light{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);
   color:#fff;border-radius:7px;padding:13px 17px}
 .yp-btn-light:hover{background:rgba(255,255,255,.12);text-decoration:none}
 .yp-btn-light:active{transform:scale(.98)}
 .yp-nav-cta{background:var(--yp-white);color:var(--yp-ink);border:1px solid var(--yp-line);
   border-radius:7px;padding:9px 13px}
-.yp-nav-cta:hover{border-color:#9baae5;transform:translateY(-1px);text-decoration:none}
+.yp-nav-cta:hover{border-color:#e08050;transform:translateY(-1px);text-decoration:none}
 .yp-btn-primary .ico,.yp-nav-cta .ico,.yp-btn-light .ico,.yp-btn-text .ico{width:14px;height:14px}
 
 /* ---------- header (design.md §7) ---------- */
@@ -113,7 +134,7 @@ code{font-family:var(--font-mono);font-size:.86em;background:var(--yp-soft);
 .yp-brand{display:flex;align-items:center;gap:10px;color:var(--yp-ink);font-weight:700;font-size:15px}
 .yp-brand:hover{text-decoration:none}
 .yp-mark{display:grid;grid-template-columns:repeat(2,9px);gap:3px;transform:rotate(-8deg)}
-.yp-mark i{display:block;width:9px;height:9px;background:var(--yp-blue);border-radius:3px 3px 3px 1px}
+.yp-mark i{display:block;width:9px;height:9px;background:var(--yp-accent);border-radius:3px 3px 3px 1px}
 .yp-mark i:nth-child(2){opacity:.55;border-radius:3px 1px 3px 3px}
 .yp-mark i:nth-child(3){opacity:.75;border-radius:1px 3px 3px 3px}
 .yp-mark i:nth-child(4){opacity:.35;border-radius:3px 3px 1px 3px}
@@ -133,7 +154,14 @@ code{font-family:var(--font-mono);font-size:.86em;background:var(--yp-soft);
   background:var(--yp-white);border:1px solid var(--yp-line);border-radius:10px;
   color:var(--yp-ink);cursor:pointer;transition:background .2s,border-color .2s,color .2s;
 }
-.yp-menu-btn:hover{border-color:var(--yp-blue);color:var(--yp-blue)}
+.yp-menu-btn:hover{border-color:var(--yp-accent);color:var(--yp-accent)}
+.yp-theme-btn{
+  display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;
+  background:var(--yp-white);border:1px solid var(--yp-line);border-radius:10px;
+  color:var(--yp-ink);font-size:17px;line-height:1;cursor:pointer;
+  transition:background .2s,border-color .2s,color .2s;
+}
+.yp-theme-btn:hover{border-color:var(--yp-accent);color:var(--yp-accent)}
 .yp-menu-btn .ico{width:20px;height:20px}
 body.nav-open{overflow:hidden}
 
@@ -160,17 +188,17 @@ body.nav-open{overflow:hidden}
 .yp-drawer-close{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;
   background:var(--yp-white);border:1px solid var(--yp-line);border-radius:8px;
   color:var(--yp-ink);cursor:pointer}
-.yp-drawer-close:hover{border-color:var(--yp-blue);color:var(--yp-blue)}
+.yp-drawer-close:hover{border-color:var(--yp-accent);color:var(--yp-accent)}
 .yp-drawer-close .ico{width:15px;height:15px}
 .yp-drawer nav{display:flex;flex-direction:column;gap:2px}
 .yp-drawer nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;
   font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--yp-ink);
   transition:background .18s,color .18s}
 .yp-drawer nav a:hover,.yp-drawer nav a:focus-visible{background:var(--yp-soft);
-  color:var(--yp-blue);text-decoration:none}
-.yp-drawer nav a .ico{flex:0 0 auto;width:20px;height:20px;color:var(--yp-blue)}
+  color:var(--yp-accent);text-decoration:none}
+.yp-drawer nav a .ico{flex:0 0 auto;width:20px;height:20px;color:var(--yp-accent)}
 .yp-drawer nav a .arrow{margin-left:auto;width:14px;height:14px;color:var(--yp-muted)}
-.yp-drawer nav a:hover .arrow{color:var(--yp-blue)}
+.yp-drawer nav a:hover .arrow{color:var(--yp-accent)}
 .yp-drawer .sep{height:1px;background:var(--yp-line);margin:12px 4px}
 .yp-drawer .cap{font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;
   text-transform:uppercase;color:var(--yp-muted);padding:4px 12px 8px}
@@ -179,7 +207,7 @@ body.nav-open{overflow:hidden}
 
 /* ---------- hero (design.md §8.2) ---------- */
 .yp-hero{padding:91px 0 72px;position:relative;z-index:1}
-.yp-hero-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:clamp(28px,4vw,58px);align-items:center}
+.yp-hero-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:clamp(28px,4vw,58px);align-items:center;position:relative;z-index:1}
 .yp-hero-actions{display:flex;align-items:center;gap:14px;margin-top:34px;flex-wrap:wrap}
 .yp-safety{
   display:flex;gap:10px;align-items:flex-start;margin-top:26px;max-width:52ch;
@@ -219,15 +247,15 @@ body.nav-open{overflow:hidden}
 .yp-frame-actions{display:flex;gap:10px;margin-top:16px}
 .yp-frame-actions span{flex:1;text-align:center;font-size:12.5px;font-weight:550;
   border-radius:7px;padding:9px 0}
-.yp-frame-actions .ghost{border:1px solid var(--yp-blue);color:var(--yp-blue)}
-.yp-frame-actions .solid{background:var(--yp-blue);color:#fff}
+.yp-frame-actions .ghost{border:1px solid var(--yp-accent);color:var(--yp-accent)}
+.yp-frame-actions .solid{background:var(--yp-accent);color:#fff}
 .yp-frame-foot{margin-top:14px;font-size:11.5px;color:var(--yp-muted)}
 
 /* ---------- proof strip (design.md §8.3) ---------- */
-.yp-proof{background:#eef2f7;border-block:1px solid var(--yp-line);position:relative;z-index:1}
+.yp-proof{background:var(--yp-soft);border-block:1px solid var(--yp-line);position:relative;z-index:1}
 .yp-proof-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;padding:34px 0}
 .yp-proof-item{display:flex;gap:12px;align-items:flex-start}
-.yp-proof-item .ico{flex:0 0 auto;width:21px;height:21px;color:var(--yp-blue);margin-top:2px}
+.yp-proof-item .ico{flex:0 0 auto;width:21px;height:21px;color:var(--yp-accent);margin-top:2px}
 .yp-proof-item b{display:block;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
 .yp-proof-item span{font-size:12.5px;line-height:1.65;color:var(--yp-muted)}
 
@@ -248,30 +276,30 @@ body.nav-open{overflow:hidden}
 }
 .yp-card .tag{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.14em;
   text-transform:uppercase;color:var(--yp-muted);margin-bottom:16px}
-.yp-card .ico{width:21px;height:21px;color:var(--yp-blue);margin-bottom:14px}
+.yp-card .ico{width:21px;height:21px;color:var(--yp-accent);margin-bottom:14px}
 .yp-card h3{font-size:19px;line-height:1.18;letter-spacing:-.03em;font-weight:550}
 .yp-card p{font-size:13px;line-height:1.7;color:var(--yp-muted);margin:10px 0 0}
 .yp-card .note{
   margin-top:auto;padding-top:14px;font-family:var(--font-mono);font-size:11px;
   line-height:1.6;color:var(--yp-muted);letter-spacing:.02em;
 }
-.yp-card.accent{background:#f0f3fb;border-color:#e1e6ef}
+.yp-card.accent{background:#fdf0ea;border-color:#f0c9b5}
 
 /* workflow track (design.md §8.7) */
 .yp-track{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:52px;align-items:stretch}
 .yp-step{position:relative;background:var(--yp-white);border:1px solid var(--yp-card-line);
   border-radius:12px;padding:22px 20px}
 .yp-step .idx{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.14em;
-  color:var(--yp-blue)}
+  color:var(--yp-accent)}
 .yp-step h3{font-size:17px;letter-spacing:-.03em;font-weight:550;margin-top:12px}
 .yp-step p{font-size:12.5px;line-height:1.7;color:var(--yp-muted);margin:8px 0 0}
 .yp-step .arrow{position:absolute;top:50%;right:-19px;transform:translateY(-50%);
-  width:22px;height:22px;color:var(--yp-blue);background:var(--yp-paper);
+  width:22px;height:22px;color:var(--yp-accent);background:var(--yp-paper);
   border:1px solid var(--yp-line);border-radius:50%;padding:4px}
 .yp-step:last-child .arrow{display:none}
 
 /* ---------- dark band (design.md §8.6) ---------- */
-.yp-dark{background:var(--yp-ink);color:#f2f5fa;position:relative;z-index:1;
+.yp-dark{background:var(--yp-band);color:#f2f5fa;position:relative;z-index:1;
   background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
                    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
   background-size:64px 64px}
@@ -297,12 +325,12 @@ body.nav-open{overflow:hidden}
 .yp-code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.12)}
 .yp-code-head .file{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.1em;
-  text-transform:uppercase;color:#8fa2ff}
+  text-transform:uppercase;color:#ff9a70}
 .yp-copy-btn{font-family:var(--font-mono);font-size:11.5px;font-weight:500;letter-spacing:.06em;
   background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);color:#e7edf7;
   border-radius:6px;padding:6px 11px;cursor:pointer;transition:background .2s,color .2s}
 .yp-copy-btn:hover{background:rgba(255,255,255,.2);color:#fff}
-.yp-copy-btn:focus-visible{outline:2px solid #8fa2ff;outline-offset:2px}
+.yp-copy-btn:focus-visible{outline:2px solid #ff7a45;outline-offset:2px}
 /* readability first: larger type, roomy leading, wrapped lines instead of a side-scroll hunt */
 .yp-code-card pre{margin:0;padding:18px 16px;overflow-x:auto;overscroll-behavior-x:contain;
   -webkit-overflow-scrolling:touch;
@@ -313,7 +341,7 @@ body.nav-open{overflow:hidden}
 .yp-code-card .cmd{color:#ffffff;font-weight:600}
 .yp-code-card .str{color:#9fe3c8}
 .yp-code-card .flg{color:#ffcf8f}
-.yp-code-card .ph{color:#8fa2ff}
+.yp-code-card .ph{color:#ff9a70}
 .yp-code-card pre::selection,.yp-code-card pre *::selection{background:rgba(143,162,255,.35)}
 .yp-code-foot{padding:11px 16px;border-top:1px solid rgba(255,255,255,.12);
   font-family:var(--font-mono);font-size:11.5px;line-height:1.6;letter-spacing:.08em;
@@ -351,7 +379,7 @@ body.nav-open{overflow:hidden}
 .yp-footer p{font-size:13px;color:var(--yp-muted);max-width:44ch;margin:14px 0 0}
 .yp-footer-links{display:flex;gap:26px;flex-wrap:wrap}
 .yp-footer-links a{font-size:13px;font-weight:550;color:var(--yp-ink)}
-.yp-footer-links a:hover{color:var(--yp-blue);text-decoration:none}
+.yp-footer-links a:hover{color:var(--yp-accent);text-decoration:none}
 .yp-disclaimer{margin-top:34px;padding-top:22px;border-top:1px solid var(--yp-line);
   font-size:12px;line-height:1.75;color:var(--yp-muted)}
 .yp-disclaimer b{color:var(--yp-ink);font-weight:600}
@@ -404,8 +432,81 @@ body.nav-open{overflow:hidden}
   .yp-reveal{opacity:1;transform:none}
   .yp-section{padding:28px 0}
 }
+/* subtle 3D rack visual in the hero (fx.js lazy-loads Three.js; static otherwise) */
+.yp-hero-fx{
+  position:absolute;right:-30px;top:34px;width:min(44vw,540px);aspect-ratio:1/1;
+  pointer-events:none;z-index:0;opacity:.92;
+}
+.yp-hero-fx canvas{display:block}
+@media (max-width:1020px){.yp-hero-fx{display:none}}
+@media (prefers-reduced-motion:reduce){.yp-hero-fx{display:none}}
+
+/* ============================================================
+   Brutalist pass — sharp edges, hard shadows, bold type.
+   Overrides everything above; driven by the same yp-* tokens.
+   ============================================================ */
+h1,h2,h3,h4,.yp-h1,.yp-h2,.yp-head h2,.yp-card h3,.yp-step h3,.yp-frame-title{font-weight:700}
+.yp-h1{letter-spacing:-.05em}
+
+/* buttons — square, thick-bordered, offset-shadow */
+.yp-btn-primary{border:2px solid var(--yp-accent);border-radius:2px;
+  box-shadow:5px 5px 0 var(--yp-hard);
+  transition:transform .16s ease-out,box-shadow .16s ease-out,background .16s ease-out}
+.yp-btn-primary:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--yp-hard);text-decoration:none}
+.yp-btn-primary:active{transform:translate(0,0);box-shadow:2px 2px 0 var(--yp-hard)}
+.yp-btn-light{border:2px solid rgba(255,255,255,.45);border-radius:2px}
+.yp-btn-light:hover{border-color:#fff;background:rgba(255,255,255,.12)}
+.yp-nav-cta{border:2px solid var(--yp-ink);border-radius:2px}
+.yp-nav-cta:hover{border-color:var(--yp-accent);color:var(--yp-accent);
+  transform:translate(-2px,-2px);box-shadow:4px 4px 0 var(--yp-accent);text-decoration:none}
+
+/* chrome */
+.yp-nav{border-bottom:2px solid var(--yp-ink)}
+.yp-menu-btn,.yp-theme-btn,.yp-drawer-close{border:2px solid var(--yp-ink);border-radius:2px}
+.yp-menu-btn:hover,.yp-theme-btn:hover,.yp-drawer-close:hover{
+  transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--yp-accent)}
+.yp-demo-tag{border-radius:0}
+.yp-drawer{border-right:2px solid var(--yp-ink)}
+.yp-drawer nav a{border-radius:0}
+
+/* hero + cards */
+.yp-safety{border-radius:0;border:1px solid var(--yp-line);border-left:4px solid var(--yp-warn)}
+.yp-frame{border:2px solid var(--yp-ink);border-radius:0;box-shadow:9px 9px 0 var(--yp-hard)}
+.yp-frame::after{border-radius:0}
+.yp-frame-label{border-radius:0}
+.yp-frame-addr{border-radius:0}
+.yp-frame-stat{border:2px solid var(--yp-line);border-radius:0}
+.yp-frame-actions span{border-radius:2px}
+.yp-card,.yp-step,.yp-list li{border:2px solid var(--yp-ink);border-radius:0;box-shadow:none;
+  transition:transform .16s ease-out,box-shadow .16s ease-out}
+@media (hover:hover){
+  .yp-card:hover,.yp-step:hover,.yp-list li:hover{
+    transform:translate(-3px,-3px);box-shadow:6px 6px 0 var(--yp-hard)}
+}
+.yp-card.accent{border-color:var(--yp-accent)}
+.yp-proof{border-block:2px solid var(--yp-ink)}
+.yp-check{border-radius:0;border:1px solid rgba(255,255,255,.3)}
+.yp-warn-card{border-radius:0}
+.yp-code-card{border:2px solid rgba(255,255,255,.32);border-radius:0;
+  box-shadow:8px 8px 0 rgba(16,24,39,.3)}
+.yp-copy-btn{border-radius:2px}
+.yp-table-wrap{border:2px solid var(--yp-ink);border-radius:0}
+.yp-footer{border-top:2px solid var(--yp-ink)}
+
+/* interaction states */
+.is-loading{pointer-events:none;opacity:.7}
+.is-loading::after{content:"…";letter-spacing:.2em;margin-left:.3em}
+.is-error{outline:2px solid #d2544f;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  .yp-card:hover,.yp-step:hover,.yp-list li:hover,
+  .yp-btn-primary:hover,.yp-nav-cta:hover,
+  .yp-menu-btn:hover,.yp-theme-btn:hover,.yp-drawer-close:hover{transform:none}
+}
+html[data-theme="dark"] .yp-btn-primary,
+html[data-theme="dark"] .yp-frame-actions .solid{color:#101827}
 </style>
 <link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body>
 
@@ -464,6 +565,7 @@ body.nav-open{overflow:hidden}
 
   <div class="yp-nav-actions">
     <span class="yp-status"><i aria-hidden="true"></i>LAN only · v1.0</span>
+    <button class="yp-theme-btn" data-theme-toggle type="button" aria-pressed="false" title="Dark theme" aria-label="Switch to dark theme">◐</button>
     <a class="yp-nav-cta" href="docs.html">Docs<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
   </div>
 
@@ -492,6 +594,7 @@ body.nav-open{overflow:hidden}
     <a href="#hardening"><svg class="ico" aria-hidden="true"><use href="#n-shield"/></svg>Hardening</a>
     <a href="#operations"><svg class="ico" aria-hidden="true"><use href="#n-server"/></svg>Operations</a>
     <a href="#developers"><svg class="ico" aria-hidden="true"><use href="#n-term"/></svg>Developers</a>
+    <a href="#adnet"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Ad network</a>
   </nav>
 
   <div class="sep"></div>
@@ -505,13 +608,14 @@ body.nav-open{overflow:hidden}
     <a href="legal.html"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
   </nav>
 
-  <div class="meta">LAN only · port 8080 · v1.0</div>
+  <div class="meta">LAN · file server 8080 · optional ads 8090 · v1.0</div>
 </aside>
 
 <main id="home">
 
   <!-- ============ HERO ============ -->
   <section class="yp-hero">
+    <div class="yp-hero-fx" data-fx-3d aria-hidden="true"></div>
     <div class="yp-wrap yp-hero-grid">
       <div>
         <span class="yp-eyebrow yp-reveal">Production guide · PhoneServer 1.0</span>
@@ -529,7 +633,7 @@ body.nav-open{overflow:hidden}
 
         <p class="yp-safety yp-reveal" style="transition-delay:280ms">
           <svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>
-          PhoneServer is a local-network service: plain HTTP on port 8080, no TLS, no cloud. It is
+          PhoneServer is a local-network service: plain HTTP on port 8080, an optional ad server on 8090, no TLS, no cloud. It is
           not hardened for the public internet — keep it on a network you trust.
         </p>
       </div>
@@ -547,9 +651,9 @@ body.nav-open{overflow:hidden}
         <div class="yp-frame-addr">http://192.168.1.24:8080</div>
 
         <div class="yp-frame-stats">
-          <div class="yp-frame-stat"><b>42</b><span>Requests</span></div>
-          <div class="yp-frame-stat"><b>2</b><span>Clients</span></div>
-          <div class="yp-frame-stat"><b>61%</b><span>RAM</span></div>
+          <div class="yp-frame-stat"><b data-count="42">42</b><span>Requests</span></div>
+          <div class="yp-frame-stat"><b data-count="2">2</b><span>Clients</span></div>
+          <div class="yp-frame-stat"><b data-count="61" data-suffix="%">61%</b><span>RAM</span></div>
         </div>
 
         <div class="yp-frame-actions">
@@ -566,7 +670,7 @@ body.nav-open{overflow:hidden}
     <div class="yp-wrap yp-proof-grid">
       <div class="yp-proof-item yp-reveal">
         <svg class="ico" aria-hidden="true"><use href="#i-server"/></svg>
-        <div><b>No cloud, no account</b><span>Everything runs on the device and keeps working with the internet unplugged.</span></div>
+        <div><b>No cloud, no hosted account</b><span>Everything runs on the device and keeps working with the internet unplugged; optional ad accounts live only in the local database.</span></div>
       </div>
       <div class="yp-proof-item yp-reveal" style="transition-delay:90ms">
         <svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg>
@@ -1012,6 +1116,84 @@ body.nav-open{overflow:hidden}
     </div>
   </section>
 
+  <!-- ============ 07 OPTIONAL AD NETWORK ============ -->
+  <section class="yp-section" id="adnet">
+    <div class="yp-wrap">
+      <div class="yp-head">
+        <span class="yp-eyebrow yp-reveal">07 — Optional add-on</span>
+        <h2 class="yp-h2 yp-reveal" style="transition-delay:60ms">Run a small <span class="hl">ad network</span> from the same phone</h2>
+        <p class="yp-copy yp-reveal" style="transition-delay:120ms">
+          Ad Network Manager is off by default. When enabled it listens on a separate
+          <code>8090</code> socket with its own database, accounts and dashboard; the file server on
+          <code>8080</code>, its password and its data are untouched. No cloud account, ad exchange
+          or third-party SDK is involved.
+        </p>
+      </div>
+
+      <div class="yp-grid-3">
+        <article class="yp-card accent yp-reveal">
+          <span class="tag">Step 01 · Enable</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-server"/></svg>
+          <h3>Turn it on and claim admin</h3>
+          <p>Settings → <b>Ad Network</b> → enable, then start the server. Open
+             <code>http://&lt;phone-ip&gt;:8090</code> and enter the one-time setup code shown only
+             on the phone to create the first administrator.</p>
+          <p class="note">Separate opt-in; nothing starts by itself</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:90ms">
+          <span class="tag">Step 02 · People</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg>
+          <h3>Add a publisher and an advertiser</h3>
+          <p>An <b>admin</b> approves sites and campaigns, manages balances and can review fraud.
+             A <b>publisher</b> registers a domain and placement; an <b>advertiser</b> creates a
+             campaign, uploads a creative and submits it for review. Sign-up is off by default.</p>
+          <p class="note">Roles: admin · advertiser · publisher</p>
+        </article>
+
+        <article class="yp-card yp-reveal" style="transition-delay:160ms">
+          <span class="tag">Step 03 · Embed</span>
+          <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>
+          <h3>Paste one tag on the site</h3>
+          <p>Only approved sites with active placements serve. Copy the tag from the placement,
+             keep the page CSP permissive for the ad origin, and test from a real hostname —
+             bare IP addresses are rejected by design.</p>
+          <p class="note">HTTP on the LAN; HTTPS pages need public_base_url</p>
+        </article>
+      </div>
+
+      <div class="yp-code-card yp-reveal" style="margin-top:22px">
+        <div class="yp-code-head">
+          <span class="file">ad-tag.html</span>
+          <button class="yp-copy-btn" data-copy="adnet-tag">Copy snippet</button>
+        </div>
+        <pre id="adnet-tag"><code><span class="cmt">&lt;!-- placement tag from the dashboard --&gt;</span>
+<span class="cmd">&lt;div</span> <span class="str">data-adnet-placement="pl_0123456789abcdef"</span><span class="cmd">&gt;&lt;/div&gt;</span>
+<span class="cmd">&lt;script</span> <span class="str">async src="http://<span class="ph">&lt;phone-ip&gt;</span>:8090/sdk.js"</span><span class="cmd">&gt;&lt;/script&gt;</span></code></pre>
+        <div class="yp-code-foot">Viewability = 50% visible for 1 second · no fill returns 204 · no fake ads</div>
+      </div>
+
+      <div class="yp-warn-card yp-reveal" style="margin-top:22px">
+        <h3>Before you expose it</h3>
+        <ul>
+          <li><b>Plaintext HTTP.</b> Port 8090 has no TLS. Keep it on a trusted LAN; use a reverse
+              proxy for HTTPS and set <code>public_base_url</code> to that origin.</li>
+          <li><b>It is not an ad exchange.</b> Fraud checks are heuristics, there is no email
+              verification or CAPTCHA, and billing is a local ledger — settle real money out of band.</li>
+          <li><b>Back it up separately.</b> <code>adnet.db</code> and
+              <code>filesDir/adnet/creatives/</code> are not included in <code>/api/v1</code>
+              project backups.</li>
+          <li><b>Do not tag this docs site.</b> <code>web/</code> promises no third-party requests;
+              the ad server is documented, not embedded.</li>
+        </ul>
+        <p style="margin:16px 0 0;font-size:13px">
+          Setup, targeting, API and retention:
+          <a href="docs.html#adnet" style="color:var(--yp-hl)">Ad Network reference</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FINAL CTA ============ -->
   <section class="yp-cta">
     <span class="yp-rings" aria-hidden="true"></span>
@@ -1058,9 +1240,9 @@ body.nav-open{overflow:hidden}
     </div>
     <p class="yp-disclaimer">
       <b>Scope:</b> PhoneServer 1.0 is a local-network service. This guide documents operating it on
-      a trusted LAN — it does not describe a cloud product: no accounts, no telemetry upload, no
-      internet exposure, and no TLS. Do not port-forward or otherwise expose port 8080 to the public
-      internet. All counters, addresses and credentials shown here are illustrative.
+      a trusted LAN — it does not describe a cloud product: no hosted accounts, no telemetry
+      upload, no internet exposure, and no TLS. Do not port-forward or otherwise expose port 8080
+      or the optional ad port 8090 to the public internet. All counters, addresses and credentials shown here are illustrative.
     </p>
   </div>
 </footer>
@@ -1121,5 +1303,6 @@ document.querySelectorAll('.yp-copy-btn').forEach(function(b){
 })();
 </script>
 <script src="site.js"></script>
+<script src="fx.js" defer></script>
 </body>
 </html>

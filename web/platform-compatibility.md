@@ -72,3 +72,14 @@ Consequences:
 The `--warning-mode all` Gradle hint and the "Deprecated Gradle features" notice
 come from the existing build setup (Gradle 9 deprecations) and are unrelated to
 this change.
+
+## Ad network runtime
+
+- The ad network is optional and uses a **second port, 8090** (`AdNetworkManager.PORT`). The main file server remains on 8080.
+- It requires no new dependency, permission or storage grant: SQLite is the device's built-in implementation, creative images live in app-private storage, and the dashboard is plain HTML/CSS/JS.
+- The dashboard needs a browser with JavaScript enabled. It is served with a strict self-only CSP, so modified assets must not introduce inline scripts/styles/handlers.
+- Client pages that embed the SDK need a **hostname** matching the registered site domain. Bare IP hosts are rejected by design; `localhost` is accepted as a special case.
+- HTTPS client pages require `public_base_url` to be an HTTPS URL for the ad server, or the browser blocks `/sdk.js` as mixed content. The page's own CSP must also allow the ad-server origin in `script-src`, `img-src` and `connect-src`.
+- Ad data is app-private (`databases/adnet.db`, `files/adnet/creatives/`) and is not covered by the `/api/v1` data-platform backup format.
+
+See [ad-network.md](ad-network.md).

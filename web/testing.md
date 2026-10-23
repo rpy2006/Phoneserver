@@ -96,3 +96,15 @@ The suites cover the testing requirements from the feature specification:
 `sh gradlew :app:lintDebug` can be run for Android Lint. It is not part of the
 default `assembleDebug`/`test` path and was not required to build the debug
 APK.
+
+## Ad network coverage
+
+There are **no automated tests for the ad-network classes or the dashboard assets** (and no CI). The 88-test suite covers the data/storage platform only. Manual verification is required:
+
+1. Enable **Settings → Ad Network**, start the server, open `http://<phone-ip>:8090/` and complete setup with the phone-displayed code.
+2. Create a site with a real hostname, a placement, a campaign and an approved creative; fund the advertiser and approve the campaign.
+3. Serve a page from that hostname with the generated tag (or call `/serve` with matching `Origin`/`Referer`), then confirm `/serve` returns JSON and `/imp` returns `204`.
+4. Click through `/c` and confirm the redirect plus a click row in reports; replay a token and confirm it is recorded as invalid and not billed.
+5. Confirm no fill (no eligible campaign) returns `204`; confirm a wrong domain returns `403`; confirm the dashboard works with JavaScript on and shows the `<noscript>` panel with it off.
+
+The ad dashboard is CSP-sensitive: static checks should confirm there are no inline `<script>`, `style=` attributes or `on*=` handlers in `assets/adnet/*`.

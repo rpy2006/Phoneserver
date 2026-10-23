@@ -6,6 +6,7 @@
 <meta name="description" content="PhoneServer terms of service — the conditions that govern installing and using the app and these documentation pages">
 <title>Terms of Service — PhoneServer</title>
 <link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="hp">
 
@@ -33,6 +34,7 @@
   </a>
   <div class="hp-nav-actions">
     <a class="hp-nav-cta" href="guide.html">Production guide<svg class="ico" aria-hidden="true"><use href="#n-arrow"/></svg></a>
+    <button class="hp-theme" data-theme-toggle type="button" aria-pressed="false" title="Dark theme" aria-label="Switch to dark theme">◐</button>
     <button class="hp-menu" data-hp-toggle aria-label="Open menu" aria-expanded="false" aria-controls="hpDrawer">
       <svg class="ico" aria-hidden="true"><use href="#n-menu"/></svg>
     </button>
@@ -64,7 +66,7 @@
     <a href="legal.html"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
   </nav>
 
-  <div class="meta">LAN only · port 8080 · v1.0</div>
+  <div class="meta">LAN · file server 8080 · optional ads 8090 · v1.0</div>
 </aside>
 
 <main class="hp-main">
@@ -77,8 +79,8 @@
       you choose — not for a service we operate for you.
     </p>
     <div class="hp-meta">
-      <span><i aria-hidden="true"></i>Effective 19 October 2026</span>
-      <span>Version 1.0</span>
+      <span><i aria-hidden="true"></i>Effective 23 October 2026</span>
+      <span>Version 1.1</span>
       <span>Applies to: app + documentation site</span>
     </div>
 
@@ -112,14 +114,17 @@
       <p>
         PhoneServer turns an Android device into a local HTTP server (fixed port <code>8080</code>)
         that serves files, a small website, custom JSON endpoints and a local SQL/file data platform
-        to other devices on the <strong>same trusted network</strong>. It is a self-hosting tool:
-        you are the operator, the administrator and the data controller.
+        to other devices on the <strong>same trusted network</strong>. It also includes an optional
+        self-hosted <strong>Ad Network Manager</strong> on a separate port (<code>8090</code>) with
+        its own local database, accounts and dashboard. It is a self-hosting tool: you are the
+        operator, the administrator and the data controller.
       </p>
       <p class="hp-note">
         <svg class="ico" aria-hidden="true"><use href="#n-shield"/></svg>
-        <span><b>It is not a cloud service.</b> There is no account, no uptime commitment, no
-        support desk and no data processing on our side — we never receive your content or your
-        credentials. Everything runs on your device under your control.</span>
+        <span><b>It is not a cloud service.</b> There is no hosted account, no uptime commitment,
+        no support desk and no data processing on our side — we never receive your content or your
+        credentials. Ad-network accounts exist only on your device. Everything runs under your
+        control.</span>
       </p>
 
       <h2 id="licence">3. Licence and ownership</h2>
@@ -139,6 +144,9 @@
         <li>interfere with, probe or disrupt any network you do not own or have permission to test;</li>
         <li>circumvent the access controls you were asked to configure, in order to gain access to another person's device or files;</li>
         <li>represent the project, its documentation or its security posture as your own, or remove licence and attribution notices.</li>
+        <li>publish ads that are deceptive, unlawful, or for products or services you are not allowed to advertise;</li>
+        <li>manipulate impressions, clicks, viewability or billing, or use the ad server to send unsolicited traffic to a third party;</li>
+        <li>run the ad network without the notices, consents and disclosures that your jurisdiction and the hosting site require.</li>
       </ul>
 
       <h2 id="your-network">5. Your network, your responsibility</h2>
@@ -150,7 +158,8 @@
       <ul>
         <li>The server speaks <strong>plain HTTP without TLS</strong>. Traffic can be read by anyone able to observe the local network.</li>
         <li>The optional password is a shared credential, not per-user identity; anyone who has it gets the access it gates.</li>
-        <li>Exposing port 8080 to the public internet — by port-forwarding, DMZ or tunnel — is outside the supported configuration and is done entirely at your own risk.</li>
+        <li>Exposing port 8080 or the optional ad port 8090 to the public internet — by port-forwarding, DMZ or tunnel — is outside the supported configuration and is done entirely at your own risk.</li>
+        <li>If you enable the ad network, you are responsible for the advertisers, campaigns, creative content, targeting, billing and payouts you operate, and for complying with advertising, consumer-protection and privacy law in your jurisdiction.</li>
       </ul>
       <p>
         The recommended setup lives in the <a href="guide.html#hardening">hardening checklist</a>
@@ -162,9 +171,10 @@
       <p>
         You are responsible for choosing a strong access password, for keeping the app updated, for
         granting only the Android permissions you intend, and for storing the backup archives the
-        app exports. Known limitations — including plaintext credential storage and the absence of
-        TLS — are documented rather than hidden; read them before treating the device as a
-        production host.
+        app exports. For the optional ad network, that includes the first-admin setup code, role
+        assignment, campaign/site approval and the integrity of the local billing ledger. Known
+        limitations — including plaintext credential storage and the absence of TLS — are documented
+        rather than hidden; read them before treating the device as a production host.
       </p>
 
       <h2 id="warranty">7. No warranty</h2>
@@ -229,12 +239,14 @@
     </div>
     <p class="hp-disclaimer">
       <b>Scope:</b> PhoneServer 1.0 is a local-network service. These pages describe operating it on
-      a trusted LAN — no cloud product, no accounts, no telemetry upload, no internet exposure and
-      no TLS. This is general information, not legal advice.
+      a trusted LAN — no cloud product, no hosted accounts, no telemetry upload, no internet
+      exposure and no TLS. Ad-network accounts are local to the device. This is general information,
+      not legal advice.
     </p>
   </div>
 </footer>
 
 <script src="site.js"></script>
+<script src="fx.js" defer></script>
 </body>
 </html>

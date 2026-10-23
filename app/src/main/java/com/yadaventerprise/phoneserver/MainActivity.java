@@ -182,6 +182,9 @@ public class MainActivity extends AppCompatActivity {
         if (drawerNavId == R.id.nav_drawer_website) {
             return new Intent(this, WebsiteFilesActivity.class);
         }
+        if (drawerNavId == R.id.nav_drawer_ads) {
+            return new Intent(this, AdNetworkActivity.class);
+        }
         if (drawerNavId == R.id.nav_drawer_account) {
             return new Intent(this, AccountSettingsActivity.class);
         }

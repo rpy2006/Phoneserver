@@ -6,6 +6,7 @@
 <meta name="description" content="PhoneServer privacy policy — what the app and this documentation site process, and what never leaves the device">
 <title>Privacy policy — PhoneServer</title>
 <link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="hp">
 
@@ -33,6 +34,7 @@
   </a>
   <div class="hp-nav-actions">
     <a class="hp-nav-cta" href="guide.html">Production guide<svg class="ico" aria-hidden="true"><use href="#n-arrow"/></svg></a>
+    <button class="hp-theme" data-theme-toggle type="button" aria-pressed="false" title="Dark theme" aria-label="Switch to dark theme">◐</button>
     <button class="hp-menu" data-hp-toggle aria-label="Open menu" aria-expanded="false" aria-controls="hpDrawer">
       <svg class="ico" aria-hidden="true"><use href="#n-menu"/></svg>
     </button>
@@ -64,7 +66,7 @@
     <a href="legal.html"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
   </nav>
 
-  <div class="meta">LAN only · port 8080 · v1.0</div>
+  <div class="meta">LAN · file server 8080 · optional ads 8090 · v1.0</div>
 </aside>
 
 <main class="hp-main">
@@ -72,13 +74,13 @@
     <span class="hp-eyebrow">Legal · Privacy</span>
     <h1 class="hp-h1">Privacy policy</h1>
     <p class="hp-lead">
-      PhoneServer is a local-network service with no backend. This policy explains exactly what the
-      app and these static pages process, where it is stored, and — the short version — what never
-      leaves the device.
+      PhoneServer is a local-first service with no hosted backend. This policy explains exactly what
+      the app, its optional self-hosted ad server and these static pages process, where it is
+      stored, and — the short version — what never leaves the device.
     </p>
     <div class="hp-meta">
-      <span><i aria-hidden="true"></i>Effective 19 October 2026</span>
-      <span>Version 1.0</span>
+      <span><i aria-hidden="true"></i>Effective 23 October 2026</span>
+      <span>Version 1.1</span>
       <span>Applies to: app + documentation site</span>
     </div>
 
@@ -90,6 +92,7 @@
         <li><a href="#permissions">Android permissions</a></li>
         <li><a href="#storage">Where data is stored</a></li>
         <li><a href="#network">What leaves the device</a></li>
+        <li><a href="#adnet">Optional ad network</a></li>
         <li><a href="#analytics">Analytics and tracking</a></li>
         <li><a href="#site">This documentation site</a></li>
         <li><a href="#third-parties">Third parties</a></li>
@@ -113,9 +116,10 @@
       </p>
       <p>
         PhoneServer is deliberately <strong>local-first</strong>: it runs on your device, on your
-        network, with no account system, no cloud service and no telemetry upload. There is no
-        "we may share your data with our partners" section below, because there is no pipeline to
-        share it through.
+        network, with no hosted account system, no cloud service and no telemetry upload. The
+        optional Ad Network Manager creates accounts locally on the phone; those are not accounts
+        with us. There is no "we may share your data with our partners" section below, because
+        there is no pipeline to share it through.
       </p>
 
       <h2 id="processed">2. What PhoneServer processes</h2>
@@ -161,6 +165,16 @@
               <td>Restore or move data between devices</td>
               <td>Wherever you choose to save the file</td>
             </tr>
+            <tr>
+              <td>Ad-network accounts, sites, placements, campaigns and creative text</td>
+              <td>Optional self-hosted ad serving and reporting</td>
+              <td>App-private <code>adnet.db</code>; creative images in <code>filesDir/adnet/creatives/</code></td>
+            </tr>
+            <tr>
+              <td>Ad impression/click events, visitor hashes and request metadata</td>
+              <td>Counting valid delivery, billing and fraud checks</td>
+              <td><code>adnet.db</code>; raw IP addresses are not stored; retained 30 days by default</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -181,7 +195,7 @@
         <li><strong>Boot completed</strong> (optional) — auto-start the server after a reboot if you enable it.</li>
         <li><strong>Camera</strong> (optional) — scan a QR code when pairing another phone.</li>
       </ul>
-      <p>Every permission is used only for the feature above. None of them feeds an analytics or advertising SDK — there are none in the build.</p>
+      <p>Every permission is used only for the feature above. None of them feeds a third-party analytics or advertising SDK — there are none in the build. The optional ad server is first-party code running on your own device, not an external ad network.</p>
 
       <h2 id="storage">4. Where data is stored</h2>
       <ul>
@@ -193,27 +207,46 @@
       <h2 id="network">5. What leaves the device</h2>
       <p>
         PhoneServer speaks plain HTTP on port <strong>8080</strong> and is designed for a trusted
-        local network. Within that boundary, other devices on your LAN can reach the server — and
-        therefore the data you chose to share through it, protected only by the password you set.
+        local network. If you enable the optional ad network, it listens separately on port
+        <strong>8090</strong>. Within that boundary, other devices on your LAN can reach the
+        services you started — and therefore the data you chose to share through them.
       </p>
       <ul>
         <li><strong>No internet transfer.</strong> The app does not upload usage data, crash reports, identifiers or content to any server we operate or to anyone else.</li>
-        <li><strong>No accounts, no identifiers.</strong> There is no registration, no advertising ID use and no cross-app tracking.</li>
-        <li><strong>Your responsibility at the edge.</strong> If you port-forward or otherwise expose port 8080 to the public internet, you are extending the trust boundary yourself. The project explicitly does not support that deployment — there is no TLS.</li>
+        <li><strong>No hosted accounts or identifiers.</strong> There is no registration with us, no advertising ID use and no cross-app tracking. Ad-network accounts exist only in the phone's <code>adnet.db</code>.</li>
+        <li><strong>Your responsibility at the edge.</strong> If you port-forward or otherwise expose port 8080 or 8090 to the public internet, you are extending the trust boundary yourself. The project explicitly does not support that deployment — there is no TLS.</li>
+      </ul>
+
+      <h3 id="adnet" style="margin-top:34px">5.1 Optional ad network</h3>
+      <p>
+        Ad Network Manager is off by default. When you enable it, the phone serves ads to websites
+        that embed a placement tag, and keeps a local ledger of accounts, campaigns, impressions,
+        clicks and billing. All of that stays in <code>adnet.db</code> on the device. The publisher
+        receives none of it.
+      </p>
+      <ul>
+        <li><strong>What is recorded.</strong> The ad request (page URL, user agent, language, IP address at request time), a daily-rotating HMAC visitor hash derived from IP and user agent, and impression/click events with validity and cost. Raw IP addresses are not stored in the event log: the request IP is used transiently for rate limiting and to derive the daily visitor hash, while the event row keeps the hash only.</li>
+        <li><strong>What is not used.</strong> No cookies, no advertising ID, no cross-site profile, no third-party pixels and no cloud analytics. <code>DNT: 1</code> and <code>Sec-GPC: 1</code> suppress the visitor hash and frequency capping.</li>
+        <li><strong>Retention.</strong> Raw events are deleted after <code>retention_days</code> (default 30); daily aggregates remain. Admins can delete accounts, which purges their events and dependent records.</li>
+        <li><strong>Your role.</strong> If you enable ads, you are the operator and controller of that ad system, including any notice or consent your visitors require.</li>
       </ul>
 
       <h2 id="analytics">6. Analytics and tracking</h2>
       <p>
-        <strong>We do not use analytics, crash-reporting, attribution or advertising tools</strong>,
-        in the app or on these pages. The dashboard numbers you see are measured by the local
-        server for your own use; they are never transmitted to us, because there is no receiver.
+        <strong>We do not use third-party analytics, crash-reporting, attribution or advertising
+        tools</strong>, in the app or on these pages. The dashboard numbers you see are measured by
+        the local server for your own use; they are never transmitted to us, because there is no
+        receiver. The optional Ad Network Manager is first-party software you operate, not an
+        analytics or ad-tech service provided by us.
       </p>
 
       <h2 id="site">7. This documentation site</h2>
       <p>
-        The guide, documentation and legal pages are plain HTML, CSS and JavaScript. They load no
-        external scripts, no web fonts from a CDN, no embedded videos and no third-party widgets.
-        They set no cookies of their own; preference values (documentation theme, cookie consent)
+        The guide, documentation and legal pages are plain HTML, CSS and JavaScript. They make no
+        third-party requests: no CDN scripts or fonts, no embedded videos, no third-party widgets
+        and <strong>no ad tags</strong>. The animation libraries used for the interface (Three.js, Anime.js, Lenis) are
+        served from this site itself, not from anyone else. They set no cookies of their own;
+        preference values (documentation theme, cookie consent)
         are stored in your browser's local storage on this device only. Full detail is in the
         <a href="cookies-policy.html">cookies policy</a>.
       </p>
@@ -224,7 +257,8 @@
 
       <h2 id="third-parties">8. Third parties</h2>
       <p>
-        PhoneServer contains no third-party SDKs for analytics, ads or marketing. Open-source
+        PhoneServer contains no third-party SDKs for analytics, ads or marketing. The optional ad
+        server is bundled first-party code; it does not call an exchange or ad network. Open-source
         libraries bundled for functionality only (AndroidX, Material Components, ZXing,
         <code>llama.cpp</code>) are listed with their licences in the
         <a href="legal.html">legal notice</a>. They do not collect or transmit personal data on our
@@ -244,6 +278,7 @@
         <li><strong>Delete content in the app</strong> — removed from storage like any other file operation.</li>
         <li><strong>Clear the data / uninstall</strong> — removes preferences, passwords, profiles, projects and databases.</li>
         <li><strong>In-memory counters</strong> — discarded when the server stops.</li>
+        <li><strong>Ad-network data</strong> — events older than <code>retention_days</code> (default 30) are deleted automatically; admins can delete accounts earlier, which purges their events and dependent rows.</li>
         <li><strong>Browser storage on these pages</strong> — delete it in your browser settings (site data / local storage) to reset the theme and the cookie choice.</li>
       </ul>
 
@@ -296,12 +331,14 @@
     </div>
     <p class="hp-disclaimer">
       <b>Scope:</b> PhoneServer 1.0 is a local-network service. These pages describe operating it on
-      a trusted LAN — no cloud product, no accounts, no telemetry upload, no internet exposure and
-      no TLS. This is general information, not legal advice.
+      a trusted LAN — no cloud product, no hosted accounts, no telemetry upload, no internet
+      exposure and no TLS. Ad-network accounts are local to the device. This is general information,
+      not legal advice.
     </p>
   </div>
 </footer>
 
 <script src="site.js"></script>
+<script src="fx.js" defer></script>
 </body>
 </html>

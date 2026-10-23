@@ -49,6 +49,10 @@
             android:id="@+id/nav_drawer_website"
             android:icon="@drawable/ic_edit"
             android:title="Website Editor" />
+        <item
+            android:id="@+id/nav_drawer_ads"
+            android:icon="@drawable/ic_ads"
+            android:title="Ad Network" />
     </group>
 
     <group android:id="@+id/group_drawer_account">

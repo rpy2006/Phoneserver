@@ -6,6 +6,7 @@
 <meta name="description" content="PhoneServer legal notice — publisher identification, product identification, open-source attributions and disclaimers">
 <title>Legal notice — PhoneServer</title>
 <link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="hp">
 
@@ -35,6 +36,7 @@
   </a>
   <div class="hp-nav-actions">
     <a class="hp-nav-cta" href="guide.html">Production guide<svg class="ico" aria-hidden="true"><use href="#n-arrow"/></svg></a>
+    <button class="hp-theme" data-theme-toggle type="button" aria-pressed="false" title="Dark theme" aria-label="Switch to dark theme">◐</button>
     <button class="hp-menu" data-hp-toggle aria-label="Open menu" aria-expanded="false" aria-controls="hpDrawer">
       <svg class="ico" aria-hidden="true"><use href="#n-menu"/></svg>
     </button>
@@ -66,7 +68,7 @@
     <a href="legal.html" class="current"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
   </nav>
 
-  <div class="meta">LAN only · port 8080 · v1.0</div>
+  <div class="meta">LAN · file server 8080 · optional ads 8090 · v1.0</div>
 </aside>
 
 <main class="hp-main">
@@ -78,8 +80,8 @@
       the disclaimers that apply to this project and its documentation.
     </p>
     <div class="hp-meta">
-      <span><i aria-hidden="true"></i>Effective 19 October 2026</span>
-      <span>Version 1.0</span>
+      <span><i aria-hidden="true"></i>Effective 23 October 2026</span>
+      <span>Version 1.1</span>
       <span>Product: PhoneServer 1.0</span>
     </div>
 
@@ -119,10 +121,10 @@
             <tr><th>Field</th><th>Value</th></tr>
           </thead>
           <tbody>
-            <tr><td>Product</td><td>PhoneServer — local file server, website host, API/data platform and on-device AI chat for Android</td></tr>
+            <tr><td>Product</td><td>PhoneServer — local file server, website host, API/data platform, on-device AI chat and optional self-hosted ad network for Android</td></tr>
             <tr><td>Package</td><td><code>com.yadaventerprise.phoneserver</code></td></tr>
             <tr><td>Version</td><td>1.0</td></tr>
-            <tr><td>Network endpoint</td><td>Local HTTP server, fixed port <code>8080</code>, no TLS, intended for a trusted LAN only</td></tr>
+            <tr><td>Network endpoints</td><td>Local HTTP file server on port <code>8080</code>; optional ad server on port <code>8090</code>. No TLS; intended for a trusted LAN only.</td></tr>
             <tr><td>Distribution</td><td>APK and/or source repository, as provided by the channel you obtained it from</td></tr>
           </tbody>
         </table>
@@ -161,6 +163,7 @@
             <tr><td>Android Gradle Plugin &amp; build tooling</td><td>Build system</td><td>Apache License 2.0</td></tr>
             <tr><td>ZXing (core)</td><td>QR code generation and scanning</td><td>Apache License 2.0</td></tr>
             <tr><td>llama.cpp</td><td>On-device inference for local AI chat</td><td>MIT License</td></tr>
+            <tr><td>Three.js, Anime.js, Lenis</td><td>Optional interface animations on the documentation pages (lazy-loaded, first-party, off under reduced-motion)</td><td>MIT License</td></tr>
             <tr><td>Space Grotesk, Avenir Next*, IBM Plex Mono*</td><td>Typefaces referenced by the documentation theme (*system fallbacks only — no web fonts are downloaded by these pages)</td><td>SIL Open Font License / respective system licences</td></tr>
           </tbody>
         </table>
@@ -178,8 +181,9 @@
       <ul>
         <li><strong>As-is software.</strong> The application and documentation are provided without warranty, per the <a href="terms-of-service.html">Terms of Service</a>.</li>
         <li><strong>Local-network scope.</strong> The product is designed, documented and supported for a trusted LAN. Public-internet deployment, port forwarding and reverse proxies are outside that scope and unsupported.</li>
-        <li><strong>Security posture.</strong> Known limitations — plaintext credential storage, unauthenticated endpoints when no password is set, absence of TLS, fixed port 8080 — are disclosed in the <a href="docs.html#security">security model</a>. Their disclosure is not an invitation to rely on the product beyond that scope.</li>
-        <li><strong>Data.</strong> The publisher does not operate a backend and receives none of your content, credentials or usage data — see the <a href="privacy-policy.html">privacy policy</a>.</li>
+        <li><strong>Security posture.</strong> Known limitations — plaintext credential storage, unauthenticated endpoints when no password is set, absence of TLS, fixed ports 8080/8090, and heuristic ad-fraud checks — are disclosed in the <a href="docs.html#security">security model</a>. Their disclosure is not an invitation to rely on the product beyond that scope.</li>
+        <li><strong>Ad network.</strong> The optional Ad Network Manager is a local first-party ad server, not an ad exchange. The publisher does not operate it, does not receive its data, and is not a party to campaigns, creatives, billing or payouts you configure. You are responsible for advertising content and legal compliance.</li>
+        <li><strong>Data.</strong> The publisher does not operate a backend and receives none of your content, credentials, ad-network records or usage data — see the <a href="privacy-policy.html">privacy policy</a>.</li>
         <li><strong>Legal process.</strong> Where the publisher holds no data, requests directed at us cannot be satisfied beyond confirming this position.</li>
       </ul>
 
@@ -189,7 +193,7 @@
         PhoneServer from. The full set of governing documents:
       </p>
       <ul>
-        <li><a href="privacy-policy.html">Privacy policy</a> — what is processed and what never leaves the device.</li>
+        <li><a href="privacy-policy.html">Privacy policy</a> — what is processed (including optional ad data) and what never leaves the device.</li>
         <li><a href="terms-of-service.html">Terms of Service</a> — the conditions on your use.</li>
         <li><a href="cookies-policy.html">Cookies policy</a> — no cookies, two preference keys.</li>
         <li><a href="guide.html">Production guide</a> · <a href="docs.html">Documentation</a> — operational material.</li>
@@ -229,12 +233,14 @@
     </div>
     <p class="hp-disclaimer">
       <b>Scope:</b> PhoneServer 1.0 is a local-network service. These pages describe operating it on
-      a trusted LAN — no cloud product, no accounts, no telemetry upload, no internet exposure and
-      no TLS. This is general information, not legal advice.
+      a trusted LAN — no cloud product, no hosted accounts, no telemetry upload, no internet
+      exposure and no TLS. Ad-network accounts are local to the device. This is general information,
+      not legal advice.
     </p>
   </div>
 </footer>
 
 <script src="site.js"></script>
+<script src="fx.js" defer></script>
 </body>
 </html>

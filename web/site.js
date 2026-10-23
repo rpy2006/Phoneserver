@@ -83,3 +83,36 @@
     });
   }
 })();
+
+/* ============================================================
+   3. persistent light/dark theme for every page that ships a
+      [data-theme-toggle] button (guide + legal pages; the docs
+      page keeps its own toggle, same localStorage key)
+   ============================================================ */
+(function () {
+  'use strict';
+  var KEY = 'ps-theme';
+  var root = document.documentElement;
+
+  function syncButtons() {
+    var dark = root.dataset.theme === 'dark';
+    var buttons = document.querySelectorAll('[data-theme-toggle]');
+    Array.prototype.forEach.call(buttons, function (b) {
+      b.setAttribute('aria-pressed', dark ? 'true' : 'false');
+      b.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+      b.setAttribute('title', dark ? 'Light theme' : 'Dark theme');
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-theme-toggle]'), function (b) {
+    b.addEventListener('click', function () {
+      var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try { window.localStorage.setItem(KEY, next); } catch (e) {}
+      syncButtons();
+      window.dispatchEvent(new CustomEvent('ps:theme', { detail: next }));
+    });
+  });
+
+  syncButtons();
+})();

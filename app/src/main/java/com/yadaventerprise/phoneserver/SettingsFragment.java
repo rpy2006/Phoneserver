@@ -106,6 +106,9 @@ public class SettingsFragment extends Fragment {
 
         view.findViewById(R.id.row_advanced_settings).setOnClickListener(v ->
                 startActivity(new Intent(getContext(), AdvancedSettingsActivity.class)));
+
+        view.findViewById(R.id.row_ad_network).setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), AdNetworkActivity.class)));
     }
 
     @Override

@@ -301,6 +301,19 @@
                     </LinearLayout>
                     <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
                 </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                <LinearLayout android:id="@+id/row_ad_network" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                    <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_home_icon_circle">
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_globe" />
+                    </FrameLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ad Network" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Run your own ads on your websites" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                    </LinearLayout>
+                    <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
+                </LinearLayout>
             </LinearLayout>
 
         </LinearLayout>

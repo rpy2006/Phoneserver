@@ -76,6 +76,7 @@
         <activity android:name=".ProjectBackupsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".ApiTokensActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name=".AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name=".RemoteBrowseActivity" android:exported="false" />
         <activity android:name=".ImageViewerActivity" android:exported="false" />
         <activity android:name=".VideoPlayerActivity" android:exported="false" />

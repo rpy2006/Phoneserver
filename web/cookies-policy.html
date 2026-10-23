@@ -6,6 +6,7 @@
 <meta name="description" content="PhoneServer cookies policy — the exact storage this site uses, and the fact that no tracking cookies exist">
 <title>Cookies policy — PhoneServer</title>
 <link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="hp">
 
@@ -33,6 +34,7 @@
   </a>
   <div class="hp-nav-actions">
     <a class="hp-nav-cta" href="guide.html">Production guide<svg class="ico" aria-hidden="true"><use href="#n-arrow"/></svg></a>
+    <button class="hp-theme" data-theme-toggle type="button" aria-pressed="false" title="Dark theme" aria-label="Switch to dark theme">◐</button>
     <button class="hp-menu" data-hp-toggle aria-label="Open menu" aria-expanded="false" aria-controls="hpDrawer">
       <svg class="ico" aria-hidden="true"><use href="#n-menu"/></svg>
     </button>
@@ -64,7 +66,7 @@
     <a href="legal.html"><svg class="ico" aria-hidden="true"><use href="#n-scale"/></svg>Legal notice</a>
   </nav>
 
-  <div class="meta">LAN only · port 8080 · v1.0</div>
+  <div class="meta">LAN · file server 8080 · optional ads 8090 · v1.0</div>
 </aside>
 
 <main class="hp-main">
@@ -77,8 +79,8 @@
       category a cookie banner would cover, minus the cookies.
     </p>
     <div class="hp-meta">
-      <span><i aria-hidden="true"></i>Effective 19 October 2026</span>
-      <span>Version 1.0</span>
+      <span><i aria-hidden="true"></i>Effective 23 October 2026</span>
+      <span>Version 1.1</span>
       <span>Cookies set: none</span>
     </div>
 
@@ -100,9 +102,10 @@
       <h2 id="short">1. The short version</h2>
       <ul>
         <li><strong>No HTTP cookies</strong> are set by any page served here — not by the guide, the documentation, or these legal pages.</li>
-        <li><strong>No analytics, advertising or social embeds</strong> run on these pages, so there is nothing that would set a tracking cookie in the first place.</li>
+        <li><strong>No analytics, advertising or social embeds</strong> run on these pages — not even the optional ad-network tag, so there is nothing that would set a tracking cookie in the first place.</li>
         <li><strong>Two preference values</strong> are kept in your browser's local storage, on your device only: the documentation theme and your answer to this banner.</li>
-        <li><strong>The local server</strong> does not send <code>Set-Cookie</code> responses either; session-free password headers are used instead.</li>
+        <li><strong>The local file server</strong> does not send <code>Set-Cookie</code> responses; session-free password headers are used instead.</li>
+        <li><strong>The optional ad server</strong> on port <code>8090</code> also sets no cookies. Its dashboard stores a bearer token and theme in local storage; delivery uses a server-side visitor hash, not a browser cookie.</li>
       </ul>
       <p class="hp-note">
         <svg class="ico" aria-hidden="true"><use href="#n-shield"/></svg>
@@ -148,9 +151,10 @@
 
       <h2 id="no-third-party">4. No third-party cookies</h2>
       <p>
-        These pages load no external scripts, fonts, frames, pixels or widgets. No third party can
-        set or read anything through them. There are no cookie identifiers shared across sites and
-        nothing to opt out of beyond the banner itself.
+        These pages load no third-party scripts, fonts, frames, pixels or widgets — the animation
+        libraries they do use (Three.js, Anime.js, Lenis) are served from this site itself. No third
+        party can set or read anything through them. There are no cookie identifiers shared across
+        sites and nothing to opt out of beyond the banner itself.
       </p>
 
       <h2 id="server">5. The local PhoneServer</h2>
@@ -164,12 +168,25 @@
         <a href="docs.html#security">security model</a>.
       </p>
 
+      <h3 id="adnet-dashboard" style="margin-top:34px">5.1 Optional ad-network dashboard</h3>
+      <p>
+        The Ad Network Manager is served from the same phone but on a different port, and it is a
+        separate origin in browser terms. It sets <strong>no HTTP cookies</strong>. After login it
+        keeps the session bearer token in <code>localStorage</code> under
+        <code>adnet_token</code>, and remembers the light/dark choice under
+        <code>adnet_theme</code>. Logging out or clearing site data for that origin removes them.
+        Ads served to other websites do not rely on cookies: the SDK sends a signed event token, and
+        the server derives a daily, non-reversible visitor hash from the request IP and user agent.
+        No raw IP address is written to the event log.
+      </p>
+
       <h2 id="control">6. Managing and withdrawing consent</h2>
       <ul>
         <li><strong>Withdraw:</strong> clear site data / local storage for this site in your browser settings — the banner will ask again on your next visit.</li>
         <li><strong>Block storage:</strong> most browsers let you block local storage per site; the pages still work, preferences just do not persist.</li>
         <li><strong>Inspect:</strong> the values above are visible in your browser's developer tools under Application → Local Storage.</li>
         <li><strong>App data:</strong> clearing or uninstalling the Android app removes everything the app stores on the device.</li>
+        <li><strong>Ad dashboard:</strong> use Log out, or clear site data for <code>http://&lt;phone-ip&gt;:8090</code>, to remove <code>adnet_token</code> and <code>adnet_theme</code>.</li>
       </ul>
 
       <h2 id="changes">7. Changes and contact</h2>
@@ -214,12 +231,14 @@
     </div>
     <p class="hp-disclaimer">
       <b>Scope:</b> PhoneServer 1.0 is a local-network service. These pages describe operating it on
-      a trusted LAN — no cloud product, no accounts, no telemetry upload, no internet exposure and
-      no TLS. This is general information, not legal advice.
+      a trusted LAN — no cloud product, no hosted accounts, no telemetry upload, no internet
+      exposure and no TLS. Ad-network accounts are local to the device. This is general information,
+      not legal advice.
     </p>
   </div>
 </footer>
 
 <script src="site.js"></script>
+<script src="fx.js" defer></script>
 </body>
 </html>

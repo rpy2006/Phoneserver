@@ -120,3 +120,28 @@ stateless apart from the `SystemDatabase` singleton and the cached
 `RateLimiter`; SQLite serialises access internally (WAL + busy timeout). The UI
 performs storage work off the main thread and observes the same layer the API
 uses, so there is no second source of truth.
+
+## Ad network (optional)
+
+The ad network is a second, independently started HTTP service. It does not add routes to `SimpleHttpServer`; it is owned by `AdNetworkManager` and started from `ServerService` only when the owner enables it.
+
+```
+ServerService (port 8080)
+   └── AdNetworkManager.startIfEnabled()
+          ├── AdHttpServer (port 8090, 4–24 workers, Connection: close)
+          │      ├── AdApi       authenticated /api/*
+          │      ├── AdDelivery  /sdk.js /serve /imp /c /media
+          │      └── static dashboard assets
+          ├── AdDb (adnet.db) + AdDelivery.creativesDir()
+          └── AdNet-Sweeper (sessions, fraud review, retention, end dates)
+```
+
+Design consequences:
+
+- **Fault and load isolation.** A slow or abusive ad request cannot occupy the file server's accept loop or its unbounded thread-per-connection handlers; the ad server uses a bounded pool and its own queue.
+- **Separate persistence.** `adnet.db` has no foreign keys into `system.db`. Project backups and the `/files` API never see ad data.
+- **Separate auth.** The file server's password/`X-Auth-Password`/Basic auth is not consulted on port 8090. Ad accounts use PBKDF2 hashes and bearer sessions.
+- **Public by necessity.** `/sdk.js`, `/serve`, `/imp`, `/c` and `/media/*` cannot require an interactive login because they run on third-party pages; they are protected by placement keys, domain matching, signed single-use tokens, bot filtering and rate limits instead.
+- **Strict dashboard CSP.** The dashboard assets are served with `default-src 'self'`, so all script/style must be external files; there are no inline handlers.
+
+Full details, including schema, selection, billing and privacy, are in [ad-network.md](ad-network.md).

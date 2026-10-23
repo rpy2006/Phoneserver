@@ -1,8 +1,10 @@
 # PhoneServer
 
-**Turn any Android phone into a network file server, mini website host, live-traffic monitor, and a small on-device AI chat — all from one APK, with no backend and no internet requirement.**
+**Turn any Android phone into a network file server, mini website host, live-traffic monitor, small on-device AI chat, and an optional self-hosted ad network — all from one APK, with no backend and no internet requirement.**
 
-PhoneServer runs a real HTTP server directly on the device (`java.net.ServerSocket`, no NanoHTTPD, no embedded webview server). Any browser, `curl`, or another phone on the same Wi‑Fi can reach it at `http://<phone-ip>:8080` and browse, upload, download, and organise the phone's shared storage. The same APK can also act as a *client* — connecting to other phones running PhoneServer and browsing them remotely.
+PhoneServer runs a real HTTP server directly on the device (`java.net.ServerSocket`, no NanoHTTPD, no embedded webview server). Any browser, `curl`, or another phone on the same Wi‑Fi can reach it at `http://<phone-ip>:8080` and browse, upload, download, and organise the phone's shared storage. The same APK can also act as a *client* — connecting to other phones running PhoneServer and browsing them remotely. An opt-in **Ad Network Manager** can run alongside it on port `8090`, with its own database, accounts and dashboard.
+
+The reference documentation for the ad network is [ad-network.md](ad-network.md).
 
 ---
 
@@ -21,6 +23,7 @@ PhoneServer runs a real HTTP server directly on the device (`java.net.ServerSock
 11. [Design Decisions & Rationale](#11-design-decisions--rationale)
 12. [Known Limitations & Technical Debt](#12-known-limitations--technical-debt)
 13. [Extension Guide](#13-extension-guide)
+14. [Ad Network Manager](#14-ad-network-manager)
 
 ---
 
@@ -87,6 +90,18 @@ A local-first storage layer that turns the phone into a small database + object-
 
 Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](architecture.md), [storage.md](storage.md), [security.md](security.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
 
+### 1.8 Optional ad network
+
+An opt-in, self-hosted ad server on a **separate port (`8090`)**, database (`adnet.db`), file store and account system. Publishers register a domain and placement, copy a small tag, and serve approved creatives; advertisers manage campaigns, creatives, budgets and targeting; admins approve sites/campaigns, manage users, credit/pay balances, review fraud and export reports. It is fully offline and never shares authentication or data with the file server.
+
+- Public delivery: `/sdk.js`, `/serve`, `/imp`, `/c`, `/media/<id>`; management API under `/api/*`
+- Real, server-signed impression/click tokens; viewability ≥50% for 1 s; no fake ads or simulated numbers
+- Internal admin / advertiser / publisher accounts, PBKDF2 passwords and 12-hour bearer sessions
+- CPM/CPC billing in integer micros with a configurable publisher revenue share (default 70%)
+- Strict CSP dashboard with sites, placements, campaigns, creatives, reports, users, billing and fraud review
+
+See [ad-network.md](ad-network.md) for setup, the embed contract, targeting, fraud rules, retention and the full API.
+
 ---
 
 ## 2. Tech Stack & Requirements
@@ -101,7 +116,7 @@ Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](AP
 | Package | `com.yadaventerprise.phoneserver` |
 | Version | 1.0 (`versionCode 1`) |
 | NDK ABI | `arm64-v8a` only |
-| Persistence | `SharedPreferences` (JSON-encoded blobs) + private files — **no database, no DI framework** |
+| Persistence | SQLite (`system.db`, project databases, `adnet.db`) + `SharedPreferences` (JSON-encoded blobs) + private files — **no DI framework** |
 | Serialization | `org.json` (platform built-in) |
 | UI | AndroidX + Material Components + View system (no Compose) |
 
@@ -213,6 +228,23 @@ PhoneServer/
         │   │   LlmEngine.java            197  JNI facade, lock-guarded
         │   │   ModelStore.java           357  model import, GGUF validation
         │   │   FileTypeUtils.java         41  extension → MIME/viewer
+        │   │   ── Ad network (optional, port 8090) ─────────────────
+        │   │   AdNetworkManager.java          opt-in lifecycle, setup code, sweeper
+        │   │   AdHttpServer.java              HTTP/1.1, limits, CSP, routing
+        │   │   AdApi.java                     management API + validation
+        │   │   AdDelivery.java                SDK, ad selection, tracking, media
+        │   │   AdSecurity.java                PBKDF2, sessions, HMAC, visitor hash
+        │   │   AdDb.java                      adnet.db schema and settings
+        │   │   AdReports.java                 reports, CSV, billing
+        │   │   AdFraud.java                   invalid-traffic rules and site flags
+        │   │   AdHttp.java / AdRateLimiter.java   JSON I/O and sliding windows
+        │   │   ── Data platform tests ───────────────────────────────
+        │   │   (see app/src/test/java/... — JUnit + Robolectric)
+        ├── assets/adnet/
+        │   ├── dashboard.html        dashboard shell (noindex, strict CSP)
+        │   ├── dashboard.js          SPA logic, SVG icons, API client
+        │   ├── dashboard.css         responsive dashboard + mobile drawer
+        │   └── sdk.js                public embed script
         └── res/
             ├── layout/         38 XML layouts
             ├── values/         colors, themes, strings
@@ -223,7 +255,7 @@ PhoneServer/
                                 backup_rules, data_extraction_rules
 ```
 
-~7,900 lines of Java across 56 classes, plus 38 layouts.
+The original server is ~7,900 lines of Java across 56 classes, plus the data platform (`data/`) and ad-network classes listed above. Unit tests live under `app/src/test/java/…` and are described in [testing.md](testing.md).
 
 ---
 
@@ -384,6 +416,9 @@ new Thread(() -> { /* blocking work */ handler.post(() -> { /* touch views */ })
 | Downloaded remote files | `Download/PhoneServer/` | `getExternalFilesDir("downloads")` |
 | Model files | — (always private) | `filesDir/models/` |
 | View cache (for `FileProvider` handoff) | — (always private) | `cacheDir/view_cache/` |
+| Ad-network database | — (always private) | `databases/adnet.db` (plus `-wal`/`-shm`) |
+| Ad creative images | — (always private) | `filesDir/adnet/creatives/<24-hex>.<ext>` |
+| Ad-network prefs | — (always private) | `SharedPreferences` file `adnet_prefs` |
 
 ### 4.6 Path-traversal defence
 
@@ -448,6 +483,27 @@ A launcher icon cannot be swapped at runtime, so the manifest declares **two `ac
 ```
 
 `IconSwitcher.setOnline(context, online)` enables one and disables the other via `PackageManager.setComponentEnabledSetting(..., DONT_KILL_APP)`. `ServerService` calls it on both start and stop. It is wrapped in a catch-all because it is cosmetic and must never take down the server.
+
+### 4.10 Ad network process boundary
+
+The optional ad network is deliberately a second, independent server rather than another set of routes in `SimpleHttpServer`:
+
+```
+ServerService (foreground, port 8080)
+   └── AdNetworkManager.startIfEnabled() ──► AdHttpServer (port 8090)
+                                                ├── AdApi      (authenticated /api/*)
+                                                ├── AdDelivery (/sdk.js /serve /imp /c /media)
+                                                ├── AdDb       (adnet.db)
+                                                └── 4–24 worker pool + AdNet-Sweeper thread
+```
+
+- **Separate port and pool:** ad traffic cannot exhaust the file server's thread-per-connection accept loop, and the file server cannot starve ad delivery.
+- **Separate database and files:** `adnet.db` and `filesDir/adnet/creatives/` are not reachable through `/files`, `/api/v1` or the project backup format.
+- **Separate auth:** the file server's access password does not log anyone into the ad dashboard; the ad dashboard uses PBKDF2-backed accounts and 12-hour bearer sessions.
+- **Separate privacy surface:** public delivery needs `Origin`/`Referer` and a placement key, but deliberately has no password gate because the SDK runs on third-party pages.
+- **Hard limits:** 8 KiB header lines, 64 headers, 128 KiB buffered API body, 2 MiB creative uploads, 300 req/min/user and per-IP public endpoint limits.
+
+It is off until enabled in **Settings → Ad Network**; `startIfEnabled` is called from `ServerService` so normal server start/stop controls both listeners. See [ad-network.md](ad-network.md).
 
 ---
 
@@ -579,11 +635,29 @@ curl -X POST -H "Authorization: Bearer pst_..." -H "Content-Type: application/js
      http://<phone-ip>:8080/api/v1/projects/<projectId>/databases/<db>/query
 ```
 
+### 5.4 Ad Network API (`:8090`)
+
+The optional ad server is a separate origin with its own API. Public delivery is unauthenticated and protected by placement keys, site-domain checks, signed single-use tokens and rate limits; management paths require `Authorization: Bearer <session-token>`.
+
+| Area | Endpoints |
+|---|---|
+| Public | `GET /health`, `GET /sdk.js`, `GET /serve`, `POST /imp`, `GET /c`, `GET /media/<id>` |
+| Auth | `GET /api/setup/status`, `POST /api/setup`, `POST /api/auth/login`, `POST /api/auth/signup`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/password`, `GET /api/meta` |
+| Users (admin) | `GET|POST /api/users`, `PATCH|DELETE /api/users/:id`, `POST /api/users/:id/credit`, `POST /api/users/:id/payout` |
+| Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
+| Campaigns / creatives | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST …/{id}/submit|approve|reject|pause|resume`, `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST …/{id}/image|approve|reject` |
+| Reports / billing | `GET /api/reports/summary`, `/breakdown`, `/export`, `GET /api/billing` |
+| Admin | `GET /api/admin/overview`, `/fraud`, `GET|PUT /api/admin/settings` |
+
+`/api/setup` is the only way to create the first administrator and requires the one-time setup code shown on the phone. Sign-up is disabled by default. Full request/response details, targeting keys, billing rules and limits are in [ad-network.md](ad-network.md).
+
 ---
 
 ## 6. Data & Persistence Model
 
 The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [architecture.md](architecture.md).
+
+The **ad network** has a third, fully separate SQLite database (`adnet.db`) with users, sessions, sites, placements, campaigns, creatives, events, daily stats, billing, audit and settings tables; its preference file is `adnet_prefs`, and creative images live under `filesDir/adnet/creatives/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](ad-network.md).
 
 | Prefs file | Key | Contents | Written by |
 |---|---|---|---|
@@ -762,7 +836,7 @@ Detection: `general.type == "mmproj"` or `general.architecture == "clip"` → re
 PhoneServer is a **local-network** service. It is not hardened for the public internet, and it does not pretend to be:
 
 - `usesCleartextTraffic="true"` + `network_security_config.xml` with `cleartextTrafficPermitted="true"`
-- All traffic is plain HTTP on port 8080
+- All traffic is plain HTTP on port 8080 (and, when enabled, port 8090 for the ad network)
 - **Default posture with no password set is unauthenticated LAN-wide read/write access to the device's shared storage**, including recursive delete. The Settings UI says so explicitly: *"No password set - open access on your Wi-Fi"*
 - `MANAGE_EXTERNAL_STORAGE` is requested, which is a very high-privilege grant
 
@@ -795,6 +869,27 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 | `file_paths.xml` exposes `/` | `<root-path name="root" path="/" />` | `FileProvider` can hand out a URI for any file the app can read. Only reachable from in-app, non-exported code |
 
 **Recommendations if this were to run beyond a trusted LAN:** TLS termination, `EncryptedSharedPreferences` or at minimum a salted hash, drop the `?pw=` channel, close the filename-traversal gap, and scope `file_paths.xml` to `Download/PhoneServer` and `cacheDir/view_cache` instead of `/`.
+
+### 9.4 Ad network security
+
+The ad network is a separate origin and does not reuse the file server's password or auth gate:
+
+| Control | Implementation |
+|---|---|
+| Password storage | PBKDF2-HMAC-SHA256, 60,000 iterations, 16-byte random salt per user |
+| Password policy | 10–128 characters, at least one letter and one digit |
+| Sessions | 32-byte random bearer tokens; only SHA-256 hashes stored; 12-hour expiry; logout/password change/disable revokes them |
+| First admin | One-time setup code shown only on the phone; setup is rate-limited and refused after the first user exists |
+| Login throttling | Per IP+email and per IP windows; unknown emails still run a dummy hash to equalise timing |
+| Role checks | Admin-only routes checked server-side; advertisers can only touch their campaigns, publishers only their sites |
+| Delivery auth | Placement key + approved site + active placement + `Origin`/`Referer` domain match |
+| Event integrity | HMAC-SHA256 tokens, 6 h/24 h expiry, single-use nonces, prior-impression requirement for clicks |
+| Rate limits | Per-IP serve/beacon/click limits, per-user management limit, upload limit |
+| Input safety | Length/range/allow-list validation, strict image sniffing (no SVG), bound SQL parameters, fixed report group expressions |
+| Response safety | CR/LF stripping in headers, `nosniff`, `no-store` on API, `X-Frame-Options: DENY`, sandbox CSP on media, strict CSP on the dashboard |
+| Privacy | No cookies, no raw IP stored with the visitor hash, daily-rotating hash, DNT/GPC honoured for visitor tracking |
+
+Residual risks: plaintext HTTP/LAN exposure, no TLS, no email verification or password reset, no CAPTCHA, and invalid traffic cannot be eliminated with certainty. The ad dashboard is only as safe as the admin's password and network. See [ad-network.md](ad-network.md) §11.
 
 ---
 
@@ -837,7 +932,16 @@ Built and developed with **AndroidIDE** (the `gradle.properties` header reads `#
 
 ### 10.4 Testing
 
-There are **no unit or instrumentation tests** in this project. There is also no CI configuration. Verification is manual: start the server, hit it with `curl`, watch the Dashboard numbers change. Adding tests would need a `testImplementation` JUnit dependency and a test source set, neither of which currently exist.
+Unit tests live under `app/src/test/java/…` and use **JUnit 4** plus **Robolectric 4.14.1** for Android-backed stores. Run:
+
+```bash
+sh gradlew :app:testDebugUnitTest
+sh gradlew :app:assembleDebug
+```
+
+The recorded result on the development host is **88 tests, 41 passed, 47 skipped, 0 failed**. The 47 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive) run everywhere. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
+
+There are **no automated tests for the ad network or the dashboard assets** yet, and no CI configuration. Verify those manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, and watch `/serve`, `/imp`, `/c` and the reports move.
 
 ### 10.5 Quick manual smoke test
 
@@ -859,6 +963,28 @@ curl -X POST -H "X-Auth-Password: mypassword" \
      -F "file=@/path/to/photo.jpg" "http://<phone-ip>:8080/api/upload?path=TestFolder"
 
 # 5. Verify the counters moved on the Dashboard tab
+```
+
+Ad network smoke test (after enabling it in Settings):
+
+```bash
+# 1. Public health and SDK
+curl http://<phone-ip>:8090/health
+curl -I http://<phone-ip>:8090/sdk.js
+
+# 2. First-run setup uses the code shown on the phone
+curl -s -X POST http://<phone-ip>:8090/api/setup -H 'Content-Type: application/json' \
+     -d '{"email":"admin@example.com","name":"Admin","password":"adminpass1","setup_code":"XXXXXXXX"}'
+
+# 3. Sign in, then create a site/placement and fetch the tag
+curl -s -X POST http://<phone-ip>:8090/api/auth/login -H 'Content-Type: application/json' \
+     -d '{"email":"admin@example.com","password":"adminpass1"}'
+# use the returned token as $TOKEN
+curl -s -X POST http://<phone-ip>:8090/api/sites -H "Authorization: Bearer $TOKEN" \
+     -H 'Content-Type: application/json' -d '{"name":"Test","domain":"example.com"}'
+curl -s -X POST http://<phone-ip>:8090/api/placements -H "Authorization: Bearer $TOKEN" \
+     -H 'Content-Type: application/json' -d '{"site_id":1,"name":"Slot","format":"text"}'
+curl -s http://<phone-ip>:8090/api/placements/1/tag -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -977,6 +1103,18 @@ Ordered roughly by how much they matter.
 - `TrafficChartView` uses raw pixel padding (90 px left, 40 px bottom) rather than dp, so axis labels collide on high-density screens, and its colours are hardcoded hex rather than resolved from `R.color.*` — invisible to dark mode.
 - `SparklineView` initialises `max = Float.MIN_VALUE`, which is the smallest *positive* float, not the most negative. It happens to work only because every current input is a non-negative percentage.
 
+### 12.6 Ad network limitations
+
+- **No automated coverage** for ad code or dashboard assets; only manual smoke tests.
+- **Plain HTTP, no TLS**, and no email verification, password reset, CAPTCHA or account recovery. The ad dashboard is LAN-grade.
+- **Delivery needs a hostname.** The domain regex rejects bare IPs, so a quick `http://192.168.x.x` test page cannot pass the `Origin`/`Referer` check; register a hostname (or `localhost` when appropriate).
+- **HTTPS pages need `public_base_url`.** Without an HTTPS base URL the browser blocks the SDK as mixed content.
+- **No geo targeting.** The app has no IP-location database, so geo fields are intentionally absent from targeting.
+- **Single-process memory limiter.** Rate limits and the asset cache are in-memory and reset when the ad server restarts; multiple app processes would not share them.
+- **Event retention is destructive.** Events older than `retention_days` are deleted, so long-term history must be exported (CSV) or backed up externally.
+- **Ad data is outside project backups.** Back up `adnet.db` and `filesDir/adnet/creatives/` separately; `/api/v1` backups do not include them.
+- **Fraud detection is heuristic.** Bot UA matching, per-IP/visitor caps and site flagging reduce invalid traffic but cannot prove a human viewed an ad.
+
 ---
 
 ## 13. Extension Guide
@@ -1040,6 +1178,32 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 -keep class com.yadaventerprise.phoneserver.LlmEngine { *; }
 ```
 
+### 13.6 Add an ad-network endpoint or report dimension
+
+1. Add the route to the `switch` in `AdApi.handle` (or a public route in `AdHttpServer.route`).
+2. Validate every parameter explicitly (`AdHttp.str/num`, `AdSecurity.normalizeDomain/isHttpUrl/micros`); throw `AdHttp.bad/forbidden/notFound` rather than returning ad-hoc strings.
+3. Check ownership with the existing `siteFor` / `placementFor` / `campaignRow` / `creativeFor` helpers before reading or writing.
+4. Use bound parameters for all values. Report grouping expressions must come from a fixed allow-list (`AdReports.groupExpr`), never from raw input.
+5. If it can change money, wrap the update and the ledger/stat write in one SQLite transaction (copy `AdDelivery.record`/`settle`).
+6. Add the endpoint to [ad-network.md](ad-network.md) and to the dashboard client, then smoke-test with `curl` (there are no automated ad tests).
+
+---
+
+## 14. Ad Network Manager
+
+The ad network is documented in full in [ad-network.md](ad-network.md). In brief:
+
+- **Opt-in, separate service** on port `8090`, started by `ServerService` only when enabled; its own `adnet.db`, creative files, thread pool and `adnet_prefs`.
+- **Three roles:** admin (users, approvals, credits/payouts, settings, fraud), advertiser (campaigns/creatives/budgets/targeting), publisher (sites/placements/tags/earnings).
+- **Accounts:** PBKDF2-HMAC-SHA256 passwords, 12-hour hashed bearer sessions, one-time phone-shown setup code for the first admin, sign-up off by default.
+- **Delivery:** a single `<script async src="…:8090/sdk.js">` plus `data-adnet-placement="pl_…"`; `/serve` chooses an eligible creative, `/imp` records a viewable impression (≥50% for 1 s), `/c` counts a click and redirects; no fill is `204`, never a fake ad.
+- **Sites:** hostnames only (bare IPs rejected); subdomains match; HTTPS pages require `public_base_url`.
+- **Campaigns:** CPM/CPC bids, total/daily budgets, start/end dates, prepaid advertiser balance, targeting by device/language/site/hour/weekday/URL/frequency; creatives are banner/native/text with strict validation and admin review.
+- **Billing:** integer micros; CPM charges `bid/1000` per valid impression, CPC charges `bid` per valid click; publisher share default 70%; invalid traffic is stored but never billed.
+- **Privacy/security:** no cookies, no raw-IP visitor storage, daily-rotating visitor hash, DNT/GPC honoured for tracking, HMAC-signed single-use tokens, strict CSP dashboard, CR/LF-stripped headers, rate limits, bot filtering and site flagging.
+- **Data:** `adnet.db` tables (`users`, `sessions`, `sites`, `placements`, `campaigns`, `creatives`, `events`, `stats_daily`, `fraud_log`, `billing`, `audit`, `settings`); hourly sweeper expires sessions, ends campaigns, prunes events after `retention_days` (30) and removes orphaned images.
+- **User deletion:** admin-only; cannot delete self or the last admin; purges owned stats/events, cascades dependent rows, deletes creative images and writes `user.delete` to the audit log.
+
 ---
 
 ## Appendix: Quick reference
@@ -1047,7 +1211,7 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 | Thing | Value |
 |---|---|
 | Package | `com.yadaventerprise.phoneserver` |
-| Default port | `8080` (`ServerService.PORT`) |
+| Default port | `8080` (`ServerService.PORT`); optional ad network on `8090` (`AdNetworkManager.PORT`) |
 | Server class | `SimpleHttpServer` — thread-per-connection, `Connection: close` |
 | Service class | `ServerService` — foreground, `dataSync`, wake lock, sticky |
 | Traversal chokepoint | `ContentStore.resolveSafePath` / `resolveSafeWebsitePath` |
@@ -1058,7 +1222,7 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 | Tabs | Home · Dashboard · QR · Chat · Settings |
 | Native library | `libllama_bridge.so`, arm64-v8a, ~47 MB, prebuilt binary |
 | Default model name | `smollm2-135m-instruct-q8_0.gguf` (must be a *text* model, not an `mmproj`) |
-| Prefs files | `server_config`, `server_profiles`, `api_endpoint_configs` |
+| Prefs files | `server_config`, `server_profiles`, `api_endpoint_configs`; ad network: `adnet_prefs` |
 | Activity count | 15 declared · 3 undeclared and dead |
 | Java LOC | ~7,900 across 56 classes |
-| Tests | None |
+| Tests | 88 JUnit/Robolectric tests (41 pass, 47 skip on Linux/aarch64); no ad-network tests |
