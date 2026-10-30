@@ -3,7 +3,7 @@ package com.yadaventerprise.phoneserver.data;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.database.Cursor;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -154,8 +154,8 @@ public final class FileStore {
         if (folder == null) throw new DataException("invalid folder path", 400);
 
         List<Records.FileRecord> result = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,original_name,storage_key,folder_path,mime_type,size_bytes,"
                         + "checksum,description,tags,created_at,updated_at FROM files "
                         + "WHERE project_id=? AND folder_path=? ORDER BY original_name COLLATE NOCASE",
@@ -168,8 +168,8 @@ public final class FileStore {
     public static List<Records.FileRecord> listAll(Context context, String projectId) throws DataException {
         ProjectStore.require(context, projectId);
         List<Records.FileRecord> result = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,original_name,storage_key,folder_path,mime_type,size_bytes,"
                         + "checksum,description,tags,created_at,updated_at FROM files "
                         + "WHERE project_id=? ORDER BY folder_path, original_name COLLATE NOCASE",
@@ -180,8 +180,8 @@ public final class FileStore {
     }
 
     public static Records.FileRecord require(Context context, String projectId, String fileId) throws DataException {
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,original_name,storage_key,folder_path,mime_type,size_bytes,"
                         + "checksum,description,tags,created_at,updated_at FROM files "
                         + "WHERE project_id=? AND id=?", new String[]{projectId, fileId})) {
@@ -242,8 +242,8 @@ public final class FileStore {
     public static List<Records.FolderRecord> listFolders(Context context, String projectId) throws DataException {
         ProjectStore.require(context, projectId);
         List<Records.FolderRecord> result = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,path,created_at FROM folders WHERE project_id=? ORDER BY path",
                 new String[]{projectId})) {
             while (c.moveToNext()) {
@@ -261,28 +261,28 @@ public final class FileStore {
     public static void deleteFolder(Context context, String projectId, String path) throws DataException {
         String folder = PathGuard.normalizeRelative(path);
         if (folder == null || folder.isEmpty()) throw new DataException("invalid folder path", 400);
-        SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
+        Object dbObj = SystemDatabase.get(context).getWritableDatabase();
         int files = 0;
-        try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM files WHERE project_id=? AND folder_path=?",
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery("SELECT COUNT(*) FROM files WHERE project_id=? AND folder_path=?",
                 new String[]{projectId, folder})) {
             if (c.moveToFirst()) files = c.getInt(0);
         }
         if (files > 0) throw new DataException("folder is not empty", 409);
-        try (Cursor c = db.rawQuery(
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT COUNT(*) FROM folders WHERE project_id=? AND path LIKE ?",
                 new String[]{projectId, folder + "/%"})) {
             if (c.moveToFirst() && c.getInt(0) > 0) {
                 throw new DataException("folder contains subfolders", 409);
             }
         }
-        db.delete("folders", "project_id=? AND path=?", new String[]{projectId, folder});
+        ((JsonDatabaseWrapper)dbObj).delete("folders", "project_id=? AND path=?", new String[]{projectId, folder});
         ProjectStore.logOperation(context, projectId, "folder.delete", folder);
     }
 
     public static Usage usage(Context context, String projectId) {
         Usage usage = new Usage();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT COUNT(*), IFNULL(SUM(size_bytes),0) FROM files WHERE project_id=?",
                 new String[]{projectId})) {
             if (c.moveToFirst()) {
@@ -335,7 +335,7 @@ public final class FileStore {
         values.put("created_at", System.currentTimeMillis());
         try {
             SystemDatabase.get(context).getWritableDatabase()
-                    .insertWithOnConflict("folders", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                    .insertWithOnConflict("folders", null, values, 5);
         } catch (Exception ignored) {
         }
     }

@@ -3,8 +3,7 @@ package com.yadaventerprise.phoneserver.data;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteConstraintException;
-import android.database.sqlite.SQLiteDatabase;
+import android.database.Cursor;
 
 import org.json.JSONObject;
 
@@ -73,7 +72,7 @@ public final class ProjectStore {
         values.put("updated_at", record.updatedAt);
         try {
             SystemDatabase.get(context).getWritableDatabase().insertOrThrow("projects", null, values);
-        } catch (SQLiteConstraintException e) {
+        } catch (RuntimeException e) {
             // roll back the empty directory we just made
             deleteQuietly(layout.projectDir(record.id));
             throw DataException.conflict("a project named '" + cleanName + "' already exists");
@@ -86,8 +85,8 @@ public final class ProjectStore {
 
     public static List<Records.ProjectRecord> list(Context context) {
         List<Records.ProjectRecord> result = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,name,description,file_quota_bytes,max_upload_bytes,created_at,updated_at "
                         + "FROM projects ORDER BY updated_at DESC", null)) {
             while (c.moveToNext()) result.add(fromCursor(c));
@@ -97,8 +96,8 @@ public final class ProjectStore {
 
     public static Records.ProjectRecord get(Context context, String id) {
         if (id == null) return null;
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,name,description,file_quota_bytes,max_upload_bytes,created_at,updated_at "
                         + "FROM projects WHERE id=?", new String[]{id})) {
             if (c.moveToFirst()) return fromCursor(c);
@@ -126,8 +125,11 @@ public final class ProjectStore {
             int rows = SystemDatabase.get(context).getWritableDatabase()
                     .update("projects", values, "id=?", new String[]{id});
             if (rows == 0) throw DataException.notFound("project");
-        } catch (SQLiteConstraintException e) {
-            throw DataException.conflict("another project already uses that name");
+        } catch (Exception e) {
+            if (e instanceof RuntimeException || e.getMessage() != null && e.getMessage().contains("CONSTRAINT")) {
+                throw DataException.conflict("another project already uses that name");
+            }
+            throw e;
         }
 
         Records.ProjectRecord updated = require(context, id);
@@ -139,8 +141,8 @@ public final class ProjectStore {
     public static void touch(Context context, String id) {
         ContentValues values = new ContentValues();
         values.put("updated_at", System.currentTimeMillis());
-        SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
-        db.update("projects", values, "id=?", new String[]{id});
+        Object dbObj = SystemDatabase.get(context).getWritableDatabase();
+        ((JsonDatabaseWrapper)dbObj).update("projects", values, "id=?", new String[]{id});
     }
 
     /**
@@ -161,20 +163,20 @@ public final class ProjectStore {
             throw new DataException("could not delete project data (files may be in use)", 500);
         }
 
-        SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
-        db.delete("projects", "id=?", new String[]{id});
+        Object dbObj = SystemDatabase.get(context).getWritableDatabase();
+        ((JsonDatabaseWrapper)dbObj).delete("projects", "id=?", new String[]{id});
         logOperation(context, null, "project.delete", record.name);
     }
 
     public static Stats stats(Context context, String projectId) {
         Stats stats = new Stats();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        stats.databaseCount = count(db, "SELECT COUNT(*) FROM project_databases WHERE project_id=?", projectId);
-        stats.fileCount = count(db, "SELECT COUNT(*) FROM files WHERE project_id=?", projectId);
-        stats.folderCount = count(db, "SELECT COUNT(*) FROM folders WHERE project_id=?", projectId);
-        stats.fileBytes = sum(db, "SELECT IFNULL(SUM(size_bytes),0) FROM files WHERE project_id=?", projectId);
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        stats.databaseCount = count(dbObj, "SELECT COUNT(*) FROM project_databases WHERE project_id=?", projectId);
+        stats.fileCount = count(dbObj, "SELECT COUNT(*) FROM files WHERE project_id=?", projectId);
+        stats.folderCount = count(dbObj, "SELECT COUNT(*) FROM folders WHERE project_id=?", projectId);
+        stats.fileBytes = sum(dbObj, "SELECT IFNULL(SUM(size_bytes),0) FROM files WHERE project_id=?", projectId);
 
-        try (Cursor c = db.rawQuery(
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT IFNULL(SUM(size_bytes),0) FROM backups WHERE project_id=?", new String[]{projectId})) {
             if (c.moveToFirst()) stats.backupBytes = c.getLong(0);
         }
@@ -191,12 +193,12 @@ public final class ProjectStore {
 
     public static GlobalStats globalStats(Context context) {
         GlobalStats stats = new GlobalStats();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        stats.projectCount = count(db, "SELECT COUNT(*) FROM projects", null);
-        stats.databaseCount = count(db, "SELECT COUNT(*) FROM project_databases", null);
-        stats.fileCount = count(db, "SELECT COUNT(*) FROM files", null);
-        stats.fileBytes = sum(db, "SELECT IFNULL(SUM(size_bytes),0) FROM files", null);
-        stats.databaseBytes = sum(db, "SELECT IFNULL(SUM(size_bytes),0) FROM project_databases", null);
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        stats.projectCount = count(dbObj, "SELECT COUNT(*) FROM projects", null);
+        stats.databaseCount = count(dbObj, "SELECT COUNT(*) FROM project_databases", null);
+        stats.fileCount = count(dbObj, "SELECT COUNT(*) FROM files", null);
+        stats.fileBytes = sum(dbObj, "SELECT IFNULL(SUM(size_bytes),0) FROM files", null);
+        stats.databaseBytes = sum(dbObj, "SELECT IFNULL(SUM(size_bytes),0) FROM project_databases", null);
         return stats;
     }
 
@@ -206,10 +208,10 @@ public final class ProjectStore {
         values.put("action", action);
         values.put("detail", detail == null ? "" : detail);
         values.put("created_at", System.currentTimeMillis());
-        SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
+        Object dbObj = SystemDatabase.get(context).getWritableDatabase();
         try {
-            db.insert("operations", null, values);
-            db.execSQL("DELETE FROM operations WHERE id NOT IN "
+            ((JsonDatabaseWrapper)dbObj).insert("operations", null, values);
+            ((JsonDatabaseWrapper)dbObj).execSQL("DELETE FROM operations WHERE id NOT IN "
                     + "(SELECT id FROM operations ORDER BY id DESC LIMIT 500)");
         } catch (Exception ignored) {
             // logging must never break the caller
@@ -243,15 +245,25 @@ public final class ProjectStore {
         return r;
     }
 
-    static int count(SQLiteDatabase db, String sql, String arg) {
-        try (Cursor c = db.rawQuery(sql, arg == null ? null : new String[]{arg})) {
-            return c.moveToFirst() ? c.getInt(0) : 0;
+    static int count(Object db, String sql, String arg) {
+        try (android.database.Cursor c = ((JsonDatabaseWrapper)db).rawQuery(sql, arg == null ? null : new String[]{arg})) {
+            boolean has = c.moveToFirst();
+            int res = has ? c.getInt(0) : 0;
+            c.close();
+            return res;
+        } catch (Exception e) {
+            return 0;
         }
     }
 
-    static long sum(SQLiteDatabase db, String sql, String arg) {
-        try (Cursor c = db.rawQuery(sql, arg == null ? null : new String[]{arg})) {
-            return c.moveToFirst() ? c.getLong(0) : 0;
+    static long sum(Object db, String sql, String arg) {
+        try (android.database.Cursor c = ((JsonDatabaseWrapper)db).rawQuery(sql, arg == null ? null : new String[]{arg})) {
+            boolean has = c.moveToFirst();
+            long res = has ? c.getLong(0) : 0;
+            c.close();
+            return res;
+        } catch (Exception e) {
+            return 0;
         }
     }
 

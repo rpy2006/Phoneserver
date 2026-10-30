@@ -115,6 +115,7 @@ final class AdApi {
             case "GET /api/billing": return reports.billing(r, u);
 
             case "GET /api/admin/overview": needAdmin(u); return overview();
+            case "GET /api/admin/audit": needAdmin(u); return audit(r);
             case "GET /api/admin/fraud": needAdmin(u); return fraud();
             case "GET /api/admin/settings": needAdmin(u); return AdHttp.ok(settingsJson());
             case "PUT /api/admin/settings": needAdmin(u); return putSettings(r, u);
@@ -811,6 +812,13 @@ final class AdApi {
                 "flagged_sites", db.scalar("SELECT COUNT(*) FROM sites WHERE flagged=1 AND status<>'removed'", 0),
                 "advertisers", db.scalar("SELECT COUNT(*) FROM users WHERE role='advertiser'", 0),
                 "publishers", db.scalar("SELECT COUNT(*) FROM users WHERE role='publisher'", 0)));
+    }
+
+    private AdHttp.Res audit(AdHttp.Req r) {
+        long limit = idParam(r, "limit");
+        if (limit < 1 || limit > 200) limit = 50;
+        return AdHttp.ok(db.query("SELECT a.id, a.ts, a.action, a.detail, u.email FROM audit a"
+                + " LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT ?", limit));
     }
 
     private AdHttp.Res fraud() {

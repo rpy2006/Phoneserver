@@ -554,7 +554,7 @@
 
   // ------------------------------------------------------------ shell + navigation
   var NAV = {
-    admin: [['overview', 'Overview'], ['users', 'Users'], ['sites', 'Sites'], ['campaigns', 'Campaigns'], ['approvals', 'Creatives'], ['reports', 'Reports'], ['billing', 'Billing'], ['fraud', 'Fraud'], ['settings', 'Settings']],
+    admin: [['admin', 'Admin'], ['overview', 'Overview'], ['users', 'Users'], ['sites', 'Sites'], ['campaigns', 'Campaigns'], ['approvals', 'Creatives'], ['reports', 'Reports'], ['billing', 'Billing'], ['fraud', 'Fraud'], ['settings', 'Settings']],
     advertiser: [['campaigns', 'Campaigns'], ['reports', 'Reports'], ['billing', 'Billing']],
     publisher: [['sites', 'My sites'], ['reports', 'Reports'], ['billing', 'Earnings']]
   };
@@ -671,6 +671,156 @@
       { k: 'new_password', t: 'New password', type: 'password', req: true, hint: 'At least 10 characters with letters and digits.', autocomplete: 'new-password' }
     ], 'Change password', function (v) { return api('POST', '/api/auth/password', v); }, function () { toast('Password changed', 'ok'); });
   }
+
+  VIEWS.admin = function (box) {
+    var kinds = [['', 'All content'], ['user', 'Users'], ['site', 'Sites'], ['campaign', 'Campaigns'], ['creative', 'Creatives']];
+    function when(ms) { return ms ? new Date(ms).toLocaleString() : '-'; }
+    function send(method, path, body, message) {
+      var request = body == null ? api(method, path) : api(method, path, body);
+      request.then(function () { toast(message, 'ok'); load(); }).catch(fail);
+    }
+    function openView(view) { return function () { location.hash = view; }; }
+    function load() {
+      clear(box);
+      box.appendChild(loadingBlock('Loading administrator console…'));
+      Promise.all([
+        api('GET', '/api/admin/overview'),
+        api('GET', '/api/users'),
+        api('GET', '/api/sites'),
+        api('GET', '/api/campaigns'),
+        api('GET', '/api/creatives'),
+        api('GET', '/api/admin/audit?limit=20')
+      ]).then(function (r) {
+        clear(box);
+        draw(r[0], r[1], r[2], r[3], r[4], r[5]);
+      }, function (e) {
+        clear(box);
+        box.appendChild(errorBox(e, load));
+      });
+    }
+    function draw(o, users, sites, campaigns, creatives, activity) {
+      var pending = Number(o.pending_campaigns) + Number(o.pending_creatives) + Number(o.pending_sites);
+      box.appendChild(h('div', { class: 'stats' },
+        statCard('Needs review', num(pending)), statCard('Pending campaigns', num(o.pending_campaigns)),
+        statCard('Pending creatives', num(o.pending_creatives)), statCard('Pending sites', num(o.pending_sites)),
+        statCard('Flagged sites', num(o.flagged_sites)), statCard('Advertisers', num(o.advertisers)),
+        statCard('Publishers', num(o.publishers))));
+      box.appendChild(card('Manage everything',
+        h('p', { class: 'hint' }, 'Every account, website, campaign and creative is listed below. Use the quick actions or open a full section for forms, reports and payments.'),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('users') }, 'Users'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('sites') }, 'Sites'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('campaigns') }, 'Campaigns'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('approvals') }, 'Creatives'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('billing') }, 'Billing'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('fraud') }, 'Fraud'),
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: openView('settings') }, 'Settings'))));
+
+      var content = [];
+      users.forEach(function (u) {
+        content.push({ kind: 'user', stamp: u.created_at, name: u.name || u.email, sub: u.email, owner: roleLabel(u.role), status: u.status, detail: u.company || '-', raw: u });
+      });
+      sites.forEach(function (s) {
+        content.push({ kind: 'site', stamp: s.created_at, name: s.name, sub: s.domain, owner: s.owner_email, status: s.status, detail: s.placements + (s.placements === 1 ? ' placement' : ' placements') + (s.flagged ? ' - flagged' : ''), raw: s });
+      });
+      campaigns.forEach(function (c) {
+        content.push({ kind: 'campaign', stamp: c.created_at, name: c.name, sub: c.advertiser_email, owner: c.pricing, status: c.status, detail: money(c.spent_micros) + ' of ' + money(c.total_budget_micros) + ' - ' + num(c.imps) + ' impressions - ' + num(c.creatives) + ' creatives', raw: c });
+      });
+      creatives.forEach(function (c) {
+        content.push({ kind: 'creative', stamp: c.created_at, name: c.title || ('Creative #' + c.id), sub: c.campaign_name, owner: c.type, status: c.status, detail: (c.has_image ? 'image attached' : 'no image') + (c.reject_reason ? ' - ' + c.reject_reason : ''), raw: c });
+      });
+      content.sort(function (a, b) { return (b.stamp || 0) - (a.stamp || 0); });
+
+      function actions(r) {
+        var a = h('div', { class: 'row' });
+        var raw = r.raw;
+        if (r.kind === 'user') {
+          a.appendChild(btn(raw.status === 'active' ? 'Disable' : 'Enable', function () {
+            send('PATCH', '/api/users/' + raw.id, { status: raw.status === 'active' ? 'disabled' : 'active' }, raw.status === 'active' ? 'User disabled' : 'User enabled');
+          }));
+          if (raw.id !== S.user.id) a.appendChild(btn('Delete', function () {
+            confirmDo('Delete ' + raw.name + ' (' + raw.email + ')? Their sites, placements, campaigns, creatives, billing records and activity history are removed, and they are signed out. This cannot be undone.', function () {
+              send('DELETE', '/api/users/' + raw.id, null, 'User deleted');
+            });
+          }, 'danger'));
+        } else if (r.kind === 'site') {
+          a.appendChild(btn('Placements', function () { placements(raw); }));
+          if (raw.status !== 'approved') a.appendChild(btn('Approve', function () { send('PATCH', '/api/sites/' + raw.id, { status: 'approved' }, 'Site approved'); }));
+          if (raw.status !== 'rejected') a.appendChild(btn('Reject', function () { send('PATCH', '/api/sites/' + raw.id, { status: 'rejected' }, 'Site rejected'); }));
+          a.appendChild(btn('Remove', function () {
+            confirmDo('Remove ' + raw.domain + ' and its placements? Past reports are kept.', function () {
+              send('DELETE', '/api/sites/' + raw.id, null, 'Site removed');
+            });
+          }, 'danger'));
+        } else if (r.kind === 'campaign') {
+          a.appendChild(btn('Creatives', function () { creatives(raw); }));
+          if (raw.status === 'pending') {
+            a.appendChild(btn('Approve', function () { send('POST', '/api/campaigns/' + raw.id + '/approve', { approve_creatives: true }, 'Campaign approved'); }));
+            a.appendChild(btn('Reject', function () {
+              formModal('Reject campaign', [{ k: 'reason', t: 'Reason shown to the advertiser', req: true, maxlen: 300 }], 'Reject', function (v) {
+                return api('POST', '/api/campaigns/' + raw.id + '/reject', v);
+              }, function () { toast('Campaign rejected', 'ok'); load(); });
+            }, 'danger'));
+          }
+          if (raw.status === 'approved') a.appendChild(btn('Pause', function () { send('POST', '/api/campaigns/' + raw.id + '/pause', null, 'Campaign paused'); }));
+          if (raw.status === 'paused') a.appendChild(btn('Resume', function () { send('POST', '/api/campaigns/' + raw.id + '/resume', null, 'Campaign resumed'); }));
+        } else if (r.kind === 'creative') {
+          if (raw.status !== 'approved') a.appendChild(btn('Approve', function () { send('POST', '/api/creatives/' + raw.id + '/approve', null, 'Creative approved'); }));
+          if (raw.status !== 'rejected') a.appendChild(btn('Reject', function () {
+            formModal('Reject creative', [{ k: 'reason', t: 'Reason shown to the advertiser', req: true, maxlen: 300 }], 'Reject', function (v) {
+              return api('POST', '/api/creatives/' + raw.id + '/reject', v);
+            }, function () { toast('Creative rejected', 'ok'); load(); });
+          }, 'danger'));
+          a.appendChild(btn('Delete', function () {
+            confirmDo('Delete this creative? This cannot be undone.', function () {
+              send('DELETE', '/api/creatives/' + raw.id, null, 'Creative deleted');
+            });
+          }, 'danger'));
+        }
+        return a;
+      }
+
+      var kindSel = h('select', { 'aria-label': 'Content type' });
+      kinds.forEach(function (k) { kindSel.appendChild(h('option', { value: k[0] }, k[1])); });
+      var searchBox = h('input', { type: 'search', placeholder: 'Search all content', 'aria-label': 'Search all content' });
+      var countChip = h('span', { class: 'chip' });
+      var holder = h('div');
+      function paint() {
+        var kind = kindSel.value;
+        var q = searchBox.value.trim().toLowerCase();
+        var rows = content.filter(function (r) {
+          if (kind && r.kind !== kind) return false;
+          if (!q) return true;
+          return (r.name + ' ' + r.sub + ' ' + r.owner + ' ' + r.status + ' ' + r.detail).toLowerCase().indexOf(q) >= 0;
+        });
+        countChip.textContent = rows.length + (rows.length === 1 ? ' item' : ' items');
+        clear(holder);
+        holder.appendChild(table([
+          { t: 'Type', f: function (r) { return r.kind.charAt(0).toUpperCase() + r.kind.slice(1); } },
+          { t: 'Content', f: function (r) { return h('span', null, h('b', null, r.name), h('div', { class: 'muted' }, r.sub)); } },
+          { t: 'Owner / model', f: function (r) { return r.owner; } },
+          { t: 'Status', f: function (r) { return h('span', { title: r.detail }, chip(r.status)); } },
+          { t: 'Details', f: function (r) { return r.detail; } },
+          { t: '', f: actions }
+        ], rows.slice(0, 300), 'Nothing matches this filter.'));
+        if (rows.length > 300) holder.appendChild(h('p', { class: 'hint' }, 'Showing the 300 newest matches. Narrow the filter to see more.'));
+      }
+      kindSel.addEventListener('change', paint);
+      searchBox.addEventListener('input', paint);
+      box.appendChild(card('All content',
+        h('div', { class: 'adminfilters' }, kindSel, searchBox, countChip),
+        holder));
+      paint();
+
+      box.appendChild(card('Recent administrator activity', table([
+        { t: 'When', f: function (r) { return when(r.ts); } },
+        { t: 'Administrator', f: function (r) { return r.email || 'deleted user'; } },
+        { t: 'Action', k: 'action' },
+        { t: 'Detail', k: 'detail' }
+      ], activity, 'No administrator activity recorded yet.')));
+    }
+    load();
+  };
 
   // ------------------------------------------------------------ overview (admin)
   VIEWS.overview = function (box) {

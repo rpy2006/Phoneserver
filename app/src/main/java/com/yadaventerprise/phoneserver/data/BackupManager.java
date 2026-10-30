@@ -3,7 +3,7 @@ package com.yadaventerprise.phoneserver.data;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.database.Cursor;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -143,8 +143,8 @@ public final class BackupManager {
     public static List<Records.BackupRecord> list(Context context, String projectId) throws DataException {
         ProjectStore.require(context, projectId);
         List<Records.BackupRecord> result = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
                         + "FROM backups WHERE project_id=? ORDER BY created_at DESC",
                 new String[]{projectId})) {
@@ -155,8 +155,8 @@ public final class BackupManager {
 
     public static Records.BackupRecord require(Context context, String projectId, String backupId)
             throws DataException {
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
                         + "FROM backups WHERE project_id=? AND id=?", new String[]{projectId, backupId})) {
             if (c.moveToFirst()) return fromCursor(c);
@@ -267,12 +267,11 @@ public final class BackupManager {
     private static void rebuildMetadata(Context context, String projectId, StorageLayout layout,
                                         Map<String, Records.FileRecord> knownFiles, boolean includeFiles)
             throws DataException {
-        SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
-        db.beginTransaction();
+        Object dbObj = SystemDatabase.get(context).getWritableDatabase();
         try {
-            db.delete("files", "project_id=?", new String[]{projectId});
-            db.delete("folders", "project_id=?", new String[]{projectId});
-            db.delete("project_databases", "project_id=?", new String[]{projectId});
+            ((JsonDatabaseWrapper)dbObj).delete("files", "project_id=?", new String[]{projectId});
+            ((JsonDatabaseWrapper)dbObj).delete("folders", "project_id=?", new String[]{projectId});
+            ((JsonDatabaseWrapper)dbObj).delete("project_databases", "project_id=?", new String[]{projectId});
 
             if (includeFiles) {
                 File filesDir = StorageLayout.ensure(layout.filesDir(projectId));
@@ -281,13 +280,11 @@ public final class BackupManager {
                     for (File f : stored) {
                         if (!f.isFile()) continue;
                         Records.FileRecord known = knownFiles.get(f.getName());
-                        insertFileMetadata(db, projectId, f.getName(), f, known);
+                        insertFileMetadata((JsonDatabaseWrapper)SystemDatabase.get(context).getWritableDatabase(), projectId, f.getName(), f, known);
                     }
                 }
             }
-            db.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
         }
 
         // Re-adopt databases from disk and re-create the logical folders.
@@ -299,12 +296,12 @@ public final class BackupManager {
                 values.put("project_id", projectId);
                 values.put("path", file.folderPath);
                 values.put("created_at", System.currentTimeMillis());
-                db.insertWithOnConflict("folders", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                SystemDatabase.get(context).getWritableDatabase().insertWithOnConflict("folders", null, values, 4);
             }
         }
     }
 
-    private static void insertFileMetadata(SQLiteDatabase db, String projectId, String storageKey,
+    private static void insertFileMetadata(JsonDatabaseWrapper db, String projectId, String storageKey,
                                            File content, Records.FileRecord known) {
         long modified = content.lastModified();
         ContentValues values = new ContentValues();
@@ -322,7 +319,7 @@ public final class BackupManager {
         values.put("tags", known == null || known.tags == null ? "" : known.tags);
         values.put("created_at", known == null || known.createdAt == 0 ? modified : known.createdAt);
         values.put("updated_at", known == null || known.updatedAt == 0 ? modified : known.updatedAt);
-        db.insertWithOnConflict("files", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+        db.insertWithOnConflict("files", null, values, 4);
     }
 
     /** Replaces {@code target} with {@code source}, keeping the old copy until the swap worked. */
@@ -472,8 +469,8 @@ public final class BackupManager {
     /** Keeps the newest {@link #MAX_BACKUPS_PER_PROJECT} archives per project. */
     private static void enforceRetention(Context context, String projectId) {
         List<Records.BackupRecord> all = new ArrayList<>();
-        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = db.rawQuery(
+        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
                 "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
                         + "FROM backups WHERE project_id=? ORDER BY created_at DESC",
                 new String[]{projectId})) {

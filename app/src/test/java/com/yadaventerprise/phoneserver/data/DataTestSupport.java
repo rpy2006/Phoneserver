@@ -1,7 +1,6 @@
 package com.yadaventerprise.phoneserver.data;
 
 import android.content.Context;
-import android.database.sqlite.SQLiteOpenHelper;
 
 import com.yadaventerprise.phoneserver.ContentStore;
 
@@ -30,13 +29,9 @@ public final class DataTestSupport {
             Field field = SystemDatabase.class.getDeclaredField("instance");
             field.setAccessible(true);
             Object current = field.get(null);
-            if (current instanceof SQLiteOpenHelper) {
-                try {
-                    ((SQLiteOpenHelper) current).close();
-                } catch (Exception ignored) {
-                }
+            try {
                 field.set(null, null);
-            }
+            } catch (Exception ignored) {}
         } catch (Exception e) {
             throw new IllegalStateException("could not reset SystemDatabase", e);
         }

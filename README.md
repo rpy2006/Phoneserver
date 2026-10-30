@@ -1,17 +1,10 @@
 # PhoneServer
 
-## 📚 Documentation
-
-[![View Docs](https://img.shields.io/badge/Documentation-Live%20Site-blue?style=flat-square&logo=google-chrome)](https://rpy2006.github.io/Phoneserver/)
-
-[**View App Documentation →**](https://rpy2006.github.io/Phoneserver/)
-
-
 **Turn any Android phone into a network file server, mini website host, live-traffic monitor, small on-device AI chat, and an optional self-hosted ad network — all from one APK, with no backend and no internet requirement.**
 
 PhoneServer runs a real HTTP server directly on the device (`java.net.ServerSocket`, no NanoHTTPD, no embedded webview server). Any browser, `curl`, or another phone on the same Wi‑Fi can reach it at `http://<phone-ip>:8080` and browse, upload, download, and organise the phone's shared storage. The same APK can also act as a *client* — connecting to other phones running PhoneServer and browsing them remotely. An opt-in **Ad Network Manager** can run alongside it on port `8090`, with its own database, accounts and dashboard.
 
-The reference documentation for the ad network is [ad-network.md](ad-network.md).
+The reference documentation for the ad network is [ad-network.md](web/ad-network.md).
 
 ---
 
@@ -95,7 +88,7 @@ A local-first storage layer that turns the phone into a small database + object-
 - **API tokens** — scoped (per-project and/or read-only) bearer tokens, stored only as SHA-256 hashes
 - **Storage insights** — real per-project database/file/folder counts, byte sizes, free space and a rolling operation log
 
-Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](architecture.md), [storage.md](storage.md), [security.md](security.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
+Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](web/API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](web/architecture.md), [storage.md](web/storage.md), [security.md](web/security.md) and [testing.md](web/testing.md) for architecture, storage layout, security and testing notes.
 
 ### 1.8 Optional ad network
 
@@ -107,7 +100,7 @@ An opt-in, self-hosted ad server on a **separate port (`8090`)**, database (`adn
 - CPM/CPC billing in integer micros with a configurable publisher revenue share (default 70%)
 - Strict CSP dashboard with sites, placements, campaigns, creatives, reports, users, billing and fraud review
 
-See [ad-network.md](ad-network.md) for setup, the embed contract, targeting, fraud rules, retention and the full API.
+See [ad-network.md](web/ad-network.md) for setup, the embed contract, targeting, fraud rules, retention and the full API.
 
 ---
 
@@ -262,7 +255,7 @@ PhoneServer/
                                 backup_rules, data_extraction_rules
 ```
 
-The original server is ~7,900 lines of Java across 56 classes, plus the data platform (`data/`) and ad-network classes listed above. Unit tests live under `app/src/test/java/…` and are described in [testing.md](testing.md).
+The original server is ~7,900 lines of Java across 56 classes, plus the data platform (`data/`) and ad-network classes listed above. Unit tests live under `app/src/test/java/…` and are described in [testing.md](web/testing.md).
 
 ---
 
@@ -510,7 +503,7 @@ ServerService (foreground, port 8080)
 - **Separate privacy surface:** public delivery needs `Origin`/`Referer` and a placement key, but deliberately has no password gate because the SDK runs on third-party pages.
 - **Hard limits:** 8 KiB header lines, 64 headers, 128 KiB buffered API body, 2 MiB creative uploads, 300 req/min/user and per-IP public endpoint limits.
 
-It is off until enabled in **Settings → Ad Network**; `startIfEnabled` is called from `ServerService` so normal server start/stop controls both listeners. See [ad-network.md](ad-network.md).
+It is off until auto-start is enabled in **Settings → Ad Network**; `startIfEnabled` is called from `ServerService`, so normal server start/stop controls both listeners. Start also turns auto-start on; Stop changes only the current session and does not turn auto-start off. Open the dashboard at `/` or `/admin`. See [ad-network.md](web/ad-network.md).
 
 ---
 
@@ -624,7 +617,7 @@ With `WWW-Authenticate: Basic realm="PhoneServer"`, which makes a browser show i
 
 The SQL/file/backup platform exposes a separate, versioned JSON API rooted at `/api/v1`. It is authenticated with either the interactive access password (admin) or a scoped bearer token, is rate-limited per client IP, honours the configured CORS origins, and streams binary resources (downloads/export/import) with HTTP range support.
 
-The **full reference — endpoints, request/response bodies, status codes, authentication, CORS and worked examples** — lives in [API.md](API.md). A short in-app summary is also available from **ApiDocsActivity** (Settings → Data platform → API documentation).
+The **full reference — endpoints, request/response bodies, status codes, authentication, CORS and worked examples** — lives in [API.md](web/API.md). A short in-app summary is also available from **ApiDocsActivity** (Settings → Data platform → API documentation).
 
 Quick taste:
 
@@ -654,17 +647,17 @@ The optional ad server is a separate origin with its own API. Public delivery is
 | Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
 | Campaigns / creatives | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST …/{id}/submit|approve|reject|pause|resume`, `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST …/{id}/image|approve|reject` |
 | Reports / billing | `GET /api/reports/summary`, `/breakdown`, `/export`, `GET /api/billing` |
-| Admin | `GET /api/admin/overview`, `/fraud`, `GET|PUT /api/admin/settings` |
+| Admin | `GET /api/admin/overview`, `/audit`, `/fraud`, `GET|PUT /api/admin/settings` |
 
-`/api/setup` is the only way to create the first administrator and requires the one-time setup code shown on the phone. Sign-up is disabled by default. Full request/response details, targeting keys, billing rules and limits are in [ad-network.md](ad-network.md).
+`/api/setup` is the only way to create the first administrator and requires the one-time setup code shown on the phone. Sign-up is disabled by default. Full request/response details, targeting keys, billing rules and limits are in [ad-network.md](web/ad-network.md).
 
 ---
 
 ## 6. Data & Persistence Model
 
-The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [architecture.md](architecture.md).
+The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](web/storage.md) and [architecture.md](web/architecture.md).
 
-The **ad network** has a third, fully separate SQLite database (`adnet.db`) with users, sessions, sites, placements, campaigns, creatives, events, daily stats, billing, audit and settings tables; its preference file is `adnet_prefs`, and creative images live under `filesDir/adnet/creatives/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](ad-network.md).
+The **ad network** has a third, fully separate SQLite database (`adnet.db`) with users, sessions, sites, placements, campaigns, creatives, events, daily stats, billing, audit and settings tables; its preference file is `adnet_prefs`, and creative images live under `filesDir/adnet/creatives/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](web/ad-network.md).
 
 | Prefs file | Key | Contents | Written by |
 |---|---|---|---|
@@ -896,7 +889,7 @@ The ad network is a separate origin and does not reuse the file server's passwor
 | Response safety | CR/LF stripping in headers, `nosniff`, `no-store` on API, `X-Frame-Options: DENY`, sandbox CSP on media, strict CSP on the dashboard |
 | Privacy | No cookies, no raw IP stored with the visitor hash, daily-rotating hash, DNT/GPC honoured for visitor tracking |
 
-Residual risks: plaintext HTTP/LAN exposure, no TLS, no email verification or password reset, no CAPTCHA, and invalid traffic cannot be eliminated with certainty. The ad dashboard is only as safe as the admin's password and network. See [ad-network.md](ad-network.md) §11.
+Residual risks: plaintext HTTP/LAN exposure, no TLS, no email verification or password reset, no CAPTCHA, and invalid traffic cannot be eliminated with certainty. The ad dashboard is only as safe as the admin's password and network. See [ad-network.md](web/ad-network.md) §11.
 
 ---
 
@@ -946,7 +939,7 @@ sh gradlew :app:testDebugUnitTest
 sh gradlew :app:assembleDebug
 ```
 
-The recorded result on the development host is **88 tests, 41 passed, 47 skipped, 0 failed**. The 47 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive) run everywhere. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
+The recorded result on the development host is **88 tests, 41 passed, 47 skipped, 0 failed**. The 47 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive) run everywhere. See [testing.md](web/testing.md) and [platform-compatibility.md](web/platform-compatibility.md).
 
 There are **no automated tests for the ad network or the dashboard assets** yet, and no CI configuration. Verify those manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, and watch `/serve`, `/imp`, `/c` and the reports move.
 
@@ -1192,13 +1185,13 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 3. Check ownership with the existing `siteFor` / `placementFor` / `campaignRow` / `creativeFor` helpers before reading or writing.
 4. Use bound parameters for all values. Report grouping expressions must come from a fixed allow-list (`AdReports.groupExpr`), never from raw input.
 5. If it can change money, wrap the update and the ledger/stat write in one SQLite transaction (copy `AdDelivery.record`/`settle`).
-6. Add the endpoint to [ad-network.md](ad-network.md) and to the dashboard client, then smoke-test with `curl` (there are no automated ad tests).
+6. Add the endpoint to [ad-network.md](web/ad-network.md) and to the dashboard client, then smoke-test with `curl` (there are no automated ad tests).
 
 ---
 
 ## 14. Ad Network Manager
 
-The ad network is documented in full in [ad-network.md](ad-network.md). In brief:
+The ad network is documented in full in [ad-network.md](web/ad-network.md). In brief:
 
 - **Opt-in, separate service** on port `8090`, started by `ServerService` only when enabled; its own `adnet.db`, creative files, thread pool and `adnet_prefs`.
 - **Three roles:** admin (users, approvals, credits/payouts, settings, fraud), advertiser (campaigns/creatives/budgets/targeting), publisher (sites/placements/tags/earnings).

@@ -1,0 +1,2433 @@
+<script src="data/docs.js"></script>
+<script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
+<script src="https://unpkg.com/dompurify@3.0.6/dist/purify.min.js"></script>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="PhoneServer documentation, HTTP API and optional self-hosted ad network reference">
+<title>PhoneServer — Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;
+  --bg-soft:#f8fafc;
+  --bg-sidebar:#fbfcfe;
+  --panel:#ffffff;
+  --fg:#0f172a;
+  --fg-dim:#64748b;
+  --fg-muted:#94a3b8;
+  --border:#e5eaf0;
+  --border-strong:#cbd5e1;
+  --accent:#4f46e5;
+  --accent-hover:#4338ca;
+  --accent-soft:#eef2ff;
+  --ok:#059669;
+  --bad:#dc2626;
+  --warn:#d97706;
+  --code-bg:#0f172a;
+  --code-fg:#e2e8f0;
+  --code-line:rgba(255,255,255,0.06);
+  --shadow:0 4px 12px rgba(15,23,42,0.06);
+  --radius:10px;
+  --radius-sm:6px;
+  --sidebar-w:280px;
+  --topbar-h:64px;
+}
+[data-theme="dark"]{
+  --bg:#0b1220;
+  --bg-soft:#131c2e;
+  --bg-sidebar:#0d1524;
+  --panel:#131c2e;
+  --fg:#e2e8f0;
+  --fg-dim:#94a3b8;
+  --fg-muted:#64748b;
+  --border:#1e293b;
+  --border-strong:#334155;
+  --accent:#818cf8;
+  --accent-hover:#a5b4fc;
+  --accent-soft:#1e1b4b;
+  --code-bg:#020617;
+  --code-fg:#e2e8f0;
+  --code-line:rgba(255,255,255,0.04);
+  --shadow:0 4px 12px rgba(0,0,0,0.4);
+}
+*{box-sizing:border-box}
+html{
+  -webkit-text-size-adjust:100%;
+  scroll-behavior:smooth;
+  scroll-padding-top:calc(var(--topbar-h) + 20px);
+}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover);text-decoration:underline}
+
+/* ============ TOPBAR ============ */
+.topbar{
+  position:sticky;
+  top:0;
+  inset:auto 0 auto 0;
+  height:var(--topbar-h);
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:0 20px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  z-index:60;
+}
+.menu-btn{
+  display:none;
+  width:40px;height:40px;
+  border:1px solid var(--border);
+  background:var(--bg);
+  border-radius:var(--radius-sm);
+  color:var(--fg);
+  cursor:pointer;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+.menu-btn:hover{background:var(--bg-soft);border-color:var(--border-strong)}
+.menu-btn svg{width:20px;height:20px;fill:none;stroke:currentColor}
+
+.brand{
+  display:flex;align-items:center;gap:10px;
+  color:var(--fg);font-weight:600;font-size:15px;
+  flex-shrink:0;
+}
+.brand:hover{text-decoration:none;color:var(--fg)}
+.brand-mark{
+  width:32px;height:32px;
+  background:var(--accent);color:#fff;
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:15px;
+}
+.brand-tag{
+  font-weight:400;color:var(--fg-muted);
+  font-size:12px;margin-left:4px;
+  padding:2px 6px;
+  border:1px solid var(--border);
+  border-radius:4px;
+}
+.search-box{
+  flex:1;max-width:520px;
+  position:relative;margin-left:auto;
+}
+.search-ic{
+  position:absolute;left:14px;top:50%;
+  transform:translateY(-50%);
+  color:var(--fg-muted);
+  pointer-events:none;
+  width:16px;height:16px;
+  fill:none;stroke:currentColor;
+}
+#q{
+  width:100%;
+  padding:10px 14px 10px 40px;
+  border:1px solid var(--border);
+  background:var(--bg-soft);
+  border-radius:8px;
+  font:inherit;font-size:14px;
+  color:var(--fg);
+  outline:none;
+  transition:border-color .15s, background .15s, box-shadow .15s;
+}
+#q:focus{
+  background:var(--bg);
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+#results{
+  position:absolute;
+  top:calc(100% + 8px);left:0;right:0;
+  max-height:420px;overflow:auto;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  box-shadow:var(--shadow);
+  display:none;padding:6px;
+}
+#results a{
+  display:block;padding:10px 12px;
+  border-radius:6px;color:var(--fg);font-size:14px;
+}
+#results a:hover{background:var(--accent-soft);text-decoration:none}
+#results .p{display:block;font-size:11px;color:var(--fg-muted);margin-bottom:2px}
+#results .empty{padding:16px;color:var(--fg-muted);text-align:center;font-size:13px}
+
+.btn-guide{
+  flex-shrink:0;padding:8px 14px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--fg);font-size:13px;font-weight:500;
+  white-space:nowrap;
+}
+.btn-guide:hover{background:var(--bg-soft);border-color:var(--border-strong);text-decoration:none;color:var(--fg)}
+
+
+/* ============ SIDEBAR ============ */
+.sidebar-backdrop{
+  position:fixed;
+  inset:var(--topbar-h) 0 0 0;
+  background:rgba(15,23,42,0.4);
+  opacity:0;visibility:hidden;
+  transition:opacity .2s, visibility .2s;
+  z-index:45;
+}
+.sidebar-backdrop.show{opacity:1;visibility:visible}
+.sidebar{
+  position:fixed;
+  top:var(--topbar-h);left:0;bottom:0;
+  width:var(--sidebar-w);
+  background:var(--bg-sidebar);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  z-index:50;
+  padding:20px 12px 40px;
+  display:flex;flex-direction:column;
+}
+.nav{flex:1}
+.nav-group{margin-bottom:2px}
+.nav-group>summary{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:600;
+  color:var(--fg);
+  list-style:none;
+  transition:background .15s;
+  user-select:none;
+}
+.nav-group>summary::-webkit-details-marker{display:none}
+.nav-group>summary::marker{content:''}
+.nav-group>summary::after{
+  content:'›';
+  margin-left:auto;
+  color:var(--fg-muted);
+  font-size:16px;
+  line-height:1;
+  transition:transform .15s;
+}
+.nav-group[open]>summary::after{transform:rotate(90deg)}
+.nav-group>summary:hover{background:var(--bg)}
+
+/* Nav icons — bold, consistent, aligned */
+.nav-ico{
+  display:inline-block;
+  vertical-align:middle;
+  width:20px;
+  height:20px;
+  color:var(--accent);
+  flex-shrink:0;
+  fill:none;
+  stroke:currentColor;
+}
+
+.nav-list{
+  list-style:none;
+  margin:4px 0 8px 20px;
+  padding:0;
+  border-left:1px solid var(--border);
+}
+.nav-list li{margin:0}
+.nav-link{
+  display:block;
+  padding:5px 12px;
+  font-size:13px;
+  color:var(--fg-dim);
+  border-radius:4px;
+  line-height:1.5;
+  margin-left:-1px;
+  border-left:2px solid transparent;
+}
+.nav-link:hover{
+  color:var(--fg);
+  background:var(--bg);
+  text-decoration:none;
+}
+.nav-link.lvl2{padding-left:22px;font-size:12.5px}
+.nav-link.lvl3{padding-left:32px;font-size:12px}
+.nav-link.current{
+  color:var(--accent);
+  background:var(--accent-soft);
+  border-left-color:var(--accent);
+  font-weight:500;
+}
+
+/* ============ MAIN ============ */
+.main-wrap{
+  padding-top:var(--topbar-h);
+  min-height:100vh;
+  display:flex;flex-direction:column;
+}
+main{
+  flex:1;
+  width:100%;
+  max-width:840px;
+  margin:0 auto;
+  padding:32px 40px 96px;
+}
+@media (min-width:1024px){
+  .main-wrap{margin-left:var(--sidebar-w)}
+}
+@media (max-width:1023px){
+  .menu-btn{display:flex}
+  .sidebar{
+    transform:translateX(-100%);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow:4px 0 30px rgba(0,0,0,.1);
+  }
+  .sidebar.open{transform:none}
+}
+.breadcrumb{
+  display:flex;align-items:center;gap:8px;
+  font-size:12.5px;
+  color:var(--fg-muted);
+  margin-bottom:24px;
+  padding-bottom:16px;
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.breadcrumb .sep{opacity:.5}
+.breadcrumb .current{color:var(--fg);font-weight:500}
+
+/* ============ CONTENT ============ */
+.page h1{
+  font-size:30px;font-weight:700;
+  letter-spacing:-.02em;line-height:1.25;
+  margin:0 0 24px;padding-bottom:16px;
+  border-bottom:2px solid var(--border);
+}
+.page h2{
+  font-size:21px;font-weight:600;
+  letter-spacing:-.01em;
+  margin:48px 0 16px;
+  border-top:1px solid var(--border);
+  padding-top:32px;
+}
+.page h2:first-of-type{border-top:none;padding-top:8px;margin-top:32px}
+.page h3{
+  font-size:17px;font-weight:600;
+  margin:32px 0 12px;
+}
+.page h4{
+  font-size:15px;font-weight:600;
+  margin:24px 0 8px;
+}
+.page h2,.page h3,.page h4{
+  scroll-margin-top:calc(var(--topbar-h) + 20px);
+}
+.page h2 .anchor,.page h3 .anchor{
+  opacity:0;margin-left:8px;
+  font-size:.8em;color:var(--fg-muted);font-weight:400;
+}
+.page h2:hover .anchor,.page h3:hover .anchor{opacity:1;text-decoration:none}
+.page p{margin:14px 0;color:var(--fg)}
+.page ul,.page ol{padding-left:24px;margin:14px 0}
+.page li{margin:6px 0}
+.page li::marker{color:var(--fg-muted)}
+.page hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+.page blockquote{
+  margin:20px 0;padding:14px 20px;
+  border-left:3px solid var(--accent);
+  background:var(--bg-soft);
+  color:var(--fg-dim);
+  border-radius:0 8px 8px 0;
+}
+.page code{
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.87em;
+  background:var(--bg-soft);
+  padding:2px 6px;
+  border-radius:4px;
+  border:1px solid var(--border);
+  color:var(--fg);
+  overflow-wrap:anywhere;
+}
+.page pre{
+  position:relative;
+  background:var(--code-bg);
+  border-radius:10px;
+  padding:20px;
+  overflow-x:auto;
+  margin:20px 0;
+  border:1px solid var(--code-line);
+  -webkit-overflow-scrolling:touch;
+}
+.page pre code{
+  background:none;border:none;padding:0;
+  font-size:13px;line-height:1.7;
+  color:var(--code-fg);
+  white-space:pre;
+  overflow-wrap:normal;
+}
+.page pre.manifest code{font-size:12.5px}
+.page .copy{
+  position:absolute;
+  top:10px;right:10px;
+  padding:5px 10px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);
+  color:var(--code-fg);
+  border-radius:5px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  cursor:pointer;
+  opacity:0;
+  transition:opacity .15s, background .15s;
+}
+.page pre:hover .copy{opacity:1}
+.page .copy:hover{background:rgba(255,255,255,0.15)}
+
+/* Tables */
+.tablewrap{
+  overflow-x:auto;
+  margin:20px 0;
+  border:1px solid var(--border);
+  border-radius:10px;
+  -webkit-overflow-scrolling:touch;
+}
+.page table{
+  border-collapse:collapse;
+  width:100%;
+  font-size:13.5px;
+  min-width:max-content;
+}
+.page th{
+  padding:12px 16px;
+  text-align:left;
+  background:var(--bg-soft);
+  font-weight:600;
+  font-size:12px;
+  color:var(--fg-dim);
+  text-transform:uppercase;
+  letter-spacing:.03em;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.page td{
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+.page tr:last-child td{border-bottom:none}
+.page tr:hover td{background:var(--bg-soft)}
+
+/* ============ FOOTER ============ */
+footer{
+  max-width:840px;
+  width:100%;
+  margin:0 auto;
+  padding:24px 40px 40px;
+  border-top:1px solid var(--border);
+  font-size:12.5px;
+  color:var(--fg-muted);
+  display:flex;gap:16px;flex-wrap:wrap;
+  justify-content:space-between;
+}
+footer a{color:var(--fg-dim)}
+footer a:hover{color:var(--accent);text-decoration:none}
+
+/* ============ BACK TO TOP ============ */
+#totop{
+  position:fixed;
+  bottom:24px;right:24px;
+  width:44px;height:44px;
+  border-radius:50%;
+  background:var(--accent);color:#fff;
+  border:none;font-size:18px;
+  cursor:pointer;
+  box-shadow:0 4px 12px rgba(79,70,229,.3);
+  display:none;
+  z-index:40;
+  transition:background .15s, transform .15s;
+}
+#totop:hover{background:var(--accent-hover);transform:translateY(-2px)}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:768px){
+  main{padding:24px 20px 96px}
+  footer{padding:20px 20px 40px;flex-direction:column;gap:8px}
+  .page h1{font-size:24px}
+  .page h2{font-size:19px}
+  .page h3{font-size:16px}
+  .page th,.page td{padding:10px 12px}
+  .page pre{padding:16px}
+  .page pre code{font-size:12.5px}
+  .breadcrumb{font-size:11.5px}
+  #totop{bottom:16px;right:16px;width:40px;height:40px}
+}
+@media (max-width:640px){
+  .topbar{padding:0 12px;gap:10px}
+  .brand-name{font-size:14px}
+  .brand-tag{display:none}
+  .btn-guide{display:none}
+  #q{font-size:13px}
+}
+@media print{
+  .topbar,.sidebar,.sidebar-backdrop,#totop,.breadcrumb,footer,.copy{display:none!important}
+  .main-wrap{margin-left:0!important;padding-top:0!important}
+  main{max-width:none;padding:0}
+  .page[hidden]{display:block!important}
+  body{background:#fff;color:#000}
+  .page h2{page-break-after:avoid}
+  .page pre,.page table{page-break-inside:avoid}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+<script>try{var t=localStorage.getItem('ps-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+<style>#md-render{width:100%;overflow-x:hidden}#md-render .content{max-width:840px;margin:0 auto;padding:32px 40px 96px;box-sizing:border-box}#md-render pre{overflow-x:auto;max-width:100%}#md-render table{display:block;overflow-x:auto;max-width:100%}#md-render img{max-width:100%;height:auto}@media (max-width:1023px){#md-render{margin-left:0!important}}@media (max-width:768px){#md-render .content{padding:24px 16px 64px}}</style>
+</head>
+<body>
+
+<!-- ============ ICON SPRITE (corrected) ============ -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 4h6a4 4 0 0 1 4 4v13H6a4 4 0 0 0-4 4z"/>
+      <path d="M22 4h-6a4 4 0 0 0-4 4v13h6a4 4 0 0 1 4 4z"/>
+    </symbol>
+    <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <path d="M7 9l3 3-3 3M13 15h4"/>
+    </symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2 2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </symbol>
+    <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="3"/>
+      <path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/>
+      <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"/>
+      <path d="M9 12l2 2 4-4"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M8 12l3 3 5-6"/>
+    </symbol>
+    <symbol id="i-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="2" width="12" height="20" rx="2"/>
+      <path d="M11 18h2"/>
+    </symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/>
+      <path d="M7 14l4-4 3 3 5-6"/>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+      <path d="M14 2v6h6"/>
+      <path d="M8 13h8M8 17h5"/>
+    </symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M3 6h18M3 12h18M3 18h18"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"/>
+      <path d="M21 21l-4.35-4.35"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ============ TOPBAR ============ -->
+<header class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Toggle navigation" aria-expanded="false">
+    <svg aria-hidden="true"><use href="#i-menu"/></svg>
+  </button>
+  <a class="brand" href="#overview">
+    <span class="brand-mark">P</span>
+    <span class="brand-name">PhoneServer <span class="brand-tag">Docs</span></span>
+  </a>
+  <div class="search-box">
+    <svg class="search-ic" aria-hidden="true"><use href="#i-search"/></svg>
+    <input id="q" type="search" placeholder="Search documentation…" autocomplete="off" aria-label="Search documentation">
+    <div id="results" role="listbox"></div>
+  </div>
+  <a class="btn-guide" href="guide.html">Guide ↗</a>
+</header>
+
+<div class="sidebar-backdrop" id="backdrop"></div>
+
+<!-- ============ SIDEBAR ============ -->
+<aside class="sidebar" id="sidebar" aria-label="Documentation navigation">
+  <nav class="nav">
+
+    <details class="nav-group" data-page="overview">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-book"/></svg><span>Overview &amp; App</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#overview--phoneserver" data-id="overview--phoneserver">PhoneServer</a></li>
+        <li><a class="nav-link lvl1" href="#overview--1-feature-overview" data-id="overview--1-feature-overview">1. Feature Overview</a></li>
+        <li><a class="nav-link lvl2" href="#overview--11-local-http-server" data-id="overview--11-local-http-server">1.1 Local HTTP server</a></li>
+        <li><a class="nav-link lvl2" href="#overview--12-remote-client-phone-to-phone" data-id="overview--12-remote-client-phone-to-phone">1.2 Remote client</a></li>
+        <li><a class="nav-link lvl2" href="#overview--13-live-dashboard" data-id="overview--13-live-dashboard">1.3 Live dashboard</a></li>
+        <li><a class="nav-link lvl2" href="#overview--14-website-api-authoring" data-id="overview--14-website-api-authoring">1.4 Website &amp; API authoring</a></li>
+        <li><a class="nav-link lvl2" href="#overview--15-on-device-ai-chat" data-id="overview--15-on-device-ai-chat">1.5 On-device AI chat</a></li>
+        <li><a class="nav-link lvl2" href="#overview--16-platform-integration" data-id="overview--16-platform-integration">1.6 Platform integration</a></li>
+        <li><a class="nav-link lvl2" href="#overview--17-local-sql-file-storage-platform" data-id="overview--17-local-sql-file-storage-platform">1.7 SQL &amp; file storage</a></li>
+        <li><a class="nav-link lvl2" href="#overview--18-optional-ad-network" data-id="overview--18-optional-ad-network">1.8 Optional ad network</a></li>
+        <li><a class="nav-link lvl1" href="#overview--2-tech-stack-requirements" data-id="overview--2-tech-stack-requirements">2. Tech Stack &amp; Requirements</a></li>
+        <li><a class="nav-link lvl2" href="#overview--dependencies" data-id="overview--dependencies">Dependencies</a></li>
+        <li><a class="nav-link lvl2" href="#overview--permissions" data-id="overview--permissions">Permissions</a></li>
+        <li><a class="nav-link lvl1" href="#overview--3-project-structure" data-id="overview--3-project-structure">3. Project Structure</a></li>
+        <li><a class="nav-link lvl1" href="#overview--4-architecture-design" data-id="overview--4-architecture-design">4. Architecture Design</a></li>
+        <li><a class="nav-link lvl2" href="#overview--41-architectural-style" data-id="overview--41-architectural-style">4.1 Architectural style</a></li>
+        <li><a class="nav-link lvl2" href="#overview--42-request-lifecycle" data-id="overview--42-request-lifecycle">4.2 Request lifecycle</a></li>
+        <li><a class="nav-link lvl2" href="#overview--43-the-measured-twice-design" data-id="overview--43-the-measured-twice-design">4.3 Measured-twice design</a></li>
+        <li><a class="nav-link lvl2" href="#overview--44-threading-model" data-id="overview--44-threading-model">4.4 Threading model</a></li>
+        <li><a class="nav-link lvl2" href="#overview--45-storage-layout" data-id="overview--45-storage-layout">4.5 Storage layout</a></li>
+        <li><a class="nav-link lvl2" href="#overview--46-path-traversal-defence" data-id="overview--46-path-traversal-defence">4.6 Path-traversal defence</a></li>
+        <li><a class="nav-link lvl2" href="#overview--47-auth-model" data-id="overview--47-auth-model">4.7 Auth model</a></li>
+        <li><a class="nav-link lvl2" href="#overview--48-response-framing" data-id="overview--48-response-framing">4.8 Response framing</a></li>
+        <li><a class="nav-link lvl2" href="#overview--49-icon-switching" data-id="overview--49-icon-switching">4.9 Icon switching</a></li>
+        <li><a class="nav-link lvl1" href="#overview--5-http-api-reference" data-id="overview--5-http-api-reference">5. HTTP API Reference</a></li>
+        <li><a class="nav-link lvl2" href="#overview--51-public-endpoints" data-id="overview--51-public-endpoints">5.1 Public endpoints</a></li>
+        <li><a class="nav-link lvl2" href="#overview--52-password-protected-endpoints" data-id="overview--52-password-protected-endpoints">5.2 Protected endpoints</a></li>
+        <li><a class="nav-link lvl2" href="#overview--53-data-storage-api-apiv1" data-id="overview--53-data-storage-api-apiv1">5.3 Data &amp; storage API</a></li>
+        <li><a class="nav-link lvl1" href="#overview--6-data-persistence-model" data-id="overview--6-data-persistence-model">6. Data &amp; Persistence</a></li>
+        <li><a class="nav-link lvl2" href="#overview--model-classes" data-id="overview--model-classes">Model classes</a></li>
+        <li><a class="nav-link lvl2" href="#overview--in-memory-state-not-persisted" data-id="overview--in-memory-state-not-persisted">In-memory state</a></li>
+        <li><a class="nav-link lvl1" href="#overview--7-ui-architecture" data-id="overview--7-ui-architecture">7. UI Architecture</a></li>
+        <li><a class="nav-link lvl2" href="#overview--71-navigation" data-id="overview--71-navigation">7.1 Navigation</a></li>
+        <li><a class="nav-link lvl2" href="#overview--72-theming" data-id="overview--72-theming">7.2 Theming</a></li>
+        <li><a class="nav-link lvl2" href="#overview--73-built-in-file-viewers" data-id="overview--73-built-in-file-viewers">7.3 File viewers</a></li>
+        <li><a class="nav-link lvl2" href="#overview--74-custom-views" data-id="overview--74-custom-views">7.4 Custom views</a></li>
+        <li><a class="nav-link lvl1" href="#overview--8-on-device-ai-subsystem" data-id="overview--8-on-device-ai-subsystem">8. On-device AI</a></li>
+        <li><a class="nav-link lvl2" href="#overview--81-component-shape" data-id="overview--81-component-shape">8.1 Component shape</a></li>
+        <li><a class="nav-link lvl2" href="#overview--82-concurrency-correctness-this-is-the-subtle-part" data-id="overview--82-concurrency-correctness-this-is-the-subtle-part">8.2 Concurrency correctness</a></li>
+        <li><a class="nav-link lvl2" href="#overview--83-gguf-validation" data-id="overview--83-gguf-validation">8.3 GGUF validation</a></li>
+        <li><a class="nav-link lvl2" href="#overview--84-ui-robustness" data-id="overview--84-ui-robustness">8.4 UI robustness</a></li>
+        <li><a class="nav-link lvl1" href="#overview--9-security-model" data-id="overview--9-security-model">9. Security Model</a></li>
+        <li><a class="nav-link lvl2" href="#overview--91-posture" data-id="overview--91-posture">9.1 Posture</a></li>
+        <li><a class="nav-link lvl2" href="#overview--92-controls-in-place" data-id="overview--92-controls-in-place">9.2 Controls</a></li>
+        <li><a class="nav-link lvl2" href="#overview--93-weaknesses" data-id="overview--93-weaknesses">9.3 Weaknesses</a></li>
+        <li><a class="nav-link lvl1" href="#overview--10-build-development" data-id="overview--10-build-development">10. Build &amp; Development</a></li>
+        <li><a class="nav-link lvl2" href="#overview--101-prerequisites" data-id="overview--101-prerequisites">10.1 Prerequisites</a></li>
+        <li><a class="nav-link lvl2" href="#overview--102-commands" data-id="overview--102-commands">10.2 Commands</a></li>
+        <li><a class="nav-link lvl2" href="#overview--103-gradle-configuration-notes" data-id="overview--103-gradle-configuration-notes">10.3 Gradle notes</a></li>
+        <li><a class="nav-link lvl2" href="#overview--104-testing" data-id="overview--104-testing">10.4 Testing</a></li>
+        <li><a class="nav-link lvl2" href="#overview--105-quick-manual-smoke-test" data-id="overview--105-quick-manual-smoke-test">10.5 Smoke test</a></li>
+        <li><a class="nav-link lvl1" href="#overview--11-design-decisions-rationale" data-id="overview--11-design-decisions-rationale">11. Design Decisions</a></li>
+        <li><a class="nav-link lvl2" href="#overview--111-hand-rolled-http-server-instead-of-nanohttpd" data-id="overview--111-hand-rolled-http-server-instead-of-nanohttpd">11.1 Hand-rolled HTTP</a></li>
+        <li><a class="nav-link lvl2" href="#overview--112-byte-safe-request-parsing" data-id="overview--112-byte-safe-request-parsing">11.2 Byte-safe parsing</a></li>
+        <li><a class="nav-link lvl2" href="#overview--113-counting-output-rather-than-estimating-traffic" data-id="overview--113-counting-output-rather-than-estimating-traffic">11.3 Counting output</a></li>
+        <li><a class="nav-link lvl2" href="#overview--114-connection-close-on-every-response" data-id="overview--114-connection-close-on-every-response">11.4 Connection: close</a></li>
+        <li><a class="nav-link lvl2" href="#overview--115-a-single-traversal-chokepoint" data-id="overview--115-a-single-traversal-chokepoint">11.5 Traversal chokepoint</a></li>
+        <li><a class="nav-link lvl2" href="#overview--116-graceful-degradation-over-failure" data-id="overview--116-graceful-degradation-over-failure">11.6 Graceful degradation</a></li>
+        <li><a class="nav-link lvl2" href="#overview--117-background-work-on-background-threads-always" data-id="overview--117-background-work-on-background-threads-always">11.7 Background work</a></li>
+        <li><a class="nav-link lvl2" href="#overview--118-descriptive-names-and-comments-that-explain-history" data-id="overview--118-descriptive-names-and-comments-that-explain-history">11.8 Descriptive names</a></li>
+        <li><a class="nav-link lvl2" href="#overview--119-two-activity-aliases-for-a-live-status-icon" data-id="overview--119-two-activity-aliases-for-a-live-status-icon">11.9 Icon aliases</a></li>
+        <li><a class="nav-link lvl1" href="#overview--12-known-limitations-technical-debt" data-id="overview--12-known-limitations-technical-debt">12. Known Limitations</a></li>
+        <li><a class="nav-link lvl2" href="#overview--121-correctness-and-security" data-id="overview--121-correctness-and-security">12.1 Correctness &amp; security</a></li>
+        <li><a class="nav-link lvl2" href="#overview--122-threading-and-lifecycle" data-id="overview--122-threading-and-lifecycle">12.2 Threading &amp; lifecycle</a></li>
+        <li><a class="nav-link lvl2" href="#overview--123-dead-and-duplicated-code" data-id="overview--123-dead-and-duplicated-code">12.3 Dead &amp; duplicated code</a></li>
+        <li><a class="nav-link lvl2" href="#overview--124-build-and-packaging" data-id="overview--124-build-and-packaging">12.4 Build &amp; packaging</a></li>
+        <li><a class="nav-link lvl2" href="#overview--125-scalability-limits-inherent-to-the-design" data-id="overview--125-scalability-limits-inherent-to-the-design">12.5 Scalability limits</a></li>
+        <li><a class="nav-link lvl1" href="#overview--13-extension-guide" data-id="overview--13-extension-guide">13. Extension Guide</a></li>
+        <li><a class="nav-link lvl2" href="#overview--131-add-a-new-http-endpoint" data-id="overview--131-add-a-new-http-endpoint">13.1 New HTTP endpoint</a></li>
+        <li><a class="nav-link lvl2" href="#overview--132-add-a-new-tab" data-id="overview--132-add-a-new-tab">13.2 New tab</a></li>
+        <li><a class="nav-link lvl2" href="#overview--133-add-a-new-file-viewer" data-id="overview--133-add-a-new-file-viewer">13.3 New file viewer</a></li>
+        <li><a class="nav-link lvl2" href="#overview--134-add-a-persisted-collection" data-id="overview--134-add-a-persisted-collection">13.4 Persisted collection</a></li>
+        <li><a class="nav-link lvl2" href="#overview--135-before-you-enable-r8" data-id="overview--135-before-you-enable-r8">13.5 Before enabling R8</a></li>
+        <li><a class="nav-link lvl1" href="#overview--appendix-quick-reference" data-id="overview--appendix-quick-reference">Appendix · Quick reference</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="api">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-term"/></svg><span>HTTP API Reference</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#api--data-storage-api-apiv1" data-id="api--data-storage-api-apiv1">Data &amp; storage API</a></li>
+        <li><a class="nav-link lvl1" href="#api--1-authentication" data-id="api--1-authentication">1. Authentication</a></li>
+        <li><a class="nav-link lvl2" href="#api--11-access-password-admin" data-id="api--11-access-password-admin">1.1 Access password</a></li>
+        <li><a class="nav-link lvl2" href="#api--12-api-token-scoped" data-id="api--12-api-token-scoped">1.2 API token</a></li>
+        <li><a class="nav-link lvl2" href="#api--13-failure-responses" data-id="api--13-failure-responses">1.3 Failure responses</a></li>
+        <li><a class="nav-link lvl2" href="#api--14-rate-limiting" data-id="api--14-rate-limiting">1.4 Rate limiting</a></li>
+        <li><a class="nav-link lvl2" href="#api--15-cors" data-id="api--15-cors">1.5 CORS</a></li>
+        <li><a class="nav-link lvl1" href="#api--2-endpoints" data-id="api--2-endpoints">2. Endpoints</a></li>
+        <li><a class="nav-link lvl2" href="#api--21-health-public" data-id="api--21-health-public">2.1 Health</a></li>
+        <li><a class="nav-link lvl2" href="#api--22-index-authenticated" data-id="api--22-index-authenticated">2.2 Index</a></li>
+        <li><a class="nav-link lvl2" href="#api--23-system-admin-only" data-id="api--23-system-admin-only">2.3 System</a></li>
+        <li><a class="nav-link lvl2" href="#api--24-tokens-admin-only" data-id="api--24-tokens-admin-only">2.4 Tokens</a></li>
+        <li><a class="nav-link lvl2" href="#api--25-projects" data-id="api--25-projects">2.5 Projects</a></li>
+        <li><a class="nav-link lvl2" href="#api--26-databases" data-id="api--26-databases">2.6 Databases</a></li>
+        <li><a class="nav-link lvl2" href="#api--27-files-folders" data-id="api--27-files-folders">2.7 Files &amp; folders</a></li>
+        <li><a class="nav-link lvl2" href="#api--28-backups" data-id="api--28-backups">2.8 Backups</a></li>
+        <li><a class="nav-link lvl1" href="#api--3-status-codes" data-id="api--3-status-codes">3. Status codes</a></li>
+        <li><a class="nav-link lvl1" href="#api--4-worked-examples" data-id="api--4-worked-examples">4. Worked examples</a></li>
+        <li><a class="nav-link lvl2" href="#api--41-create-a-project-database-and-table-then-insert-and-query" data-id="api--41-create-a-project-database-and-table-then-insert-and-query">4.1 Create &amp; query</a></li>
+        <li><a class="nav-link lvl2" href="#api--42-a-website-using-the-api-javascript-fetch" data-id="api--42-a-website-using-the-api-javascript-fetch">4.2 Website (JS)</a></li>
+        <li><a class="nav-link lvl2" href="#api--43-an-app-using-the-api-kotlinjava-http" data-id="api--43-an-app-using-the-api-kotlinjava-http">4.3 App (Kotlin/Java)</a></li>
+        <li><a class="nav-link lvl2" href="#api--44-backups" data-id="api--44-backups">4.4 Backups</a></li>
+        <li><a class="nav-link lvl1" href="#api--5-notes-on-the-sql-workspace" data-id="api--5-notes-on-the-sql-workspace">5. SQL workspace notes</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="architecture">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-layers"/></svg><span>Architecture</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#architecture--architecture" data-id="architecture--architecture">Architecture</a></li>
+        <li><a class="nav-link lvl1" href="#architecture--component-map" data-id="architecture--component-map">Component map</a></li>
+        <li><a class="nav-link lvl1" href="#architecture--layers" data-id="architecture--layers">Layers</a></li>
+        <li><a class="nav-link lvl1" href="#architecture--request-lifecycle-for-apiv1" data-id="architecture--request-lifecycle-for-apiv1">Request lifecycle</a></li>
+        <li><a class="nav-link lvl1" href="#architecture--design-choices" data-id="architecture--design-choices">Design choices</a></li>
+        <li><a class="nav-link lvl1" href="#architecture--threading" data-id="architecture--threading">Threading</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="storage">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-db"/></svg><span>Storage Layout</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#storage--storage-layout" data-id="storage--storage-layout">Storage layout</a></li>
+        <li><a class="nav-link lvl1" href="#storage--where-the-data-root-lives" data-id="storage--where-the-data-root-lives">Data root</a></li>
+        <li><a class="nav-link lvl1" href="#storage--directory-structure" data-id="storage--directory-structure">Directory structure</a></li>
+        <li><a class="nav-link lvl1" href="#storage--systemdb-schema-version-1" data-id="storage--systemdb-schema-version-1">system.db schema</a></li>
+        <li><a class="nav-link lvl1" href="#storage--project-databases" data-id="storage--project-databases">Project databases</a></li>
+        <li><a class="nav-link lvl1" href="#storage--uploads-and-temporaries" data-id="storage--uploads-and-temporaries">Uploads &amp; temporaries</a></li>
+        <li><a class="nav-link lvl1" href="#storage--quotas-and-limits" data-id="storage--quotas-and-limits">Quotas and limits</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="security">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-shield"/></svg><span>Security Model</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#security--security-model" data-id="security--security-model">Security model</a></li>
+        <li><a class="nav-link lvl1" href="#security--threat-model" data-id="security--threat-model">Threat model</a></li>
+        <li><a class="nav-link lvl1" href="#security--authentication" data-id="security--authentication">Authentication</a></li>
+        <li><a class="nav-link lvl1" href="#security--authorisation-project-isolation" data-id="security--authorisation-project-isolation">Authorisation</a></li>
+        <li><a class="nav-link lvl1" href="#security--path-safety" data-id="security--path-safety">Path safety</a></li>
+        <li><a class="nav-link lvl1" href="#security--sql-safety" data-id="security--sql-safety">SQL safety</a></li>
+        <li><a class="nav-link lvl1" href="#security--uploads-downloads" data-id="security--uploads-downloads">Uploads &amp; downloads</a></li>
+        <li><a class="nav-link lvl1" href="#security--backups" data-id="security--backups">Backups</a></li>
+        <li><a class="nav-link lvl1" href="#security--resource-limits" data-id="security--resource-limits">Resource limits</a></li>
+        <li><a class="nav-link lvl1" href="#security--error-handling" data-id="security--error-handling">Error handling</a></li>
+        <li><a class="nav-link lvl1" href="#security--cors" data-id="security--cors">CORS</a></li>
+        <li><a class="nav-link lvl1" href="#security--explicit-non-goals-production-requirements" data-id="security--explicit-non-goals-production-requirements">Non-goals / production</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="testing">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-check"/></svg><span>Testing</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#testing--testing" data-id="testing--testing">Testing</a></li>
+        <li><a class="nav-link lvl1" href="#testing--how-to-run" data-id="testing--how-to-run">How to run</a></li>
+        <li><a class="nav-link lvl1" href="#testing--frameworks" data-id="testing--frameworks">Frameworks</a></li>
+        <li><a class="nav-link lvl1" href="#testing--test-suites" data-id="testing--test-suites">Test suites</a></li>
+        <li><a class="nav-link lvl1" href="#testing--results" data-id="testing--results">Results</a></li>
+        <li><a class="nav-link lvl1" href="#testing--relationship-to-the-specification" data-id="testing--relationship-to-the-specification">Spec coverage</a></li>
+        <li><a class="nav-link lvl1" href="#testing--lint-static-analysis" data-id="testing--lint-static-analysis">Lint</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="platform">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-device"/></svg><span>Platform Compatibility</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#platform--platform-compatibility-setup" data-id="platform--platform-compatibility-setup">Platform compatibility</a></li>
+        <li><a class="nav-link lvl1" href="#platform--device-runtime-requirements" data-id="platform--device-runtime-requirements">Device requirements</a></li>
+        <li><a class="nav-link lvl1" href="#platform--build-environment" data-id="platform--build-environment">Build environment</a></li>
+        <li><a class="nav-link lvl1" href="#platform--dependencies-added" data-id="platform--dependencies-added">Dependencies</a></li>
+        <li><a class="nav-link lvl1" href="#platform--host-architecture-note-tests" data-id="platform--host-architecture-note-tests">Host architecture</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="adnet">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-scale"/></svg><span>Ad Network</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#adnet" data-id="adnet">Ad Network Manager</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--1-overview" data-id="adnet--1-overview">1. Overview</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--2-getting-started" data-id="adnet--2-getting-started">2. Getting started</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--3-roles-and-workflow" data-id="adnet--3-roles-and-workflow">3. Roles &amp; workflow</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--4-sites-and-placements" data-id="adnet--4-sites-and-placements">4. Sites &amp; placements</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--5-campaigns-creatives-targeting" data-id="adnet--5-campaigns-creatives-targeting">5. Campaigns</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--6-embedding-the-sdk" data-id="adnet--6-embedding-the-sdk">6. Embedding SDK</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--7-counting-fraud-billing" data-id="adnet--7-counting-fraud-billing">7. Counting &amp; billing</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--8-dashboard" data-id="adnet--8-dashboard">8. Dashboard</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--9-http-api" data-id="adnet--9-http-api">9. HTTP API</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--10-data-retention-backups" data-id="adnet--10-data-retention-backups">10. Retention &amp; backups</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--11-security-privacy" data-id="adnet--11-security-privacy">11. Security &amp; privacy</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--12-limits-troubleshooting" data-id="adnet--12-limits-troubleshooting">12. Limits</a></li>
+        <li><a class="nav-link lvl1" href="#adnet--13-source-files" data-id="adnet--13-source-files">13. Source files</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="manifest">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-file"/></svg><span>Update Manifest</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="#manifest" data-id="manifest">Update Manifest</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--project" data-id="manifest--project">Project</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--implementation-summary" data-id="manifest--implementation-summary">Summary</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--added-files-61" data-id="manifest--added-files-61">Added files</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--modified-files-8" data-id="manifest--modified-files-8">Modified files</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--explanation-of-each-change" data-id="manifest--explanation-of-each-change">Change explanations</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--dependencies-added-changed" data-id="manifest--dependencies-added-changed">Dependencies</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--database-initialization" data-id="manifest--database-initialization">Database init</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--build-run" data-id="manifest--build-run">Build / Run</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--test-results" data-id="manifest--test-results">Test results</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--installation-integration" data-id="manifest--installation-integration">Installation</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--backup-restore" data-id="manifest--backup-restore">Backup / Restore</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--known-limitations" data-id="manifest--known-limitations">Known limitations</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--required-configuration-changes" data-id="manifest--required-configuration-changes">Required config</a></li>
+        <li><a class="nav-link lvl1" href="#manifest--archive-contents-69-files" data-id="manifest--archive-contents-69-files">Archive contents</a></li>
+      </ul>
+    </details>
+
+    <details class="nav-group" data-page="techdocs">
+      <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-file"/></svg><span>Technical Documentation</span></summary>
+      <ul class="nav-list">
+        <li><a class="nav-link lvl1" href="docs/API.md">API Documentation</a></li>
+        <li><a class="nav-link lvl1" href="docs/architecture.md">Architecture</a></li>
+        <li><a class="nav-link lvl1" href="docs/security.md">Security</a></li>
+        <li><a class="nav-link lvl1" href="docs/storage.md">Storage</a></li>
+        <li><a class="nav-link lvl1" href="docs/testing.md">Testing</a></li>
+        <li><a class="nav-link lvl1" href="docs/ad-network.md">Ad Network</a></li>
+        <li><a class="nav-link lvl1" href="docs/platform-compatibility.md">Platform Compatibility</a></li>
+      </ul>
+    </details>
+
+  </nav>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<div class="main-wrap">
+  <main id="content">
+    <div class="breadcrumb" id="breadcrumb"></div>
+
+    <!-- OVERVIEW -->
+    <section class="page" id="overview" data-page="overview" hidden>
+      <h1 id="overview--phoneserver">PhoneServer</h1>
+      <p><strong>Turn any Android phone into a network file server, mini website host, live-traffic monitor, a small on-device AI chat, and an optional self-hosted ad network — all from one APK, with no backend and no internet requirement.</strong></p>
+      <p>PhoneServer runs a real HTTP server directly on the device (<code>java.net.ServerSocket</code>, no NanoHTTPD, no embedded webview server). Any browser, <code>curl</code>, or another phone on the same Wi‑Fi can reach it at <code>http://&lt;phone-ip&gt;:8080</code> and browse, upload, download, and organise the phone's shared storage.</p>
+      <hr />
+
+      <h2 id="overview--1-feature-overview">1. Feature Overview</h2>
+      <h3 id="overview--11-local-http-server">1.1 Local HTTP server</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Capability</th><th>Endpoint</th><th>Notes</th></tr></thead>
+      <tbody>
+      <tr><td>Hosted website</td><td><code>GET /</code></td><td>Serves <code>files/website/index.html</code></td></tr>
+      <tr><td>Live status</td><td><code>GET /status</code></td><td>Public</td></tr>
+      <tr><td>File download</td><td><code>GET /files/&lt;path&gt;</code></td><td>Password-protected</td></tr>
+      <tr><td>Folder listing</td><td><code>GET /api/browse</code></td><td>Password-protected</td></tr>
+      <tr><td>Create folder</td><td><code>POST /api/mkdir</code></td><td>JSON body</td></tr>
+      <tr><td>Delete</td><td><code>POST /api/delete</code></td><td>Recursive</td></tr>
+      <tr><td>Rename</td><td><code>POST /api/rename</code></td><td>JSON body</td></tr>
+      <tr><td>Upload</td><td><code>POST /api/upload</code></td><td>multipart</td></tr>
+      <tr><td>Statistics</td><td><code>GET /api/stats</code></td><td>Live metrics</td></tr>
+      <tr><td>Custom endpoints</td><td><code>/api/&lt;x&gt;</code></td><td>User-defined</td></tr>
+      </tbody>
+      </table></div>
+      <p>Uploads land in the device's real <code>Pictures/</code>, <code>Movies/</code>, <code>Music/</code>, <code>Download/</code> folders and are pushed to <code>MediaScannerConnection</code> immediately.</p>
+
+      <h3 id="overview--12-remote-client-phone-to-phone">1.2 Remote client (phone-to-phone)</h3>
+      <ul>
+        <li>Save unlimited <strong>server profiles</strong></li>
+        <li>Live online/offline dot per profile</li>
+        <li>Browse, upload, download, rename, delete on the remote device</li>
+        <li><strong>QR onboarding</strong></li>
+      </ul>
+
+      <h3 id="overview--13-live-dashboard">1.3 Live dashboard</h3>
+      <p>Real telemetry: request count, bytes up/down, clients, per-endpoint hit counts, RAM %, CPU %, uptime, sparklines, activity feed.</p>
+
+      <h3 id="overview--14-website-api-authoring">1.4 Website &amp; API authoring</h3>
+      <ul>
+        <li><strong>Website editor</strong> manages the served site</li>
+        <li><strong>API endpoint editor</strong> defines method → JSON mappings</li>
+      </ul>
+
+      <h3 id="overview--15-on-device-ai-chat">1.5 On-device AI chat</h3>
+      <ul>
+        <li>Imports a <code>.gguf</code> text model</li>
+        <li>Validates the GGUF header</li>
+        <li>Token-streaming chat UI via native <code>llama.cpp</code></li>
+      </ul>
+
+      <h3 id="overview--16-platform-integration">1.6 Platform integration</h3>
+      <ul>
+        <li>Foreground service with notification</li>
+        <li>Optional start-on-boot</li>
+        <li>Launcher icon swaps between online/offline</li>
+        <li>DayNight theme support</li>
+      </ul>
+
+      <h3 id="overview--17-local-sql-file-storage-platform">1.7 Local SQL &amp; file storage platform</h3>
+      <ul>
+        <li><strong>Projects</strong> — isolated workspaces</li>
+        <li><strong>Databases</strong> — many SQLite databases per project</li>
+        <li><strong>Files</strong> — streamed with SHA-256 checksums</li>
+        <li><strong>Backups</strong> — validated zip archives</li>
+        <li><strong>API tokens</strong> — scoped, hashed</li>
+      </ul>
+      <p>Everything is reachable over HTTP under <code>/api/v1</code>.</p>
+
+      <h3 id="overview--18-optional-ad-network">1.8 Optional ad network</h3>
+      <p>An opt-in, self-hosted ad server on a <strong>separate port (<code>8090</code>)</strong>.</p>
+
+      <hr />
+      <h2 id="overview--2-tech-stack-requirements">2. Tech Stack &amp; Requirements</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Item</th><th>Value</th></tr></thead>
+      <tbody>
+      <tr><td>Language</td><td>Java 11</td></tr>
+      <tr><td>Min SDK</td><td>24</td></tr>
+      <tr><td>Target / Compile SDK</td><td>34</td></tr>
+      <tr><td>AGP</td><td>8.5.2</td></tr>
+      <tr><td>Gradle</td><td>9.0.0</td></tr>
+      <tr><td>Package</td><td><code>com.yadaventerprise.phoneserver</code></td></tr>
+      <tr><td>NDK ABI</td><td><code>arm64-v8a</code></td></tr>
+      <tr><td>Persistence</td><td>SharedPreferences + private files</td></tr>
+      <tr><td>UI</td><td>AndroidX + Material + View system</td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--dependencies">Dependencies</h3>
+      <pre><code>androidx.appcompat:appcompat:1.4.2
+androidx.recyclerview:recyclerview:1.2.1
+androidx.core:core:1.9.0
+androidx.viewpager2:viewpager2:1.1.0
+com.google.android.material:material:1.9.0
+com.google.zxing:core:3.5.2
+com.journeyapps:zxing-android-embedded:4.3.0</code></pre>
+
+      <h3 id="overview--permissions">Permissions</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Permission</th><th>Why</th></tr></thead>
+      <tbody>
+      <tr><td><code>INTERNET</code></td><td>Server socket + remote client</td></tr>
+      <tr><td><code>ACCESS_WIFI_STATE</code></td><td>Address discovery</td></tr>
+      <tr><td><code>FOREGROUND_SERVICE</code></td><td>Keep server alive</td></tr>
+      <tr><td><code>POST_NOTIFICATIONS</code></td><td>Service notification</td></tr>
+      <tr><td><code>WAKE_LOCK</code></td><td>While serving</td></tr>
+      <tr><td><code>RECEIVE_BOOT_COMPLETED</code></td><td>Auto-start</td></tr>
+      <tr><td><code>MANAGE_EXTERNAL_STORAGE</code></td><td>All-files access</td></tr>
+      </tbody>
+      </table></div>
+
+      <hr />
+      <h2 id="overview--3-project-structure">3. Project Structure</h2>
+      <pre><code>PhoneServer/
+├── build.gradle
+├── settings.gradle
+├── gradle.properties
+├── gradle/wrapper/
+└── app/
+    ├── build.gradle
+    └── src/main/
+        ├── AndroidManifest.xml
+        ├── jniLibs/arm64-v8a/libllama_bridge.so
+        └── java/com/yadaventerprise/phoneserver/
+            └── … (56 classes total)</code></pre>
+      <p>~7,900 lines of Java across 56 classes, plus 38 layouts.</p>
+
+      <hr />
+      <h2 id="overview--4-architecture-design">4. Architecture Design</h2>
+      <h3 id="overview--41-architectural-style">4.1 Architectural style</h3>
+      <p>A layered, message-passing-free monolith with three loosely-coupled tiers.</p>
+      <pre><code>┌──────────────────────────────────────────────┐
+│  PRESENTATION TIER                           │
+├──────────────────────────────────────────────┤
+│  SERVICE / ENGINE TIER                       │
+│  ServerService → SimpleHttpServer → Stats    │
+├──────────────────────────────────────────────┤
+│  STATE / UTILITY TIER                        │
+│  ContentStore · ServerProfileStore · …       │
+└──────────────────────────────────────────────┘</code></pre>
+
+      <h3 id="overview--42-request-lifecycle">4.2 Request lifecycle</h3>
+      <pre><code>Browser/curl
+    ↓
+acceptLoop()  [dedicated thread]
+    ↓
+handleClient(Socket)
+    ├ 1. readRequest()
+    ├ 2. CountingOutputStream
+    ├ 3. route(req, out)
+    └ 4. ServerStats.recordRequest()</code></pre>
+
+      <h3 id="overview--43-the-measured-twice-design">4.3 The "measured twice" design</h3>
+      <p><strong>Every number the dashboard shows is a real measurement.</strong></p>
+      <pre><code>LOCAL                          REMOTE
+─────                          ──────
+Socket → CountingOutputStream  RemoteApiClient.getStats()
+    ↓                              ↓
+ServerStats.recordRequest()    HTTP GET /api/stats
+    ↓                              ↓
+/api/stats JSON                StatsSnapshot
+    └──────────┬───────────────────┘
+               ▼
+       SparklineView / TrafficChartView</code></pre>
+
+      <h3 id="overview--44-threading-model">4.4 Threading model</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Component</th><th>Thread</th></tr></thead>
+      <tbody>
+      <tr><td>Socket accept</td><td>1 dedicated thread</td></tr>
+      <tr><td>Per-connection</td><td>1 thread per connection</td></tr>
+      <tr><td>HTTP client</td><td>1 thread per call</td></tr>
+      <tr><td>LLM</td><td>Single-thread executor</td></tr>
+      <tr><td>UI polling</td><td>Handler.postDelayed</td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--45-storage-layout">4.5 Storage layout</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Purpose</th><th>Path</th></tr></thead>
+      <tbody>
+      <tr><td>Served website</td><td><code>filesDir/website/</code></td></tr>
+      <tr><td>Shared files</td><td>External storage / fallback</td></tr>
+      <tr><td>Downloads</td><td><code>Download/PhoneServer/</code></td></tr>
+      <tr><td>Models</td><td><code>filesDir/models/</code></td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--46-path-traversal-defence">4.6 Path-traversal defence</h3>
+      <ol>
+        <li>Strip leading <code>/</code></li>
+        <li>Build <code>new File(root, relative)</code></li>
+        <li>Canonicalise both</li>
+        <li>Require target starts with root + separator</li>
+      </ol>
+
+      <h3 id="overview--47-auth-model">4.7 Auth model</h3>
+      <pre><code>isAuthorized(request)
+    ├ password empty → TRUE
+    ├ X-Auth-Password header
+    ├ ?pw= query
+    └ Authorization: Basic
+            else → 401 + WWW-Authenticate</code></pre>
+
+      <h3 id="overview--48-response-framing">4.8 Response framing</h3>
+      <pre><code>HTTP/1.1 &lt;code&gt; &lt;reason&gt;
+Content-Type: &lt;type&gt;
+Content-Length: &lt;exact bytes&gt;
+Connection: close
+Access-Control-Allow-Origin: *</code></pre>
+
+      <h3 id="overview--49-icon-switching">4.9 Icon switching</h3>
+      <p>Two <code>activity-alias</code> components toggled via <code>PackageManager.setComponentEnabledSetting(..., DONT_KILL_APP)</code>.</p>
+
+      <hr />
+      <h2 id="overview--5-http-api-reference">5. HTTP API Reference</h2>
+      <p>Base URL: <code>http://&lt;device-ip&gt;:8080</code></p>
+
+      <h3 id="overview--51-public-endpoints">5.1 Public endpoints</h3>
+      <h4><code>GET /</code></h4>
+      <p>Returns <code>files/website/index.html</code>.</p>
+      <h4><code>GET /status</code></h4>
+      <pre><code class="language-json">{"server":"android-phone","status":"online","time":"..."}</code></pre>
+      <h4><code>GET|POST|PUT|DELETE /api/&lt;custom-path&gt;</code></h4>
+      <p>User-defined endpoints.</p>
+
+      <h3 id="overview--52-password-protected-endpoints">5.2 Password-protected endpoints</h3>
+      <h4><code>GET /files/&lt;path&gt;</code></h4>
+      <p>Downloads a file.</p>
+      <h4><code>GET /api/browse?path=&lt;rel&gt;</code></h4>
+      <pre><code class="language-json">{"path":"Pictures","entries":[{"name":"a.jpg","isDir":false,"size":2048}]}</code></pre>
+      <h4><code>POST /api/mkdir</code></h4>
+      <pre><code class="language-json">{"path":"Pictures","name":"trip"}</code></pre>
+      <h4><code>POST /api/delete</code></h4>
+      <pre><code class="language-json">{"path":"Pictures/trip"}</code></pre>
+      <h4><code>POST /api/rename</code></h4>
+      <pre><code class="language-json">{"path":"Pictures/a.jpg","newName":"b.jpg"}</code></pre>
+      <h4><code>POST /api/upload?path=&lt;target&gt;</code></h4>
+      <p>multipart/form-data, field <code>file</code>.</p>
+      <h4><code>GET /api/stats</code></h4>
+      <pre><code class="language-json">{"requestCount":42,"bytesUp":1048576,"bytesDown":52428800,"activeClients":2}</code></pre>
+
+      <h3 id="overview--53-data-storage-api-apiv1">5.3 Data &amp; storage API (<code>/api/v1</code>)</h3>
+      <pre><code class="language-bash">curl http://&lt;phone-ip&gt;:8080/api/v1/health
+curl -H "Authorization: Bearer pst_..." http://&lt;phone-ip&gt;:8080/api/v1/projects</code></pre>
+
+      <hr />
+      <h2 id="overview--6-data-persistence-model">6. Data &amp; Persistence Model</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Prefs file</th><th>Key</th><th>Contents</th></tr></thead>
+      <tbody>
+      <tr><td><code>server_config</code></td><td><code>access_password</code></td><td>Local password</td></tr>
+      <tr><td><code>server_config</code></td><td><code>auth_username</code></td><td>Display-only</td></tr>
+      <tr><td><code>server_config</code></td><td><code>start_on_boot</code></td><td>boolean</td></tr>
+      <tr><td><code>server_profiles</code></td><td><code>profiles_json</code></td><td>JSONArray</td></tr>
+      <tr><td><code>api_endpoint_configs</code></td><td><code>endpoints_json</code></td><td>JSONArray</td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--model-classes">Model classes</h3>
+      <ul>
+        <li><code>ServerProfile</code> — id, name, ip, port, username, password</li>
+        <li><code>ApiEndpointConfig</code> — path, method, headers, params, body</li>
+        <li><code>RemoteEntry</code> — name, isDir, size, modified</li>
+        <li><code>StatsSnapshot</code> — scalars + lists</li>
+        <li><code>KeyValue</code> — key, value</li>
+      </ul>
+
+      <h3 id="overview--in-memory-state-not-persisted">In-memory state</h3>
+      <ul>
+        <li>Traffic counters — <code>ServerStats.INSTANCE</code></li>
+        <li>Active clients — reset on server start</li>
+        <li>Recent activity — capped at 30</li>
+        <li>Uptime — zeroed on stop</li>
+      </ul>
+
+      <hr />
+      <h2 id="overview--7-ui-architecture">7. UI Architecture</h2>
+      <h3 id="overview--71-navigation">7.1 Navigation</h3>
+      <pre><code>MainActivity
+  ViewPager2 + FragmentStateAdapter
+       ├── HomeFragment
+       ├── DashboardFragment
+       ├── QrFragment
+       ├── ChatFragment
+       └── SettingsFragment</code></pre>
+
+      <h3 id="overview--72-theming">7.2 Theming</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Dark</th><th>Light</th></tr></thead>
+      <tbody>
+      <tr><td>Background</td><td>#0D0F14</td><td>#FAFAFA</td></tr>
+      <tr><td>Accent</td><td>#2979FF</td><td>#2E7D32</td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--73-built-in-file-viewers">7.3 Built-in file viewers</h3>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Kind</th><th>Viewer</th></tr></thead>
+      <tbody>
+      <tr><td>IMAGE</td><td>ImageViewerActivity</td></tr>
+      <tr><td>VIDEO</td><td>VideoPlayerActivity</td></tr>
+      <tr><td>AUDIO</td><td>MusicPlayerActivity</td></tr>
+      <tr><td>TEXT</td><td>TextFileViewerActivity</td></tr>
+      <tr><td>PDF</td><td>PdfViewerActivity</td></tr>
+      <tr><td>OTHER</td><td>FileProvider handoff</td></tr>
+      </tbody>
+      </table></div>
+
+      <h3 id="overview--74-custom-views">7.4 Custom views</h3>
+      <p><code>SparklineView</code> and <code>TrafficChartView</code> — hand-rolled <code>View.onDraw</code>.</p>
+
+      <hr />
+      <h2 id="overview--8-on-device-ai-subsystem">8. On-device AI Subsystem</h2>
+      <h3 id="overview--81-component-shape">8.1 Component shape</h3>
+      <pre><code>ChatFragment → ModelStore.importModel → LlmEngine.loadModel → generate</code></pre>
+
+      <h3 id="overview--82-concurrency-correctness-this-is-the-subtle-part">8.2 Concurrency correctness</h3>
+      <blockquote>The native unload frees the llama_context, so loadModel must hold the lock for the entire swap.</blockquote>
+      <ol>
+        <li><code>loadModel()</code> holds <code>generationLock</code> for the entire swap.</li>
+        <li><code>generate()</code> reads <code>nativeHandle</code> inside the lock.</li>
+        <li><code>nativeUnloadModel</code> wrapped in <code>try/catch</code>.</li>
+        <li>Callbacks swallow <code>Throwable</code>.</li>
+      </ol>
+
+      <h3 id="overview--83-gguf-validation">8.3 GGUF validation</h3>
+      <p>Rejects non-GGUF magic, truncated headers, version outside 2–3, and vision projectors.</p>
+
+      <h3 id="overview--84-ui-robustness">8.4 UI robustness</h3>
+      <ul>
+        <li><code>viewAlive</code> flag</li>
+        <li><code>pendingTokens</code> buffer</li>
+        <li>Coalesced flush <code>Runnable</code></li>
+        <li>20,000-char cap</li>
+      </ul>
+
+      <hr />
+      <h2 id="overview--9-security-model">9. Security Model</h2>
+      <h3 id="overview--91-posture">9.1 Posture</h3>
+      <ul>
+        <li><code>usesCleartextTraffic="true"</code></li>
+        <li>Plain HTTP on 8080 / 8090</li>
+        <li>No password = open LAN access</li>
+      </ul>
+
+      <h3 id="overview--92-controls-in-place">9.2 Controls</h3>
+      <ul>
+        <li>Canonical-path containment</li>
+        <li>Name injection rejection</li>
+        <li>Multipart filename stripping</li>
+        <li>User-supplied headers filtered</li>
+        <li>All Activities <code>exported="false"</code></li>
+      </ul>
+
+      <h3 id="overview--93-weaknesses">9.3 Weaknesses</h3>
+      <ul>
+        <li>Plaintext credentials at rest</li>
+        <li>Password in URL query</li>
+        <li>Plaintext compare</li>
+        <li>Custom endpoints public</li>
+        <li>Traversal guard bypass on filenames</li>
+      </ul>
+
+      <hr />
+      <h2 id="overview--10-build-development">10. Build &amp; Development</h2>
+      <h3 id="overview--101-prerequisites">10.1 Prerequisites</h3>
+      <ul>
+        <li>JDK 17</li>
+        <li>Android SDK Platform 34</li>
+        <li>Gradle 9.0.0 wrapper</li>
+      </ul>
+
+      <h3 id="overview--102-commands">10.2 Commands</h3>
+      <pre><code class="language-bash">./gradlew assembleDebug
+./gradlew installDebug
+./gradlew :app:lintDebug</code></pre>
+
+      <h3 id="overview--103-gradle-configuration-notes">10.3 Gradle notes</h3>
+      <ul>
+        <li><code>nonTransitiveRClass=true</code></li>
+        <li><code>jvmargs=-Xmx2048m</code></li>
+        <li><code>parallel=true</code></li>
+        <li><code>minifyEnabled=false</code></li>
+      </ul>
+
+      <h3 id="overview--104-testing">10.4 Testing</h3>
+      <p>No unit or instrumentation tests.</p>
+
+      <h3 id="overview--105-quick-manual-smoke-test">10.5 Smoke test</h3>
+      <pre><code class="language-bash">curl http://&lt;phone-ip&gt;:8080/status
+curl -u :mypassword http://&lt;phone-ip&gt;:8080/api/browse?path=Pictures</code></pre>
+
+      <hr />
+      <h2 id="overview--11-design-decisions-rationale">11. Design Decisions</h2>
+      <h3 id="overview--111-hand-rolled-http-server-instead-of-nanohttpd">11.1 Hand-rolled HTTP server</h3>
+      <p>Dependency would be a supply-chain and size cost.</p>
+      <h3 id="overview--112-byte-safe-request-parsing">11.2 Byte-safe parsing</h3>
+      <p>Reader would corrupt binary upload bodies.</p>
+      <h3 id="overview--113-counting-output-rather-than-estimating-traffic">11.3 Counting output</h3>
+      <p>Bytes served is a headline number.</p>
+      <h3 id="overview--114-connection-close-on-every-response">11.4 Connection: close</h3>
+      <p>Removes keep-alive timeout handling.</p>
+      <h3 id="overview--115-a-single-traversal-chokepoint">11.5 Single chokepoint</h3>
+      <p>One function to audit.</p>
+      <h3 id="overview--116-graceful-degradation-over-failure">11.6 Graceful degradation</h3>
+      <p>Crashes on missing grant are unusable.</p>
+      <h3 id="overview--117-background-work-on-background-threads-always">11.7 Background threads</h3>
+      <p>Consistent with strict-mode.</p>
+      <h3 id="overview--118-descriptive-names-and-comments-that-explain-history">11.8 Descriptive names</h3>
+      <p>Maintained by reading.</p>
+      <h3 id="overview--119-two-activity-aliases-for-a-live-status-icon">11.9 Icon aliases</h3>
+      <p>Only supported way to change launcher icon.</p>
+
+      <hr />
+      <h2 id="overview--12-known-limitations-technical-debt">12. Known Limitations</h2>
+      <h3 id="overview--121-correctness-and-security">12.1 Correctness &amp; security</h3>
+      <ul>
+        <li>Filename appended after traversal check</li>
+        <li>Two switches never read</li>
+        <li>Username never verified</li>
+        <li>Password in <code>?pw=</code></li>
+        <li>Plaintext at rest</li>
+        <li>Custom endpoints public</li>
+        <li><code>file_paths.xml</code> root</li>
+        <li>No rate limiting on password</li>
+        <li>CRLF not escaped</li>
+      </ul>
+
+      <h3 id="overview--122-threading-and-lifecycle">12.2 Threading &amp; lifecycle</h3>
+      <ul>
+        <li>Unbounded thread spawning</li>
+        <li>No cancellation on lifecycle</li>
+        <li>Main-thread I/O</li>
+        <li>No ViewModel</li>
+        <li>Players don't pause on <code>onPause</code></li>
+      </ul>
+
+      <h3 id="overview--123-dead-and-duplicated-code">12.3 Dead code</h3>
+      <ul>
+        <li>DashboardActivity (588 lines)</li>
+        <li>QrCodeActivity &amp; ServerSettingsActivity</li>
+        <li>Two password setters</li>
+        <li><code>ContentStore.getApiPrefs()</code></li>
+        <li><code>ApiEndpoint</code>, <code>SparklineView.addValue</code></li>
+        <li>Duplicated code blocks</li>
+        <li>Raw Intent keys</li>
+        <li>No <code>DiffUtil</code></li>
+        <li>Mixed server data</li>
+        <li>Full JSON body in adapter</li>
+        <li><code>deleteRecursive</code> unguarded</li>
+      </ul>
+
+      <h3 id="overview--124-build-and-packaging">12.4 Build &amp; packaging</h3>
+      <ul>
+        <li>No tests, no CI</li>
+        <li><code>minifyEnabled false</code></li>
+        <li>47 MB prebuilt <code>.so</code></li>
+        <li>Uncommitted <code>.so</code></li>
+        <li>API 26+ Files on minSdk 24</li>
+        <li>Two commits total</li>
+      </ul>
+
+      <h3 id="overview--125-scalability-limits-inherent-to-the-design">12.5 Scalability limits</h3>
+      <ul>
+        <li>Whole files buffered in memory</li>
+        <li>Entire request body buffered</li>
+        <li>Recursive count every 2s</li>
+        <li>Chart pixel padding / hardcoded colors</li>
+      </ul>
+
+      <hr />
+      <h2 id="overview--13-extension-guide">13. Extension Guide</h2>
+      <h3 id="overview--131-add-a-new-http-endpoint">13.1 Add a new HTTP endpoint</h3>
+      <ol>
+        <li>Constant in <code>SimpleHttpServer</code></li>
+        <li>Add to password-gate condition</li>
+        <li>Handler mirroring <code>handleMkdir</code></li>
+        <li>Client method in <code>RemoteApiClient</code></li>
+        <li>Update §5</li>
+      </ol>
+
+      <h3 id="overview--132-add-a-new-tab">13.2 Add a new tab</h3>
+      <ol>
+        <li><code>XFragment</code></li>
+        <li>Layout + icon</li>
+        <li><code>PAGE_X</code> in <code>MainPagerAdapter</code></li>
+        <li>Menu item</li>
+        <li>Mapping in <strong>both</strong> directions</li>
+      </ol>
+
+      <h3 id="overview--133-add-a-new-file-viewer">13.3 Add a new file viewer</h3>
+      <ol>
+        <li>Extensions in <code>FileTypeUtils.classify</code></li>
+        <li><code>XViewerActivity</code></li>
+        <li>Manifest <code>exported="false"</code></li>
+        <li><code>case</code> in <strong>both</strong> <code>openFile</code> methods</li>
+      </ol>
+
+      <h3 id="overview--134-add-a-persisted-collection">13.4 Add a persisted collection</h3>
+      <ol>
+        <li><code>&lt;Name&gt;Store</code></li>
+        <li><code>getAll</code> defensive</li>
+        <li><code>getById</code> / <code>find</code></li>
+        <li><code>save</code> UUID if absent</li>
+        <li><code>writeAll</code> + try/catch</li>
+      </ol>
+
+      <h3 id="overview--135-before-you-enable-r8">13.5 Before enabling R8</h3>
+      <pre><code class="language-proguard">-keepclasseswithmembernames class * {
+    native &lt;methods&gt;;
+}
+-keep class com.yadaventerprise.phoneserver.LlmEngine { *; }</code></pre>
+
+      <hr />
+      <h2 id="overview--appendix-quick-reference">Appendix: Quick reference</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Thing</th><th>Value</th></tr></thead>
+      <tbody>
+      <tr><td>Package</td><td><code>com.yadaventerprise.phoneserver</code></td></tr>
+      <tr><td>Default port</td><td><code>8080</code></td></tr>
+      <tr><td>Traversal chokepoint</td><td><code>ContentStore.resolveSafePath</code></td></tr>
+      <tr><td>Stats singleton</td><td><code>ServerStats.get()</code></td></tr>
+      <tr><td>Tabs</td><td>Home · Dashboard · QR · Chat · Settings</td></tr>
+      <tr><td>Java LOC</td><td>~7,900 across 56 classes</td></tr>
+      <tr><td>Tests</td><td>None</td></tr>
+      </tbody>
+      </table></div>
+    </section>
+
+    <!-- API -->
+    <section class="page" id="api" data-page="api" hidden>
+      <h1 id="api--data-storage-api-apiv1">Data &amp; storage API (<code>/api/v1</code>)</h1>
+      <p>The local SQL + file storage platform is exposed as a versioned JSON API.</p>
+      <ul>
+        <li><strong>Base URL:</strong> <code>http://&lt;device-ip&gt;:8080/api/v1</code></li>
+        <li><strong>Content type:</strong> <code>application/json; charset=utf-8</code></li>
+        <li><strong>Errors:</strong> <code>{"error":"&lt;message&gt;","status":&lt;code&gt;}</code></li>
+      </ul>
+      <hr />
+
+      <h2 id="api--1-authentication">1. Authentication</h2>
+      <p>Every endpoint requires authentication except <code>GET /health</code> and <code>OPTIONS</code>.</p>
+      <h3 id="api--11-access-password-admin">1.1 Access password</h3>
+      <ul>
+        <li>Header — <code>X-Auth-Password: my-secret</code></li>
+        <li>Query — <code>?pw=my-secret</code></li>
+        <li>Basic — <code>Authorization: Basic base64(user:my-secret)</code></li>
+      </ul>
+
+      <h3 id="api--12-api-token-scoped">1.2 API token</h3>
+      <pre><code class="language-http">Authorization: Bearer pst_3f9c…</code></pre>
+      <p>Tokens can be global or project-scoped, read-write or read-only. Only the SHA-256 hash is stored.</p>
+
+      <h3 id="api--13-failure-responses">1.3 Failure responses</h3>
+      <ul>
+        <li><code>401</code> — Missing/invalid credential</li>
+        <li><code>403</code> — Valid but not allowed</li>
+        <li><code>429</code> — Rate limit exceeded</li>
+      </ul>
+
+      <h3 id="api--14-rate-limiting">1.4 Rate limiting</h3>
+      <p>Default 240/min per client IP.</p>
+
+      <h3 id="api--15-cors">1.5 CORS</h3>
+      <pre><code>Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type, X-Auth-Password
+Access-Control-Max-Age: 600</code></pre>
+
+      <hr />
+      <h2 id="api--2-endpoints">2. Endpoints</h2>
+      <h3 id="api--21-health-public">2.1 Health</h3>
+      <pre><code class="language-json">{"status":"online","apiVersion":"v1","server":"phoneserver"}</code></pre>
+
+      <h3 id="api--22-index-authenticated">2.2 Index</h3>
+      <p>Returns server name/version and endpoint patterns.</p>
+
+      <h3 id="api--23-system-admin-only">2.3 System</h3>
+      <pre><code class="language-json">{"projects":{"count":2},"databases":{"count":3,"bytes":94208},"files":{"count":12,"bytes":5242880}}</code></pre>
+
+      <h3 id="api--24-tokens-admin-only">2.4 Tokens</h3>
+      <ul>
+        <li><code>GET /tokens</code> — list</li>
+        <li><code>POST /tokens</code> — create</li>
+        <li><code>DELETE /tokens/{id}</code> — revoke</li>
+      </ul>
+
+      <h3 id="api--25-projects">2.5 Projects</h3>
+      <pre><code class="language-json">{"id":"9c1f…","name":"Notes","fileQuotaBytes":0,"maxUploadBytes":0}</code></pre>
+      <ul>
+        <li><code>GET /projects</code></li>
+        <li><code>POST /projects</code></li>
+        <li><code>GET /projects/{id}</code></li>
+        <li><code>PATCH /projects/{id}</code></li>
+        <li><code>DELETE /projects/{id}?confirm=&lt;name&gt;</code></li>
+        <li><code>GET /projects/{id}/stats</code></li>
+        <li><code>GET /projects/{id}/usage</code></li>
+      </ul>
+
+      <h3 id="api--26-databases">2.6 Databases</h3>
+      <ul>
+        <li><code>GET /projects/{id}/databases</code></li>
+        <li><code>POST /projects/{id}/databases</code></li>
+        <li><code>GET /projects/{id}/databases/{db}</code></li>
+        <li><code>DELETE /projects/{id}/databases/{db}</code></li>
+        <li><code>GET /projects/{id}/databases/{db}/tables</code></li>
+        <li><code>GET /projects/{id}/databases/{db}/tables/{table}</code></li>
+        <li><code>POST /projects/{id}/databases/{db}/query</code></li>
+        <li><code>POST /projects/{id}/databases/{db}/transaction</code></li>
+        <li><code>GET /projects/{id}/databases/{db}/export</code></li>
+        <li><code>POST /projects/{id}/databases/{db}/import</code></li>
+      </ul>
+
+      <h4>2.6.1 Query</h4>
+      <pre><code class="language-json">{"sql":"SELECT * FROM notes WHERE id = ?","params":[1],"limit":100,"offset":0}</code></pre>
+
+      <h4>2.6.2 Transaction</h4>
+      <pre><code class="language-json">{"statements":[{"sql":"INSERT INTO notes(body) VALUES(?)","params":["a"]}]}</code></pre>
+
+      <h4>2.6.3 Export / import</h4>
+      <p>Export streams a consistent copy. Import replaces the database (requires <code>?confirm=true</code>).</p>
+
+      <h3 id="api--27-files-folders">2.7 Files &amp; folders</h3>
+      <ul>
+        <li><code>GET /projects/{id}/files</code></li>
+        <li><code>POST /projects/{id}/files</code></li>
+        <li><code>GET /projects/{id}/files/{fileId}</code></li>
+        <li><code>PATCH /projects/{id}/files/{fileId}</code></li>
+        <li><code>DELETE /projects/{id}/files/{fileId}</code></li>
+        <li><code>GET /projects/{id}/files/{fileId}/download</code></li>
+        <li><code>GET /projects/{id}/folders</code></li>
+        <li><code>POST /projects/{id}/folders</code></li>
+        <li><code>DELETE /projects/{id}/folders</code></li>
+      </ul>
+
+      <h4>2.7.1 Upload</h4>
+      <pre><code class="language-bash">curl -X POST "http://&lt;ip&gt;:8080/api/v1/projects/&lt;pid&gt;/files?folder=albums&amp;name=photo.jpg" \
+     -H "Authorization: Bearer pst_…" \
+     -H "Content-Type: image/jpeg" \
+     --data-binary @photo.jpg</code></pre>
+
+      <h4>2.7.2 Download</h4>
+      <p>Streamed with <code>Range</code> support. Served as attachment unless <code>?inline=1</code> on the inline-safe list.</p>
+
+      <h3 id="api--28-backups">2.8 Backups</h3>
+      <ul>
+        <li><code>GET /projects/{id}/backups</code></li>
+        <li><code>POST /projects/{id}/backups</code></li>
+        <li><code>POST /projects/{id}/backups/import</code></li>
+        <li><code>GET /projects/{id}/backups/{backupId}</code></li>
+        <li><code>DELETE /projects/{id}/backups/{backupId}</code></li>
+        <li><code>POST /projects/{id}/backups/{backupId}/restore</code></li>
+        <li><code>POST /projects/{id}/backups/{backupId}/validate</code></li>
+        <li><code>GET /projects/{id}/backups/{backupId}/download</code></li>
+      </ul>
+
+      <hr />
+      <h2 id="api--3-status-codes">3. Status codes</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Code</th><th>When</th></tr></thead>
+      <tbody>
+      <tr><td><code>200</code></td><td>Successful read/update</td></tr>
+      <tr><td><code>201</code></td><td>Resource created</td></tr>
+      <tr><td><code>204</code></td><td>CORS preflight</td></tr>
+      <tr><td><code>400</code></td><td>Invalid input</td></tr>
+      <tr><td><code>401</code></td><td>Unauthorized</td></tr>
+      <tr><td><code>403</code></td><td>Forbidden</td></tr>
+      <tr><td><code>404</code></td><td>Not found</td></tr>
+      <tr><td><code>405</code></td><td>Wrong method</td></tr>
+      <tr><td><code>408</code></td><td>Query timeout</td></tr>
+      <tr><td><code>409</code></td><td>Conflict</td></tr>
+      <tr><td><code>410</code></td><td>File content missing</td></tr>
+      <tr><td><code>411</code></td><td>Length required</td></tr>
+      <tr><td><code>413</code></td><td>Payload too large</td></tr>
+      <tr><td><code>422</code></td><td>Backup validation failed</td></tr>
+      <tr><td><code>429</code></td><td>Rate limit</td></tr>
+      <tr><td><code>500</code></td><td>Internal error</td></tr>
+      </tbody>
+      </table></div>
+
+      <hr />
+      <h2 id="api--4-worked-examples">4. Worked examples</h2>
+      <h3 id="api--41-create-a-project-database-and-table-then-insert-and-query">4.1 Create &amp; query</h3>
+      <pre><code class="language-bash">BASE=http://192.168.1.50:8080/api/v1
+TOKEN=pst_xxxxxxxx
+
+PID=$(curl -s -X POST "$BASE/projects" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Notes"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+
+curl -s -X POST "$BASE/projects/$PID/databases" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"app"}'
+
+curl -s -X POST "$BASE/projects/$PID/databases/app/query" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"sql":"CREATE TABLE notes(id INTEGER PRIMARY KEY, body TEXT)"}'
+
+curl -s -X POST "$BASE/projects/$PID/databases/app/query" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"sql":"INSERT INTO notes(body) VALUES(?)","params":["hello world"]}'</code></pre>
+
+      <h3 id="api--42-a-website-using-the-api-javascript-fetch">4.2 Website (JS)</h3>
+      <pre><code class="language-html">&lt;script&gt;
+const TOKEN = "pst_xxxxxxxx";
+const BASE  = "http://192.168.1.50:8080/api/v1";
+
+async function query(sql, params = []) {
+  const res = await fetch(`${BASE}/projects/${PID}/databases/app/query`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ sql, params })
+  });
+  return res.json();
+}
+&lt;/script&gt;</code></pre>
+
+      <h3 id="api--43-an-app-using-the-api-kotlinjava-http">4.3 App (Kotlin/Java)</h3>
+      <pre><code class="language-kotlin">val conn = (URL("$base/projects/$pid/files").openConnection() as HttpURLConnection).apply {
+    requestMethod = "POST"
+    doOutput = true
+    setRequestProperty("Authorization", "Bearer $token")
+    setRequestProperty("Content-Type", "image/jpeg")
+    setFixedLengthStreamingMode(file.length())
+}
+file.inputStream().use { input -&gt; conn.outputStream.use { it.write(input.readBytes()) } }</code></pre>
+
+      <h3 id="api--44-backups">4.4 Backups</h3>
+      <pre><code class="language-bash">curl -s -X POST "$BASE/projects/$PID/backups" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"includeFiles":true,"note":"before migration"}'
+
+curl -s -X POST "$BASE/projects/$PID/backups/&lt;backupId&gt;/restore" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"confirm":true}'</code></pre>
+
+      <hr />
+      <h2 id="api--5-notes-on-the-sql-workspace">5. Notes on the SQL workspace</h2>
+      <ul>
+        <li>One statement per request.</li>
+        <li>Values via <code>params</code>; the guard blocks dangerous constructs.</li>
+        <li>Row results paginated and time-bounded.</li>
+        <li>Local-first store, not a hardened multi-tenant SQL service.</li>
+      </ul>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="page" id="architecture" data-page="architecture" hidden>
+      <h1 id="architecture--architecture">Architecture</h1>
+      <p>This document describes the local SQL + file storage platform that was added on top of PhoneServer.</p>
+
+      <h2 id="architecture--component-map">Component map</h2>
+      <pre><code>SimpleHttpServer (8080)
+    ↓
+DataApi (auth, rate limit, CORS, JSON framing)
+    ↓
+ProjectStore · DatabaseManager · FileStore · BackupManager · TokenStore
+    ↓
+system.db + filesystem</code></pre>
+
+      <h2 id="architecture--layers">Layers</h2>
+      <ol>
+        <li><strong>Transport — <code>SimpleHttpServer</code></strong></li>
+        <li><strong>API facade — <code>DataApi</code></strong></li>
+        <li><strong>Stores — <code>data/</code> package</strong></li>
+      </ol>
+
+      <h2 id="architecture--request-lifecycle-for-apiv1">Request lifecycle</h2>
+      <ol>
+        <li>Parse request</li>
+        <li>If <code>/api/v1</code> → <code>DataApi.handle()</code></li>
+        <li>Reject too-large buffered bodies → <code>413</code></li>
+        <li><code>OPTIONS</code> → CORS preflight</li>
+        <li><code>GET /health</code> → public</li>
+        <li>Rate limit then authenticate</li>
+        <li>Route to handler</li>
+        <li>Store + render JSON</li>
+      </ol>
+
+      <h2 id="architecture--design-choices">Design choices</h2>
+      <ul>
+        <li>Metadata in SQL, content on disk</li>
+        <li>Generated ids and keys</li>
+        <li>Parameterised SQL + static guard</li>
+        <li>Defence in depth for paths</li>
+        <li>One connection style</li>
+        <li>Safe error messages</li>
+      </ul>
+
+      <h2 id="architecture--threading">Threading</h2>
+      <p><code>SimpleHttpServer</code> handles each connection on its own thread.</p>
+    </section>
+
+    <!-- STORAGE -->
+    <section class="page" id="storage" data-page="storage" hidden>
+      <h1 id="storage--storage-layout">Storage layout</h1>
+      <p>All persistent platform data lives under a single configurable <strong>data root</strong>.</p>
+
+      <h2 id="storage--where-the-data-root-lives">Where the data root lives</h2>
+      <ol>
+        <li>Advanced Settings → <code>data_root</code></li>
+        <li>App-private external directory</li>
+        <li>App-private internal directory</li>
+      </ol>
+
+      <h2 id="storage--directory-structure">Directory structure</h2>
+      <pre><code>&lt;root&gt;/
+  system/system.db
+  tmp/
+  projects/&lt;project-id&gt;/
+    databases/&lt;name&gt;.db
+    files/&lt;storage-key&gt;
+    backups/&lt;backup-id&gt;.zip
+    project-config.json</code></pre>
+
+      <h2 id="storage--systemdb-schema-version-1">system.db schema</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+      <tbody>
+      <tr><td><code>projects</code></td><td>Project records</td></tr>
+      <tr><td><code>project_databases</code></td><td>Registered databases</td></tr>
+      <tr><td><code>files</code></td><td>Stored-file metadata</td></tr>
+      <tr><td><code>folders</code></td><td>Logical folders</td></tr>
+      <tr><td><code>api_tokens</code></td><td>API credentials</td></tr>
+      <tr><td><code>backups</code></td><td>Backup archives</td></tr>
+      <tr><td><code>operations</code></td><td>Rolling log</td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="storage--project-databases">Project databases</h2>
+      <p>Each logical database is an independent SQLite file with foreign keys, WAL and <code>busy_timeout=5000</code>.</p>
+
+      <h2 id="storage--uploads-and-temporaries">Uploads and temporaries</h2>
+      <p>Streamed into <code>tmp/&lt;prefix&gt;-&lt;id&gt;.part</code> then renamed into <code>files/&lt;storage-key&gt;</code> after full write + SHA-256.</p>
+
+      <h2 id="storage--quotas-and-limits">Quotas and limits</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Limit</th><th>Value</th></tr></thead>
+      <tbody>
+      <tr><td>Max upload per file</td><td>512 MiB</td></tr>
+      <tr><td>Max files per project</td><td>20 000</td></tr>
+      <tr><td>Max databases per project</td><td>50</td></tr>
+      <tr><td>Max backups per project</td><td>25</td></tr>
+      <tr><td>Query row limit</td><td>100 default, 1000 max</td></tr>
+      <tr><td>Query time budget</td><td>5 s default, 30 s max</td></tr>
+      <tr><td>Restore size cap</td><td>4 GiB</td></tr>
+      </tbody>
+      </table></div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="page" id="security" data-page="security" hidden>
+      <h1 id="security--security-model">Security model</h1>
+      <p>Security review for the local SQL + file storage platform.</p>
+
+      <h2 id="security--threat-model">Threat model</h2>
+      <ol>
+        <li>No unauthenticated admin surface</li>
+        <li>No cross-project data access</li>
+        <li>No filesystem escape</li>
+        <li>No SQL escape</li>
+        <li>No secret leakage</li>
+        <li>Bounded resource use</li>
+      </ol>
+
+      <h2 id="security--authentication">Authentication</h2>
+      <ul>
+        <li>Access password (admin, constant-time)</li>
+        <li>Bearer token (<code>pst_…</code>, scoped, hashed)</li>
+        <li>Anonymous admin refused if no password</li>
+      </ul>
+
+      <h2 id="security--authorisation-project-isolation">Authorisation</h2>
+      <p><code>requireProjectAccess</code> rejects project-scoped tokens on other projects.</p>
+
+      <h2 id="security--path-safety">Path safety</h2>
+      <ul>
+        <li><code>normalizeRelative</code> rejects <code>..</code>, <code>.</code>, empty</li>
+        <li><code>sanitizeFileName</code> strips reserved chars</li>
+        <li><code>safeResolve</code> canonicalises both root and candidate</li>
+      </ul>
+
+      <h2 id="security--sql-safety">SQL safety</h2>
+      <ul>
+        <li>One statement per request</li>
+        <li>Blocked: <code>ATTACH</code>, <code>DETACH</code>, <code>load_extension</code>, <code>writable_schema</code></li>
+        <li>Explicit transactions rejected</li>
+        <li>Parameterised only</li>
+      </ul>
+
+      <h2 id="security--uploads-downloads">Uploads &amp; downloads</h2>
+      <ul>
+        <li>Limits against declared and streamed bytes</li>
+        <li>Multipart buffered + capped</li>
+        <li>Range downloads</li>
+        <li>Attachment unless inline-safe</li>
+      </ul>
+
+      <h2 id="security--backups">Backups</h2>
+      <ul>
+        <li>Validated format/version/safe paths</li>
+        <li>Root-checked, size-capped extraction</li>
+        <li>Restore/import only after validated extraction</li>
+      </ul>
+
+      <h2 id="security--resource-limits">Resource limits</h2>
+      <ul>
+        <li>Per-IP rate limit</li>
+        <li>Buffered bodies capped</li>
+        <li>Row + time budget</li>
+      </ul>
+
+      <h2 id="security--error-handling">Error handling</h2>
+      <p><code>DataException</code> carries safe client messages.</p>
+
+      <h2 id="security--cors">CORS</h2>
+      <p>Origins from <code>ContentStore.getAllowedOrigins</code> (default <code>*</code>).</p>
+
+      <h2 id="security--explicit-non-goals-production-requirements">Non-goals</h2>
+      <ul>
+        <li>No TLS in the app</li>
+        <li>Bearer secrets</li>
+        <li>No audit-grade logging</li>
+        <li>No encryption at rest</li>
+        <li>No protection against malicious local apps</li>
+      </ul>
+    </section>
+
+    <!-- TESTING -->
+    <section class="page" id="testing" data-page="testing" hidden>
+      <h1 id="testing--testing">Testing</h1>
+      <h2 id="testing--how-to-run">How to run</h2>
+      <pre><code class="language-bash">sh gradlew :app:testDebugUnitTest
+sh gradlew :app:assembleDebug</code></pre>
+
+      <h2 id="testing--frameworks">Frameworks</h2>
+      <ul>
+        <li>JUnit 4 (4.13.2)</li>
+        <li>Robolectric 4.14.1</li>
+      </ul>
+
+      <h2 id="testing--test-suites">Test suites</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Suite</th><th>Kind</th></tr></thead>
+      <tbody>
+      <tr><td><code>PathGuardTest</code></td><td>JVM</td></tr>
+      <tr><td><code>SqlGuardTest</code></td><td>JVM</td></tr>
+      <tr><td><code>MimeTypesTest</code></td><td>JVM</td></tr>
+      <tr><td><code>TokenUtilTest</code></td><td>JVM</td></tr>
+      <tr><td><code>RateLimiterTest</code></td><td>JVM</td></tr>
+      <tr><td><code>StorageLayoutTest</code></td><td>JVM</td></tr>
+      <tr><td><code>BackupArchiveTest</code></td><td>JVM</td></tr>
+      <tr><td><code>ProjectStoreTest</code></td><td>Robolectric</td></tr>
+      <tr><td><code>DatabaseManagerTest</code></td><td>Robolectric</td></tr>
+      <tr><td><code>FileStoreTest</code></td><td>Robolectric</td></tr>
+      <tr><td><code>BackupManagerTest</code></td><td>Robolectric</td></tr>
+      <tr><td><code>TokenStoreTest</code></td><td>Robolectric</td></tr>
+      <tr><td><code>DataApiTest</code></td><td>Robolectric</td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="testing--results">Results</h2>
+      <pre><code>88 tests, 41 passed, 47 skipped, 0 failed</code></pre>
+      <p>Robolectric tests skipped on Linux/aarch64 (no native binaries for that platform).</p>
+
+      <h2 id="testing--relationship-to-the-specification">Spec coverage</h2>
+      <ul>
+        <li>Database — initialisation, CRUD, transactions, invalid SQL, migrations</li>
+        <li>Projects — create/list/update/delete, isolation, duplicate names</li>
+        <li>Files — upload/download metadata, checksum, folders, quota</li>
+        <li>Backups — creation, validation, restore</li>
+        <li>API/Security — unauthorized, cross-project, oversized uploads, rate limit, injection</li>
+      </ul>
+
+      <h2 id="testing--lint-static-analysis">Lint</h2>
+      <p><code>sh gradlew :app:lintDebug</code></p>
+    </section>
+
+    <!-- PLATFORM -->
+    <section class="page" id="platform" data-page="platform" hidden>
+      <h1 id="platform--platform-compatibility-setup">Platform compatibility &amp; setup</h1>
+      <p>Targets <strong>Android</strong>. Built with the existing Gradle/AGP setup.</p>
+
+      <h2 id="platform--device-runtime-requirements">Device requirements</h2>
+      <ul>
+        <li>Android API 24+</li>
+        <li>Network interface reachable; port <strong>8080</strong></li>
+        <li>All-files access only needed for shared-storage browsing</li>
+      </ul>
+
+      <h2 id="platform--build-environment">Build environment</h2>
+      <ul>
+        <li>JDK 21</li>
+        <li>Gradle wrapper 9.0.0</li>
+        <li>AGP 8.5.2</li>
+        <li><code>local.properties</code> → SDK path</li>
+      </ul>
+      <pre><code class="language-bash">sh gradlew :app:assembleDebug
+sh gradlew :app:testDebugUnitTest</code></pre>
+
+      <h2 id="platform--dependencies-added">Dependencies added</h2>
+      <pre><code class="language-groovy">testImplementation 'junit:junit:4.13.2'
+testImplementation 'org.robolectric:robolectric:4.14.1'</code></pre>
+      <p>No new runtime dependencies.</p>
+
+      <h2 id="platform--host-architecture-note-tests">Host architecture</h2>
+      <p>Robolectric's SQLite backend requires a native library. There is no Linux/aarch64 build.</p>
+    </section>
+
+    <!-- AD NETWORK -->
+    <section class="page" id="adnet" data-page="adnet" hidden>
+      <h1 id="adnet--ad-network-manager">Ad Network Manager</h1>
+      <p>An <strong>optional</strong>, self-hosted advertising server inside PhoneServer.</p>
+      <blockquote>Not a third-party SDK — ads are served from the owner's phone.</blockquote>
+
+      <h2 id="adnet--1-overview">1. Overview</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Property</th><th>Value</th></tr></thead>
+      <tbody>
+      <tr><td>Default port</td><td><code>8090</code></td></tr>
+      <tr><td>Enablement</td><td>Opt-in</td></tr>
+      <tr><td>Server</td><td><code>AdHttpServer</code></td></tr>
+      <tr><td>Database</td><td><code>adnet.db</code></td></tr>
+      <tr><td>Dashboard</td><td><code>GET /</code> on 8090</td></tr>
+      <tr><td>Accounts</td><td>admin / advertiser / publisher</td></tr>
+      <tr><td>Money</td><td>Integer micros</td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="adnet--2-getting-started">2. Getting started</h2>
+      <ol>
+        <li>Enable <strong>Settings → Ad Network</strong></li>
+        <li>Note address + setup code</li>
+        <li>Open dashboard, set up first admin</li>
+        <li>Create publisher/advertiser accounts</li>
+        <li>Publisher: register a site, create placement, copy tag</li>
+      </ol>
+      <pre><code class="language-bash">curl http://&lt;phone-ip&gt;:8090/health
+curl http://&lt;phone-ip&gt;:8090/api/setup/status
+curl -I http://&lt;phone-ip&gt;:8090/sdk.js</code></pre>
+
+      <h2 id="adnet--3-roles-and-workflow">3. Roles and workflow</h2>
+      <ul>
+        <li><strong>admin</strong> — Everything</li>
+        <li><strong>publisher</strong> — Sites/placements, tags, own reports</li>
+        <li><strong>advertiser</strong> — Campaigns/creatives, own spend</li>
+      </ul>
+
+      <h2 id="adnet--4-sites-and-placements">4. Sites and placements</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Field</th><th>Rules</th></tr></thead>
+      <tbody>
+      <tr><td>Site name</td><td>1–80 characters</td></tr>
+      <tr><td>Site domain</td><td>Hostname; subdomains match</td></tr>
+      <tr><td>Site limits</td><td>50 active per owner</td></tr>
+      <tr><td>Placement format</td><td>banner, native, text</td></tr>
+      <tr><td>Placement size</td><td>Required for banner</td></tr>
+      <tr><td>Placement limit</td><td>100 active per site</td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="adnet--5-campaigns-creatives-targeting">5. Campaigns</h2>
+      <ul>
+        <li><code>name</code> 1–100 chars</li>
+        <li><code>pricing</code> CPM or CPC</li>
+        <li><code>bid</code> ≥ 0.001</li>
+        <li><code>total_budget</code> &gt; 0</li>
+        <li><code>start</code> / <code>end</code></li>
+      </ul>
+
+      <h2 id="adnet--6-embedding-the-sdk">6. Embedding SDK</h2>
+      <pre><code class="language-html">&lt;div data-adnet-placement="pl_0123456789abcdef"&gt;&lt;/div&gt;
+&lt;script async src="http://192.168.1.50:8090/sdk.js"&gt;&lt;/script&gt;</code></pre>
+
+      <h2 id="adnet--7-counting-fraud-billing">7. Counting &amp; billing</h2>
+      <ul>
+        <li>HMAC-SHA256-signed tokens</li>
+        <li>Viewability ≥50% for 1s</li>
+        <li>Integer micros</li>
+        <li>Publisher share 70%</li>
+      </ul>
+
+      <h2 id="adnet--8-dashboard">8. Dashboard</h2>
+      <p><code>http://&lt;phone-ip&gt;:8090/</code></p>
+
+      <h2 id="adnet--9-http-api">9. HTTP API</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Area</th><th>Endpoints</th></tr></thead>
+      <tbody>
+      <tr><td>Public</td><td><code>/health</code>, <code>/sdk.js</code>, <code>/serve</code>, <code>/imp</code>, <code>/c</code>, <code>/media/&lt;id&gt;</code></td></tr>
+      <tr><td>Auth</td><td><code>/api/setup</code>, <code>/api/auth/*</code></td></tr>
+      <tr><td>Users (admin)</td><td><code>/api/users</code></td></tr>
+      <tr><td>Sites/placements</td><td><code>/api/sites</code>, <code>/api/placements</code></td></tr>
+      <tr><td>Campaigns</td><td><code>/api/campaigns</code></td></tr>
+      <tr><td>Creatives</td><td><code>/api/creatives</code></td></tr>
+      <tr><td>Reports</td><td><code>/api/reports/*</code>, <code>/api/billing</code></td></tr>
+      <tr><td>Admin</td><td><code>/api/admin/*</code></td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="adnet--10-data-retention-backups">10. Retention &amp; backups</h2>
+      <p>Events pruned after 30 days (configurable). Fraud log 90 days.</p>
+
+      <h2 id="adnet--11-security-privacy">11. Security &amp; privacy</h2>
+      <ul>
+        <li>Separate surface from file server</li>
+        <li>PBKDF2-HMAC-SHA256</li>
+        <li>One-time setup code</li>
+        <li>Server-side route checks</li>
+        <li>Origin/Referer verification</li>
+      </ul>
+
+      <h2 id="adnet--12-limits-troubleshooting">12. Limits</h2>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Limit</th><th>Value</th></tr></thead>
+      <tbody>
+      <tr><td>Header line / count</td><td>8 KiB / 64</td></tr>
+      <tr><td>Buffered API body</td><td>128 KiB</td></tr>
+      <tr><td>Creative image</td><td>2 MiB</td></tr>
+      <tr><td>Sites / placements / creatives</td><td>50 / 100 / 30</td></tr>
+      <tr><td>Report range / rows</td><td>366 days / 500</td></tr>
+      <tr><td>Event retention</td><td>30 days</td></tr>
+      </tbody>
+      </table></div>
+
+      <h2 id="adnet--13-source-files">13. Source files</h2>
+      <ul>
+        <li><code>AdNetworkManager.java</code></li>
+        <li><code>AdHttpServer.java</code></li>
+        <li><code>AdApi.java</code></li>
+        <li><code>AdDelivery.java</code></li>
+        <li><code>AdSecurity.java</code></li>
+        <li><code>AdDb.java</code></li>
+        <li><code>AdReports.java</code></li>
+        <li><code>AdFraud.java</code></li>
+      </ul>
+    </section>
+
+    <!-- MANIFEST -->
+    <section class="page" id="manifest" data-page="manifest" hidden>
+      <h1 id="manifest">Update Manifest</h1>
+
+      <h2 id="manifest--project">Project</h2>
+      <pre class="manifest">Name:    PhoneServer
+Repo:    https://github.com/rpy2006/Phoneserver
+Type:    Android application (Java), Gradle + Android Gradle Plugin
+Baseline: git branch "main", single prior commit (d9315c9).
+
+Archive: Phoneserver-SQL-Storage-Update.zip
+Layout:  original relative paths only
+Counts:  69 files = 8 modified + 61 added.</pre>
+
+      <h2 id="manifest--implementation-summary">Implementation Summary</h2>
+      <pre class="manifest">An incremental upgrade that turns PhoneServer into a local-first SQL database
+and file-storage platform, without removing or rewriting existing features.
+
+Added:
+  * Projects
+  * SQL database management
+  * Persistent file storage
+  * Backups
+  * HTTP API under /api/v1
+  * API tokens
+  * UI screens
+  * Tests
+  * Documentation
+
+Also added a project-local debug keystore and signing config.</pre>
+
+      <h2 id="manifest--added-files-61">Added Files (61)</h2>
+      <pre class="manifest">-- Documentation -------------------------------------------------------------
+web/API.md
+web/UPDATE_MANIFEST.txt
+web/architecture.md
+web/platform-compatibility.md
+web/security.md
+web/storage.md
+web/testing.md
+
+-- Signing -------------------------------------------------------------------
+app/debug.keystore
+
+-- HTTP API facade -----------------------------------------------------------
+app/src/main/java/com/yadaventerprise/phoneserver/DataApi.java
+
+-- Storage layer ------------------------------------------------------------
+app/src/main/java/com/yadaventerprise/phoneserver/data/BackupArchive.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/BackupManager.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/ContentStoreBridge.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/DataException.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/DatabaseManager.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/FileStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/MimeTypes.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/PathGuard.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/ProjectStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/RateLimiter.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/Records.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/SqlGuard.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/StorageLayout.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/SystemDatabase.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/TokenStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/data/TokenUtil.java
+
+-- UI activities &amp; adapters ---------------------------------------------------
+app/src/main/java/com/yadaventerprise/phoneserver/ApiDocsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ApiTokensAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectBackupsAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectDetailActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectFilesAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ProjectsAdapter.java
+app/src/main/java/com/yadaventerprise/phoneserver/SqlWorkspaceActivity.java
+
+-- Layouts -------------------------------------------------------------------
+app/src/main/res/layout/activity_api_docs.xml
+app/src/main/res/layout/activity_api_tokens.xml
+app/src/main/res/layout/activity_project_backups.xml
+app/src/main/res/layout/activity_project_detail.xml
+app/src/main/res/layout/activity_project_files.xml
+app/src/main/res/layout/activity_projects.xml
+app/src/main/res/layout/activity_sql_workspace.xml
+app/src/main/res/layout/item_backup.xml
+app/src/main/res/layout/item_project.xml
+app/src/main/res/layout/item_project_file.xml
+app/src/main/res/layout/item_token.xml
+
+-- Tests ---------------------------------------------------------------------
+app/src/test/java/com/yadaventerprise/phoneserver/DataApiTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/BackupArchiveTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/BackupManagerTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/DataTestSupport.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/DatabaseManagerTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/FileStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/MimeTypesTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/PathGuardTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/ProjectStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/RateLimiterTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/SqlGuardTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/StorageLayoutTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/TokenStoreTest.java
+app/src/test/java/com/yadaventerprise/phoneserver/data/TokenUtilTest.java</pre>
+
+      <h2 id="manifest--modified-files-8">Modified Files (8)</h2>
+      <pre class="manifest">web/README.md
+app/build.gradle
+app/src/main/AndroidManifest.xml
+app/src/main/java/com/yadaventerprise/phoneserver/AdvancedSettingsActivity.java
+app/src/main/java/com/yadaventerprise/phoneserver/ContentStore.java
+app/src/main/java/com/yadaventerprise/phoneserver/HomeFragment.java
+app/src/main/java/com/yadaventerprise/phoneserver/SimpleHttpServer.java
+app/src/main/res/layout/activity_advanced_settings.xml</pre>
+
+      <h2 id="manifest--explanation-of-each-change">Explanation Of Each Change</h2>
+      <pre class="manifest">Modified:
+  web/README.md           Added §1.7, §5.3, §6
+  app/build.gradle        Test deps + signingConfig
+  AndroidManifest.xml     New activities registered
+  AdvancedSettings…       Data-platform entry points
+  ContentStore.java       Data root + CORS accessor
+  HomeFragment.java       Data-platform entry
+  SimpleHttpServer.java   /api/v1 routing + streaming
+  activity_advanced…      Data-platform rows
+
+Added (key):
+  DataApi.java            HTTP facade
+  SystemDatabase.java     system.db schema
+  StorageLayout/PathGuard Layout + safety
+  *Store.java             Five stores
+  Guards + utils          SqlGuard, MimeTypes, TokenUtil, RateLimiter
+  UI activities           Projects, detail, SQL, files, backups, tokens, docs
+  Tests                   JUnit + Robolectric
+  Docs                    web/*.md</pre>
+
+      <h2 id="manifest--dependencies-added-changed">Dependencies Added / Changed</h2>
+      <pre class="manifest">Test-only:
+
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.14.1'
+
+No runtime dependency added or changed.</pre>
+
+      <h2 id="manifest--database-initialization">Database Initialization</h2>
+      <pre class="manifest">Nothing manual required:
+  1. Data root created on first use
+  2. system.db created under system/
+  3. Per-project SQLite files created on demand</pre>
+
+      <h2 id="manifest--build-run">Build / Run</h2>
+      <pre class="manifest">Build:       sh gradlew :app:assembleDebug
+Test:        sh gradlew :app:testDebugUnitTest
+Run:         Install APK, start server on port 8080
+Requires:    JDK 21, Android SDK in local.properties</pre>
+
+      <h2 id="manifest--test-results">Test Results</h2>
+      <pre class="manifest">88 tests total — 41 passed, 47 skipped, 0 failed
+
+Robolectric DB tests skipped on Linux/aarch64.</pre>
+
+      <h2 id="manifest--installation-integration">Installation / Integration</h2>
+      <pre class="manifest">1. Extract Phoneserver-SQL-Storage-Update.zip into project root
+2. Confirm local.properties
+3. sh gradlew :app:assembleDebug</pre>
+
+      <h2 id="manifest--backup-restore">Backup / Restore</h2>
+      <pre class="manifest">Create:   project → Backups → Create backup
+Download: GET /api/v1/projects/&lt;id&gt;/backups/&lt;backupId&gt;/download
+Validate: POST …/backups/&lt;backupId&gt;/validate
+Restore:  POST …/backups/&lt;backupId&gt;/restore {"confirm":true}
+Import:   POST …/backups/import?confirm=true</pre>
+
+      <h2 id="manifest--known-limitations">Known Limitations</h2>
+      <pre class="manifest">  * No TLS in the app
+  * No encryption at rest
+  * SQLite single-file/single-node
+  * Robolectric DB tests cannot run on Linux/aarch64
+  * Instrumentation tests not run
+  * Debug signing key changed</pre>
+
+      <h2 id="manifest--required-configuration-changes">Required Configuration Changes</h2>
+      <pre class="manifest">  * Access password (required)
+  * Data root (optional)
+  * CORS origins (optional, default "*")
+  * API rate limit (optional, default 240/min)
+  * local.properties → sdk.dir
+  * Debug keystore in repo</pre>
+
+      <h2 id="manifest--archive-contents-69-files">Archive Contents (69 Files)</h2>
+      <pre class="manifest">MODIFIED (8):
+  web/README.md
+  app/build.gradle
+  app/src/main/AndroidManifest.xml
+  app/src/main/java/…/AdvancedSettingsActivity.java
+  app/src/main/java/…/ContentStore.java
+  app/src/main/java/…/HomeFragment.java
+  app/src/main/java/…/SimpleHttpServer.java
+  app/src/main/res/layout/activity_advanced_settings.xml
+
+ADDED (61):
+  web/API.md
+  web/UPDATE_MANIFEST.txt
+  app/debug.keystore
+  web/architecture.md
+  web/platform-compatibility.md
+  web/security.md
+  web/storage.md
+  web/testing.md
+  … (see full list above)
+
+EXCLUDED ON PURPOSE:
+  feature to implement.txt
+  local.properties
+  .git/, .gradle/, build/, *.apk
+  user databases and uploaded files
+  secrets/credentials</pre>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>PhoneServer — local-first SQL &amp; file storage platform</span>
+  </footer>
+</div>
+
+<button id="totop" title="Back to top" aria-label="Back to top">↑</button>
+
+<script>
+(function(){
+  'use strict';
+
+  const PAGES = [...document.querySelectorAll('.page')].map(p => p.dataset.page);
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('backdrop');
+  const menuBtn = document.getElementById('menuBtn');
+  const breadcrumb = document.getElementById('breadcrumb');
+
+  // ---- Theme ----
+  const root = document.documentElement;
+  function openMenu() {
+    sidebar.classList.add('open');
+    backdrop.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    menuBtn.setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu() {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('show');
+    document.body.style.overflow = '';
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  menuBtn.addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeMenu() : openMenu();
+  });
+  backdrop.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+
+  // ---- Search ----
+  const SEARCH = [];
+  document.querySelectorAll('.nav-group').forEach(group => {
+    const pageTitle = group.querySelector('summary span').textContent.trim();
+    group.querySelectorAll('.nav-link').forEach(link => {
+      SEARCH.push({
+        pageTitle,
+        id: link.dataset.id || link.getAttribute('href').slice(1),
+        name: link.textContent.trim(),
+        url: link.getAttribute('href')
+      });
+    });
+  });
+
+  const q = document.getElementById('q');
+  const results = document.getElementById('results');
+
+  function runSearch() {
+    const term = q.value.trim().toLowerCase();
+    if (!term) { results.style.display = 'none'; return; }
+    const hits = SEARCH.filter(s =>
+      s.name.toLowerCase().includes(term) ||
+      s.pageTitle.toLowerCase().includes(term)
+    ).slice(0, 30);
+
+    results.innerHTML = hits.length
+      ? hits.map(h => `<a href="${h.url}" data-id="${h.id}"><span class="p">${h.pageTitle} ›</span> ${h.name}</a>`).join('')
+      : '<div class="empty">No matches</div>';
+
+    results.style.display = 'block';
+    results.querySelectorAll('a[data-id]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        go(a.dataset.id);
+        results.style.display = 'none';
+        q.value = '';
+      });
+    });
+  }
+
+  q.addEventListener('input', runSearch);
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const first = results.querySelector('a[data-id]');
+      if (first) first.click();
+    }
+    if (e.key === 'Escape') { results.style.display = 'none'; q.blur(); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-box')) results.style.display = 'none';
+  });
+
+  // ---- Routing ----
+  function pageFor(id) {
+    if (PAGES.includes(id)) return id;
+    if (id && id.includes('--')) {
+      const d = id.split('--')[0];
+      if (PAGES.includes(d)) return d;
+    }
+    return PAGES[0];
+  }
+
+  function updateBreadcrumb(pid, anchorId) {
+    const pageTitleMap = {
+      overview: 'Overview & App Docs',
+      api: 'HTTP API Reference',
+      architecture: 'Architecture',
+      storage: 'Storage Layout',
+      security: 'Security Model',
+      testing: 'Testing',
+      platform: 'Platform Compatibility',
+      adnet: 'Ad Network',
+      manifest: 'Update Manifest'
+    };
+    const pageTitle = pageTitleMap[pid] || pid;
+    let section = '';
+    if (anchorId && anchorId !== pid) {
+      const link = document.querySelector(`.nav-link[data-id="${anchorId}"]`);
+      if (link) section = link.textContent.trim();
+    }
+    breadcrumb.innerHTML = section
+      ? `<span>${pageTitle}</span><span class="sep">›</span><span class="current">${section}</span>`
+      : `<span class="current">${pageTitle}</span>`;
+  }
+
+  function show(id) {
+    const pid = pageFor(id);
+    document.querySelectorAll('.page').forEach(p => {
+      p.hidden = p.dataset.page !== pid;
+    });
+    document.querySelectorAll('.nav-link.current').forEach(a => a.classList.remove('current'));
+    const activeLink = document.querySelector(`.nav-link[data-id="${CSS.escape(id)}"]`);
+    if (activeLink) activeLink.classList.add('current');
+    const activeGroup = document.querySelector(`.nav-group[data-page="${pid}"]`);
+    if (activeGroup && !activeGroup.open) activeGroup.open = true;
+    updateBreadcrumb(pid, id);
+    const el = id && id !== pid ? document.getElementById(id) : null;
+    if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+    else window.scrollTo(0, 0);
+    closeMenu();
+  }
+
+  function go(id) {
+    location.hash = id ? ('#' + id) : '#overview';
+  }
+
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+  document.querySelectorAll('.nav-link').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      closeMenu();
+      go(a.dataset.id);
+    });
+  });
+
+  // ---- Heading anchors ----
+  document.querySelectorAll('.page h2, .page h3').forEach(h => {
+    if (!h.id) return;
+    const a = document.createElement('a');
+    a.className = 'anchor';
+    a.href = '#' + h.id;
+    a.setAttribute('aria-label', 'Link to this section');
+    a.textContent = '#';
+    h.appendChild(a);
+  });
+
+  // ---- Wrap tables ----
+  document.querySelectorAll('.page table').forEach(t => {
+    const w = document.createElement('div');
+    w.className = 'tablewrap';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  // ---- Copy buttons ----
+  document.querySelectorAll('.page pre').forEach(pre => {
+    if (pre.classList.contains('manifest')) return;
+    const b = document.createElement('button');
+    b.className = 'copy';
+    b.textContent = 'copy';
+    b.setAttribute('aria-label', 'Copy code');
+    b.addEventListener('click', () => {
+      const code = pre.querySelector('code');
+      const text = code ? code.innerText : pre.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        b.textContent = 'copied';
+        setTimeout(() => { b.textContent = 'copy'; }, 1200);
+      }).catch(() => {
+        b.textContent = 'error';
+        setTimeout(() => { b.textContent = 'copy'; }, 1200);
+      });
+    });
+    pre.appendChild(b);
+  });
+
+  // ---- Back to top ----
+  const totop = document.getElementById('totop');
+  window.addEventListener('scroll', () => {
+    totop.style.display = window.scrollY > 600 ? 'block' : 'none';
+  }, { passive: true });
+  totop.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ---- Boot ----
+  show(location.hash.slice(1) || 'overview');
+})();
+</script>
+
+<script>
+document.addEventListener('click', function(e){
+  var a = e.target.closest('a.nav-link[href$=".md"]');
+  if(!a) return;
+  e.preventDefault();
+  var href = a.getAttribute('href');
+  var title = a.textContent.trim();
+  var key = href.split('/').pop().replace('.md','');
+  var t = (window.DOCS_DATA && window.DOCS_DATA[key]) ? window.DOCS_DATA[key].content : null;
+  if(t && typeof marked !== 'undefined') {
+    var html = marked.parse(t);
+    if(typeof DOMPurify !== 'undefined') html = DOMPurify.sanitize(html);
+    var div = document.getElementById('md-render');
+    if(!div){
+      div = document.createElement('main');
+      div.id = 'md-render';
+      div.className = 'main-wrap';
+      div.innerHTML = '<div class="content"><nav class="breadcrumb"><span>'+title+'</span></nav><h1>'+title+'</h1><article id="mdc"></article></div>';
+      document.body.appendChild(div);
+    } else {
+      div.className = 'main-wrap';
+    }
+    document.getElementById('mdc').innerHTML = html;
+    document.querySelectorAll('.page').forEach(function(p){p.hidden = true; p.style.display='none';});
+    div.style.display='block';
+    window.scrollTo({top:0, behavior:'auto'});
+  } else {
+    fetch(href).then(function(r){return r.text();}).then(function(tt){
+      if(typeof marked !== 'undefined') {
+        var html = marked.parse(tt);
+        if(typeof DOMPurify !== 'undefined') html = DOMPurify.sanitize(html);
+        var div = document.getElementById('md-render');
+        if(!div){
+          div = document.createElement('main');
+          div.id = 'md-render';
+          div.className = 'main-wrap';
+          div.innerHTML = '<div class="content"><nav class="breadcrumb"><span>'+title+'</span></nav><h1>'+title+'</h1><article id="mdc"></article></div>';
+          document.body.appendChild(div);
+        } else {
+          div.className = 'main-wrap';
+        }
+        document.getElementById('mdc').innerHTML = html;
+        document.querySelectorAll('.page').forEach(function(p){p.hidden = true; p.style.display='none';});
+        div.style.display='block';
+        window.scrollTo({top:0, behavior:'auto'});
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>

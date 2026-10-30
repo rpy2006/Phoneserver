@@ -38,9 +38,13 @@ public final class AdNetworkManager {
         return server != null && server.isRunning();
     }
 
-    /** Called from ServerService: starts only if the owner has enabled the ad network. */
+    /** Called from ServerService: starts automatically when the owner has enabled auto-start. */
     public static void startIfEnabled(Context c) {
-        if (isEnabled(c)) start(c);
+        if (!isEnabled(c)) return;
+        String error = start(c);
+        if (error != null) {
+            android.util.Log.w("AdNet", "auto-start failed: " + error);
+        }
     }
 
     /** Returns null on success, otherwise a short reason. */
