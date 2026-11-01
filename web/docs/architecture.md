@@ -2,7 +2,7 @@
 
 This document describes the local SQL + file storage platform that was added
 on top of PhoneServer. It complements the high-level overview in the project
-[README](README.md) and the request-level reference in [API.md](API.md).
+[README](../README.md) and the request-level reference in [API.md](API.md).
 
 The platform is deliberately small: a thin `data/` storage layer, a single
 HTTP facade (`DataApi`), and a set of Android screens that drive the same

@@ -496,6 +496,7 @@ or campaign identities.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/admin/overview` | Platform totals |
+| `GET` | `/api/admin/audit?limit=50` | Recent administrator activity (maximum 200) |
 | `GET` | `/api/admin/fraud` | Invalid-traffic summary and flagged sites |
 | `GET` | `/api/admin/settings` | Current platform settings |
 | `PUT` | `/api/admin/settings` | Update platform settings |

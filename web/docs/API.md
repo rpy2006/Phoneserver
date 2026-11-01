@@ -564,7 +564,7 @@ Base URL: `http://<phone-ip>:8090`. Management endpoints use `Authorization: Bea
 | Campaigns | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST /api/campaigns/:id/{submit,approve,reject,pause,resume}` |
 | Creatives | `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST /api/creatives/:id/{image,approve,reject}` |
 | Reports | `GET /api/reports/{summary,breakdown,export}`, `GET /api/billing` |
-| Admin | `GET /api/admin/{overview,fraud,settings}`, `PUT /api/admin/settings` |
+| Admin | `GET /api/admin/{overview,audit,fraud,settings}`, `PUT /api/admin/settings` |
 
 Dates use `YYYY-MM-DD` UTC. Reports accept `from`, `to`, `campaign_id`, `site_id`; `/breakdown` and `/export` also accept `by` (`campaign`, `site`, `placement`, `creative`, `day`). The default range is 29 days back from `to`; the maximum is 366 days.
 
