@@ -1,5 +1,12 @@
 # PhoneServer
 
+## 📚 Documentation
+
+[![View Docs](https://img.shields.io/badge/Documentation-Live%20Site-blue?style=flat-square&logo=google-chrome)](https://rpy2006.github.io/Phoneserver/)
+
+[**View App Documentation →**](https://rpy2006.github.io/Phoneserver/)
+
+
 **Turn any Android phone into a network file server, mini website host, live-traffic monitor, small on-device AI chat, and an optional self-hosted ad network — all from one APK, with no backend and no internet requirement.**
 
 PhoneServer runs a real HTTP server directly on the device (`java.net.ServerSocket`, no NanoHTTPD, no embedded webview server). Any browser, `curl`, or another phone on the same Wi‑Fi can reach it at `http://<phone-ip>:8080` and browse, upload, download, and organise the phone's shared storage. The same APK can also act as a *client* — connecting to other phones running PhoneServer and browsing them remotely. An opt-in **Ad Network Manager** can run alongside it on port `8090`, with its own database, accounts and dashboard.
