@@ -267,9 +267,7 @@ final class AdHttpServer {
         if (!r.method.equals("GET")) return AdHttp.empty(405);
         switch (p) {
             case "/":
-            case "/index.html":
-            case "/admin":
-            case "/admin/": return page("dashboard.html", "text/html; charset=utf-8");
+            case "/index.html": return page("dashboard.html", "text/html; charset=utf-8");
             case "/dashboard.js": return page("dashboard.js", "application/javascript; charset=utf-8");
             case "/dashboard.css": return page("dashboard.css", "text/css; charset=utf-8");
             default: return AdHttp.empty(404);

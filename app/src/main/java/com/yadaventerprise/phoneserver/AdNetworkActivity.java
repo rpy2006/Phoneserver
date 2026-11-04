@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -24,8 +23,6 @@ public class AdNetworkActivity extends AppCompatActivity {
     private TextView status;
     private EditText publicUrl;
     private Button toggle;
-    private CheckBox autoStart;
-    private boolean syncing;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,26 +44,9 @@ public class AdNetworkActivity extends AppCompatActivity {
         status.setTextIsSelectable(true);
         root.addView(status, matchWrap());
 
-        autoStart = new CheckBox(this);
-        autoStart.setText("Start automatically with the phone server");
-        autoStart.setChecked(AdNetworkManager.isEnabled(this));
-        autoStart.setOnCheckedChangeListener((buttonView, checked) -> {
-            if (syncing) return;
-            AdNetworkManager.setEnabled(this, checked);
-            if (checked) {
-                if (ServerService.isServerRunning() && !AdNetworkManager.isRunning()) {
-                    String err = AdNetworkManager.start(this);
-                    if (err != null) status.setText(err);
-                }
-            } else {
-                AdNetworkManager.stop();
-            }
-            refresh();
-        });
-        root.addView(autoStart, matchWrap());
-
         toggle = button("", v -> {
             if (AdNetworkManager.isRunning()) {
+                AdNetworkManager.setEnabled(this, false);
                 AdNetworkManager.stop();
             } else {
                 AdNetworkManager.setEnabled(this, true);
@@ -106,8 +86,7 @@ public class AdNetworkActivity extends AppCompatActivity {
         note.setPadding(0, dp(16), 0, 0);
         note.setText("Websites served over HTTPS can only load the ad script from an HTTPS address, and visitors must be able to "
                 + "reach it. Put this phone behind an HTTPS reverse proxy or tunnel that you control, then enter that address above. "
-                + "With auto-start on, the ad server starts and stops with the PhoneServer service. Start also turns auto-start on; "
-                + "Stop changes only the current session. Untick auto-start to keep it off after the server restarts.");
+                + "The ad server runs while the PhoneServer service is running.");
         root.addView(note, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
@@ -126,17 +105,12 @@ public class AdNetworkActivity extends AppCompatActivity {
         StringBuilder sb = new StringBuilder();
         sb.append(AdNetworkManager.isRunning() ? "Status: running" : "Status: stopped").append('\n');
         sb.append("Dashboard on this network: http://").append(ip != null ? ip : "PHONE-IP").append(':').append(AdNetworkManager.PORT).append("/\n");
-        sb.append("Phone server: ").append(ServerService.isServerRunning() ? "running" : "stopped").append('\n');
-        sb.append("Auto-start: ").append(AdNetworkManager.isEnabled(this) ? "on" : "off").append('\n');
         if (AdNetworkManager.isRunning() && AdNetworkManager.needsSetup(this)) {
             sb.append("\nFirst-time setup code: ").append(AdNetworkManager.setupCode(this))
                     .append("\nEnter it on the dashboard page to create the administrator account.");
         }
         status.setText(sb.toString());
         toggle.setText(AdNetworkManager.isRunning() ? "Stop ad network" : "Start ad network");
-        syncing = true;
-        autoStart.setChecked(AdNetworkManager.isEnabled(this));
-        syncing = false;
     }
 
     private Button button(String label, View.OnClickListener l) {

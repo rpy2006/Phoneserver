@@ -2,9 +2,10 @@ package com.yadaventerprise.phoneserver.data;
 
 import android.content.ContentValues;
 import android.content.Context;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
+import android.util.Base64;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -16,7 +17,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * JSON-based replacement for project databases. Preserves API compatibility.
+ * Owns the SQLite engines used for user data: one database file per logical
+ * database inside a project. Each connection enables foreign keys, WAL and a
+ * busy timeout, all statements go through {@link SqlGuard}, results are
+ * paginated, and long scans are bounded by a time budget.
  */
 public final class DatabaseManager {
 
@@ -50,19 +54,17 @@ public final class DatabaseManager {
         record.id = StorageLayout.generateId();
         record.projectId = projectId;
         record.name = clean;
-        record.fileName = clean + ".json";
+        record.fileName = clean + ".db";
         record.createdAt = now;
         record.updatedAt = now;
 
-        // Create JSON database file
-        JSONObject dbJson = new JSONObject();
+        // Create the file and configure it before recording metadata, so we
+        // never advertise a database that failed to open.
+        SQLiteDatabase db = openFile(dbFile, true);
         try {
-            dbJson.put("tables", new JSONObject());
-            dbJson.put("name", clean);
-            dbJson.put("version", 1);
-            JsonStorage.writeJsonAtomic(dbFile, dbJson, false);
-        } catch (Exception e) {
-            throw new DataException("failed to create database", 500);
+            db.execSQL("PRAGMA auto_vacuum = INCREMENTAL");
+        } finally {
+            db.close();
         }
         record.sizeBytes = dbFile.length();
 
@@ -89,10 +91,10 @@ public final class DatabaseManager {
         StorageLayout.ensure(dir);
 
         List<Records.DbRecord> result = new ArrayList<>();
-        android.database.Cursor c = SystemDatabase.get(context).getReadableDatabase().rawQuery(
+        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = db.rawQuery(
                 "SELECT id,project_id,name,file_name,size_bytes,created_at,updated_at "
-                        + "FROM project_databases WHERE project_id=? ORDER BY name", new String[]{projectId});
-        try {
+                        + "FROM project_databases WHERE project_id=? ORDER BY name", new String[]{projectId})) {
             while (c.moveToNext()) {
                 Records.DbRecord r = new Records.DbRecord();
                 r.id = c.getString(0);
@@ -103,31 +105,23 @@ public final class DatabaseManager {
                 r.createdAt = c.getLong(5);
                 r.updatedAt = c.getLong(6);
                 File f = new File(dir, r.fileName);
-                if (!f.exists()) {
-                    // try old .db extension
-                    f = new File(dir, r.name + ".db");
-                    if (f.exists()) r.fileName = r.name + ".db";
-                }
                 if (f.exists()) r.sizeBytes = f.length();
                 result.add(r);
             }
-        } finally {
-            c.close();
         }
 
-        // Adopt database files that exist on disk but not in metadata
+        // Adopt database files that exist on disk but not in metadata (e.g. after
+        // a manual restore) so nothing becomes invisible.
         File[] files = dir.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (!f.isFile()) continue;
-                if (!f.getName().endsWith(".json") && !f.getName().endsWith(".db")) continue;
+                if (!f.isFile() || !f.getName().endsWith(".db")) continue;
                 boolean known = false;
                 for (Records.DbRecord r : result) {
                     if (r.fileName.equals(f.getName())) { known = true; break; }
                 }
                 if (!known) {
-                    String base = f.getName().endsWith(".json") ? f.getName().substring(0, f.getName().length() - 5)
-                            : f.getName().substring(0, f.getName().length() - 3);
+                    String base = f.getName().substring(0, f.getName().length() - 3);
                     Records.DbRecord r = new Records.DbRecord();
                     r.id = StorageLayout.generateId();
                     r.projectId = projectId;
@@ -146,7 +140,8 @@ public final class DatabaseManager {
                     values.put("updated_at", r.updatedAt);
                     try {
                         SystemDatabase.get(context).getWritableDatabase()
-                                .insertWithOnConflict("project_databases", null, values, 4);
+                                .insertWithOnConflict("project_databases", null, values,
+                                        SQLiteDatabase.CONFLICT_IGNORE);
                     } catch (Exception ignored) {
                     }
                     result.add(r);
@@ -166,15 +161,15 @@ public final class DatabaseManager {
     public static void delete(Context context, String projectId, String idOrName) throws DataException {
         Records.DbRecord record = require(context, projectId, idOrName);
         File file = databaseFile(context, projectId, record.name);
+        // Remove sidecar files too (WAL/SHM), otherwise a re-created database
+        // with the same name could inherit an old WAL.
         for (String suffix : new String[]{"", "-wal", "-shm", "-journal"}) {
             File f = new File(file.getAbsolutePath() + suffix);
             if (f.exists()) {
+                //noinspection ResultOfMethodCallIgnored
                 f.delete();
             }
         }
-        // also try other extensions
-        File f2 = new File(file.getParentFile(), record.name + ".db");
-        if (f2.exists()) f2.delete();
         SystemDatabase.get(context).getWritableDatabase()
                 .delete("project_databases", "id=?", new String[]{record.id});
         ProjectStore.logOperation(context, projectId, "database.delete", record.name);
@@ -187,10 +182,6 @@ public final class DatabaseManager {
         if (file == null || !PathGuard.isInside(dir, file)) {
             throw new DataException("invalid database name", 400);
         }
-        if (!file.exists()) {
-            File alt = new File(dir, clean + ".db");
-            if (alt.exists()) return alt;
-        }
         return file;
     }
 
@@ -200,24 +191,22 @@ public final class DatabaseManager {
             throws DataException {
         File file = requireExisting(context, projectId, dbName);
         List<Records.TableInfo> tables = new ArrayList<>();
-        try {
-            JSONObject dbJson = readDb(file);
-            JSONObject tablesObj = dbJson.optJSONObject("tables");
-            if (tablesObj != null) {
-                java.util.Iterator<String> keys = tablesObj.keys();
-                while (keys.hasNext()) {
-                    String tableName = keys.next();
-                    JSONObject tableObj = tablesObj.optJSONObject(tableName);
-                    Records.TableInfo t = new Records.TableInfo();
-                    t.name = tableName;
-                    t.type = "table";
-                    JSONArray rows = tableObj != null ? tableObj.optJSONArray("rows") : null;
-                    t.rowCount = rows == null ? 0 : rows.length();
-                    tables.add(t);
+        SQLiteDatabase db = openFile(file, false);
+        try (Cursor c = db.rawQuery(
+                "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') "
+                        + "AND name NOT LIKE 'sqlite_%' ORDER BY name", null)) {
+            while (c.moveToNext()) {
+                Records.TableInfo t = new Records.TableInfo();
+                t.name = c.getString(0);
+                t.type = c.getString(1);
+                if ("table".equals(t.type)) {
+                    t.rowCount = countRows(db, t.name);
+                    t.columns = columns(db, t.name);
                 }
+                tables.add(t);
             }
-        } catch (Exception e) {
-            throw new DataException("failed to read database", 500);
+        } finally {
+            db.close();
         }
         return tables;
     }
@@ -225,526 +214,322 @@ public final class DatabaseManager {
     public static Records.TableInfo tableInfo(Context context, String projectId, String dbName, String table)
             throws DataException {
         File file = requireExisting(context, projectId, dbName);
-        String cleanTable = validateIdentifier(table);
+        SQLiteDatabase db = openFile(file, false);
         try {
-            JSONObject dbJson = readDb(file);
-            JSONObject tablesObj = dbJson.optJSONObject("tables");
-            JSONObject tableObj = tablesObj != null ? tablesObj.optJSONObject(cleanTable) : null;
-            if (tableObj == null) throw DataException.notFound("table");
             Records.TableInfo t = new Records.TableInfo();
-            t.name = cleanTable;
-            t.type = "table";
-            JSONArray rows = tableObj.optJSONArray("rows");
-            t.rowCount = rows == null ? 0 : rows.length();
-            JSONArray columns = tableObj.optJSONArray("columns");
-            if (columns != null) {
-                for (int i = 0; i < columns.length(); i++) {
-                    JSONObject c = columns.getJSONObject(i);
-                    Records.ColumnInfo col = new Records.ColumnInfo();
-                    col.name = c.optString("name");
-                    col.type = c.optString("type", "TEXT");
-                    col.notNull = c.optBoolean("notNull");
-                    col.primaryKey = c.optBoolean("primaryKey");
-                    col.defaultValue = c.optString("defaultValue");
-                    t.columns.add(col);
-                }
-            }
-            t.indexes = new ArrayList<>();
+            t.name = table;
+            t.columns = columns(db, table);
+            if (t.columns.isEmpty()) throw DataException.notFound("table");
+            t.rowCount = countRows(db, table);
+            t.indexes = indexes(db, table);
             return t;
-        } catch (DataException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new DataException("failed to read table", 500);
+        } finally {
+            db.close();
         }
     }
+
+    // ---- query execution ----
 
     public static Records.QueryResult execute(Context context, String projectId, String dbName, String sql,
                                               List<Object> params, Integer limit, Integer offset,
                                               Long timeBudgetMs, boolean allowWrite) throws DataException {
-        long start = System.currentTimeMillis();
-        SqlGuard.Result guard = SqlGuard.inspect(sql, allowWrite);
-        if (guard.verdict == SqlGuard.Verdict.EMPTY) {
-            throw new DataException("no SQL supplied", 400);
-        }
-        if (guard.verdict == SqlGuard.Verdict.MULTIPLE_STATEMENTS) {
-            throw new DataException("only one SQL statement may be executed per request", 403);
-        }
-        if (guard.verdict == SqlGuard.Verdict.FORBIDDEN) {
-            throw new DataException(guard.reason, 403);
-        }
-        if (guard.verdict == SqlGuard.Verdict.WRITE_DISALLOWED) {
-            throw new DataException(guard.reason, 403);
-        }
-
-        String[] args = bindArguments(sql, params);
-        Records.QueryResult result = new Records.QueryResult();
-        result.keyword = guard.keyword == null ? "" : guard.keyword;
-        result.isSelect = SqlGuard.isReadOnlyKeyword(result.keyword);
-
         File file = requireExisting(context, projectId, dbName);
-        int lim = limit == null ? DEFAULT_ROW_LIMIT : Math.min(limit, MAX_ROW_LIMIT);
-        int off = offset == null ? 0 : Math.max(0, offset);
-        long budget = timeBudgetMs == null ? DEFAULT_TIME_BUDGET_MS : Math.min(timeBudgetMs, 30000);
+        SqlGuard.Result guard = SqlGuard.inspect(sql, allowWrite);
+        switch (guard.verdict) {
+            case EMPTY:
+                throw new DataException("no SQL supplied");
+            case MULTIPLE_STATEMENTS:
+            case FORBIDDEN:
+            case WRITE_DISALLOWED:
+                throw DataException.forbidden(guard.reason);
+            default:
+                break;
+        }
 
+        int rowLimit = limit == null ? DEFAULT_ROW_LIMIT : Math.max(1, Math.min(limit, MAX_ROW_LIMIT));
+        int rowOffset = offset == null ? 0 : Math.max(0, offset);
+        long budget = timeBudgetMs == null ? DEFAULT_TIME_BUDGET_MS : Math.max(50, Math.min(timeBudgetMs, 30000));
+
+        SQLiteDatabase db = openFile(file, true);
+        long start = System.currentTimeMillis();
+        Records.QueryResult result = new Records.QueryResult();
         try {
-            if (result.isSelect || result.keyword.equals("pragma") || result.keyword.equals("explain")) {
-                executeSelect(context, file, sql, args, lim, off, budget, result);
+            String[] args = bindArguments(sql, params);
+            if (SqlGuard.isReadOnlyKeyword(guard.keyword)) {
+                result.isSelect = true;
+                result.keyword = guard.keyword;
+                runQuery(db, sql, args, result, rowLimit, rowOffset, budget, start);
             } else {
-                if (!allowWrite) {
-                    throw new DataException("this credential is read-only", 403);
-                }
-                executeWrite(context, file, sql, args, result);
+                result.keyword = guard.keyword;
+                result.rowsAffected = runWrite(db, sql, args, guard.keyword);
             }
-        } catch (DataException e) {
-            throw e;
-        } catch (Exception e) {
-            String msg = safeMessage(e);
-            if (msg.toLowerCase(Locale.US).contains("no such table")) {
-                throw new DataException(msg, 400);
-            }
-            throw new DataException(msg, 400);
+        } catch (android.database.sqlite.SQLiteException e) {
+            throw new DataException("SQL error: " + safeMessage(e), 400);
+        } finally {
+            result.durationMs = System.currentTimeMillis() - start;
+            db.close();
         }
 
-        result.durationMs = System.currentTimeMillis() - start;
-        if (result.durationMs > budget) {
-            throw new DataException("query exceeded time budget", 408);
-        }
+        updateDatabaseSize(context, projectId, file);
         return result;
     }
 
-    private static void executeSelect(Context context, File file, String sql, String[] args, int limit, int offset,
-                                      long budget, Records.QueryResult result) throws Exception {
-        String lower = sql.toLowerCase(Locale.US).trim();
-        JSONObject dbJson = readDb(file);
-        JSONObject tablesObj = dbJson.optJSONObject("tables");
-        if (tablesObj == null) tablesObj = new JSONObject();
-        result.columns = new ArrayList<>();
-        result.rows = new ArrayList<>();
-        result.isSelect = true;
-        result.rowsAffected = 0;
-        result.truncated = false;
-
-        // Very basic SQL support
-        if (lower.startsWith("select")) {
-            // Extract table name
-            String[] parts = lower.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < parts.length; i++) {
-                if (parts[i].equals("from") && i + 1 < parts.length) {
-                    tableName = parts[i + 1].replaceAll("[^a-z0-9_]", "");
+    private static void runQuery(SQLiteDatabase db, String sql, String[] args, Records.QueryResult result,
+                                 int rowLimit, int rowOffset, long budget, long start) throws DataException {
+        try (Cursor c = db.rawQuery(sql, args)) {
+            String[] names = c.getColumnNames();
+            for (String name : names) result.columns.add(name);
+            if (rowOffset > 0) {
+                if (!c.moveToPosition(rowOffset)) return;
+            } else {
+                if (!c.moveToFirst()) return;
+            }
+            int collected = 0;
+            do {
+                if (System.currentTimeMillis() - start > budget) {
+                    throw new DataException("query exceeded the time budget", 408);
+                }
+                List<Object> row = new ArrayList<>(names.length);
+                for (int i = 0; i < names.length; i++) {
+                    row.add(valueAt(c, i));
+                }
+                result.rows.add(row);
+                collected++;
+                if (collected > rowLimit) {
+                    result.rows.remove(result.rows.size() - 1);
+                    result.truncated = true;
                     break;
                 }
-            }
-            if (tableName == null || !tablesObj.has(tableName)) {
-                if (lower.contains("sqlite_master")) {
-                    result.columns.add("name");
-                    result.columns.add("type");
-                    java.util.Iterator<String> keys = tablesObj.keys();
-                    int total = 0;
-                    List<String[]> allRows = new ArrayList<>();
-                    while (keys.hasNext()) {
-                        String tn = keys.next();
-                        allRows.add(new String[]{tn, "table"});
-                    }
-                    result.truncated = allRows.size() > limit;
-                    for (int i = offset; i < Math.min(allRows.size(), offset + limit); i++) {
-                        List<Object> row = new ArrayList<>();
-                        row.add(allRows.get(i)[0]);
-                        row.add(allRows.get(i)[1]);
-                        result.rows.add(row);
-                    }
-                    return;
-                }
-                throw new DataException("no such table: " + (tableName == null ? "" : tableName), 400);
-            }
-            JSONObject tableObj = tablesObj.getJSONObject(tableName);
-            JSONArray columnsArr = tableObj.optJSONArray("columns");
-            JSONArray rowsArr = tableObj.optJSONArray("rows");
-            if (columnsArr != null) {
-                for (int i = 0; i < columnsArr.length(); i++) {
-                    JSONObject c = columnsArr.getJSONObject(i);
-                    result.columns.add(c.optString("name"));
-                }
-            }
-            if (rowsArr != null) {
-                List<JSONObject> allRows = new ArrayList<>();
-                for (int i = 0; i < rowsArr.length(); i++) {
-                    allRows.add(rowsArr.getJSONObject(i));
-                }
-                result.truncated = allRows.size() > limit + offset;
-                for (int i = offset; i < Math.min(allRows.size(), offset + limit); i++) {
-                    JSONObject r = allRows.get(i);
-                    List<Object> row = new ArrayList<>();
-                    for (String col : result.columns) {
-                        if (r.has(col)) {
-                            Object v = r.get(col);
-                            if (v == JSONObject.NULL) row.add(null);
-                            else row.add(v);
-                        } else {
-                            row.add(null);
-                        }
-                    }
-                    result.rows.add(row);
-                }
-            }
-        } else if (lower.startsWith("pragma")) {
-            result.columns.add("pragma_result");
-            List<Object> row = new ArrayList<>();
-            row.add("ok");
-            result.rows.add(row);
-        } else {
-            result.columns.add("result");
-            List<Object> row = new ArrayList<>();
-            row.add(1);
-            result.rows.add(row);
+            } while (c.moveToNext());
         }
     }
 
-    private static void executeWrite(Context context, File file, String sql, String[] args, Records.QueryResult result) throws Exception {
-        String lower = sql.toLowerCase(Locale.US).trim();
-        JSONObject dbJson = readDb(file);
-        JSONObject tablesObj = dbJson.optJSONObject("tables");
-        if (tablesObj == null) {
-            tablesObj = new JSONObject();
-            dbJson.put("tables", tablesObj);
-        }
-        result.isSelect = false;
-        result.rowsAffected = 0;
-        result.columns = new ArrayList<>();
-        result.rows = new ArrayList<>();
-        result.truncated = false;
-
-        if (lower.startsWith("create table")) {
-            // Extract table name
-            String[] tokens = sql.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].equalsIgnoreCase("table") && i + 1 < tokens.length) {
-                    tableName = tokens[i + 1].replaceAll("[^A-Za-z0-9_]", "");
-                    break;
-                }
-            }
-            if (tableName != null && !tablesObj.has(tableName)) {
-                JSONObject tableObj = new JSONObject();
-                tableObj.put("columns", new JSONArray());
-                tableObj.put("rows", new JSONArray());
-                tablesObj.put(tableName, tableObj);
-                writeDb(file, dbJson);
-                result.rowsAffected = 0;
-            } else if (tableName != null && tablesObj.has(tableName)) {
-                // if not exists behavior - but just succeed
-                result.rowsAffected = 0;
-            } else {
-                throw new DataException("invalid CREATE TABLE", 400);
-            }
-        } else if (lower.startsWith("insert into")) {
-            String[] tokens = lower.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].equals("into") && i + 1 < tokens.length) {
-                    tableName = tokens[i + 1].replaceAll("[^a-z0-9_]", "");
-                    break;
-                }
-            }
-            if (tableName == null || !tablesObj.has(tableName)) {
-                throw new DataException("no such table: " + tableName, 400);
-            }
-            JSONObject tableObj = tablesObj.getJSONObject(tableName);
-            JSONArray rowsArr = tableObj.optJSONArray("rows");
-            if (rowsArr == null) rowsArr = new JSONArray();
-            JSONObject newRow = new JSONObject();
-            if (args != null) {
-                // try to assign to columns
-                JSONArray cols = tableObj.optJSONArray("columns");
-                if (cols != null && cols.length() > 0) {
-                    for (int i = 0; i < args.length && i < cols.length(); i++) {
-                        String colName = cols.getJSONObject(i).optString("name");
-                        if (colName != null) newRow.put(colName, args[i]);
-                    }
-                } else {
+    private static int runWrite(SQLiteDatabase db, String sql, String[] args, String keyword) {
+        if (Arrays.asList("insert", "update", "delete", "replace").contains(keyword)) {
+            SQLiteStatement statement = db.compileStatement(sql);
+            try {
+                if (args != null) {
                     for (int i = 0; i < args.length; i++) {
-                        newRow.put("col" + i, args[i]);
+                        if (args[i] == null) statement.bindNull(i + 1);
+                        else statement.bindString(i + 1, args[i]);
                     }
                 }
+                return statement.executeUpdateDelete();
+            } finally {
+                statement.close();
             }
-            rowsArr.put(newRow);
-            tableObj.put("rows", rowsArr);
-            tablesObj.put(tableName, tableObj);
-            dbJson.put("tables", tablesObj);
-            writeDb(file, dbJson);
-            result.rowsAffected = 1;
-        } else if (lower.startsWith("update")) {
-            String[] tokens = lower.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].equals("update") && i + 1 < tokens.length) {
-                    tableName = tokens[i + 1].replaceAll("[^a-z0-9_]", "");
-                    break;
-                }
-            }
-            if (tableName == null || !tablesObj.has(tableName)) {
-                throw new DataException("no such table: " + tableName, 400);
-            }
-            JSONObject tableObj = tablesObj.getJSONObject(tableName);
-            JSONArray rowsArr = tableObj.optJSONArray("rows");
-            if (rowsArr == null) rowsArr = new JSONArray();
-            // simple update all or with args
-            int affected = 0;
-            for (int i = 0; i < rowsArr.length(); i++) {
-                JSONObject r = rowsArr.getJSONObject(i);
-                // basic SET handling
-                if (lower.contains("set")) {
-                    // try to parse simple cases
-                    if (args != null && args.length >= 1 && lower.contains("age")) {
-                        try { r.put("age", args[0]); } catch (Exception ignored) {}
-                    }
-                    if (args != null && args.length >= 1 && lower.contains("v")) {
-                        try { r.put("v", args[0]); } catch (Exception ignored) {}
-                    }
-                }
-                affected++;
-            }
-            tableObj.put("rows", rowsArr);
-            tablesObj.put(tableName, tableObj);
-            dbJson.put("tables", tablesObj);
-            writeDb(file, dbJson);
-            result.rowsAffected = affected;
-        } else if (lower.startsWith("delete")) {
-            String[] tokens = lower.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].equals("from") && i + 1 < tokens.length) {
-                    tableName = tokens[i + 1].replaceAll("[^a-z0-9_]", "");
-                    break;
-                }
-            }
-            if (tableName == null || !tablesObj.has(tableName)) {
-                throw new DataException("no such table: " + tableName, 400);
-            }
-            JSONObject tableObj = tablesObj.getJSONObject(tableName);
-            JSONArray rowsArr = tableObj.optJSONArray("rows");
-            int orig = rowsArr == null ? 0 : rowsArr.length();
-            JSONArray newArr = new JSONArray();
-            if (rowsArr != null) {
-                for (int i = 0; i < rowsArr.length(); i++) {
-                    // if no where clause, delete all? or with args - be permissive
-                    if (lower.contains("where")) {
-                        // skip if matches args? try simple
-                        boolean skip = false;
-                        if (args != null && args.length >= 1 && lower.contains("name")) {
-                            JSONObject r = rowsArr.getJSONObject(i);
-                            if (args[0] != null && args[0].equals(r.optString("name"))) {
-                                skip = true;
-                            }
-                        } else if (args != null && args.length >= 1 && lower.contains("v")) {
-                            skip = false; // be permissive
-                        }
-                        if (!skip) newArr.put(rowsArr.getJSONObject(i));
-                    } else {
-                        // no where, delete all
-                    }
-                }
-            }
-            if (!lower.contains("where")) {
-                newArr = new JSONArray();
-                result.rowsAffected = orig;
-            } else {
-                result.rowsAffected = orig - newArr.length();
-            }
-            tableObj.put("rows", newArr);
-            tablesObj.put(tableName, tableObj);
-            dbJson.put("tables", tablesObj);
-            writeDb(file, dbJson);
-        } else if (lower.startsWith("drop table")) {
-            String[] tokens = lower.split("\\s+");
-            String tableName = null;
-            for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].equals("table") && i + 1 < tokens.length) {
-                    tableName = tokens[i + 1].replaceAll("[^a-z0-9_]", "");
-                    break;
-                }
-            }
-            if (tableName != null && tablesObj.has(tableName)) {
-                tablesObj.remove(tableName);
-                dbJson.put("tables", tablesObj);
-                writeDb(file, dbJson);
-            }
-            result.rowsAffected = 0;
         } else {
-            throw new DataException("unsupported SQL statement", 403);
+            if (args == null || args.length == 0) db.execSQL(sql);
+            else db.execSQL(sql, args);
+            return 0;
         }
     }
+
+    private static Object valueAt(Cursor c, int index) {
+        switch (c.getType(index)) {
+            case Cursor.FIELD_TYPE_NULL:
+                return null;
+            case Cursor.FIELD_TYPE_INTEGER:
+                return c.getLong(index);
+            case Cursor.FIELD_TYPE_FLOAT:
+                return c.getDouble(index);
+            case Cursor.FIELD_TYPE_BLOB:
+                byte[] blob = c.getBlob(index);
+                return blob == null ? null : "base64:" + Base64.encodeToString(blob, Base64.NO_WRAP);
+            default:
+                return c.getString(index);
+        }
+    }
+
+    // ---- transactions over multiple statements ----
 
     public static Records.QueryResult executeTransaction(Context context, String projectId, String dbName,
-                                                        List<String> statements, List<List<Object>> params,
-                                                        boolean allowWrite) throws DataException {
-        long start = System.currentTimeMillis();
+                                                         List<String> statements, List<List<Object>> params,
+                                                         boolean allowWrite) throws DataException {
         File file = requireExisting(context, projectId, dbName);
+        for (String sql : statements) {
+            SqlGuard.Result guard = SqlGuard.inspect(sql, allowWrite);
+            if (!guard.isOk()) throw DataException.forbidden(guard.reason);
+        }
+        SQLiteDatabase db = openFile(file, true);
+        long start = System.currentTimeMillis();
         Records.QueryResult result = new Records.QueryResult();
-        result.isSelect = false;
-        result.keyword = "transaction";
-        result.rowsAffected = 0;
-        result.columns = new ArrayList<>();
-        result.rows = new ArrayList<>();
-        result.truncated = false;
+        db.beginTransaction();
         try {
             for (int i = 0; i < statements.size(); i++) {
-                String sql = statements.get(i);
-                List<Object> p = params != null && params.size() > i ? params.get(i) : null;
-                String[] args = bindArguments(sql, p);
-                SqlGuard.Result guard = SqlGuard.inspect(sql, allowWrite);
-                if (guard.verdict != SqlGuard.Verdict.OK) {
-                    throw new DataException("transaction failed at statement " + (i+1) + ": " + guard.reason, 400);
-                }
-                String[] stokens = sql.split("\\s+");
-                String kw = stokens.length > 0 ? stokens[0].toLowerCase(Locale.US) : "";
-                if (SqlGuard.isReadOnlyKeyword(kw) || kw.equals("pragma") || kw.equals("explain")) {
-                    Records.QueryResult r = new Records.QueryResult();
-                    executeSelect(context, file, sql, args, DEFAULT_ROW_LIMIT, 0, DEFAULT_TIME_BUDGET_MS, r);
-                } else {
-                    Records.QueryResult r = new Records.QueryResult();
-                    executeWrite(context, file, sql, args, r);
-                    result.rowsAffected += r.rowsAffected;
-                }
+                String[] args = bindArguments(statements.get(i),
+                        params != null && i < params.size() ? params.get(i) : null);
+                SqlGuard.Result guard = SqlGuard.inspect(statements.get(i), allowWrite);
+                result.rowsAffected += runWrite(db, statements.get(i), args, guard.keyword);
             }
-        } catch (DataException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new DataException("transaction failed: " + safeMessage(e), 400);
+            db.setTransactionSuccessful();
+        } catch (android.database.sqlite.SQLiteException e) {
+            throw new DataException("SQL error: " + safeMessage(e), 400);
+        } finally {
+            db.endTransaction();
+            result.durationMs = System.currentTimeMillis() - start;
+            db.close();
         }
-        result.durationMs = System.currentTimeMillis() - start;
+        updateDatabaseSize(context, projectId, file);
         return result;
     }
 
+    // ---- export / import ----
+
     public static void exportTo(Context context, String projectId, String dbName, File dest) throws DataException {
-        Records.DbRecord record = require(context, projectId, dbName);
-        File source = databaseFile(context, projectId, record.name);
-        if (!source.exists()) {
-            source = new File(source.getParentFile(), record.name + ".json");
+        File file = requireExisting(context, projectId, dbName);
+        StorageLayout.ensure(dest.getParentFile());
+        if (dest.exists() && !dest.delete()) {
+            throw new DataException("could not prepare export file", 500);
         }
-        if (!source.exists()) throw DataException.notFound("database");
+        SQLiteDatabase db = openFile(file, false);
         try {
-            copyFile(source, dest);
-        } catch (DataException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new DataException("export failed", 500);
+            try {
+                db.execSQL("VACUUM INTO " + quote(dest.getAbsolutePath()));
+            } catch (android.database.sqlite.SQLiteException vacuumUnsupported) {
+                // Older SQLite: checkpoint WAL then copy the file bytes.
+                db.execSQL("PRAGMA wal_checkpoint(TRUNCATE)");
+                db.close();
+                copyFile(file, dest);
+                return;
+            }
+        } finally {
+            if (db.isOpen()) db.close();
         }
     }
 
     public static void importFrom(Context context, String projectId, String dbName, File source, boolean confirm)
             throws DataException {
-        if (!confirm) throw new DataException("import requires ?confirm=true", 400);
-        verifySqliteFile(source);
-        Records.ProjectRecord project = ProjectStore.require(context, projectId);
-        String clean = validateDatabaseName(dbName);
-        StorageLayout layout = ContentStoreBridge.layout(context);
-        File dir = StorageLayout.ensure(layout.databasesDir(projectId));
-        File target = safeDatabaseFile(dir, clean);
-        if (target == null) throw new DataException("invalid database name", 400);
-        if (!target.exists()) {
-            // create metadata if missing
-            try {
-                List<Records.DbRecord> all = list(context, projectId);
-                boolean known = false;
-                for (Records.DbRecord r : all) if (r.name.equalsIgnoreCase(clean)) { known = true; break; }
-                if (!known) {
-                    Records.DbRecord rec = create(context, projectId, clean);
-                    target = databaseFile(context, projectId, rec.name);
-                }
-            } catch (Exception ignored) {}
+        File target = databaseFile(context, projectId, dbName);
+        if (!confirm) {
+            throw new DataException("import requires confirm=true (it replaces the existing database)", 400);
         }
-        for (String suffix : new String[]{"", "-wal", "-shm", "-journal"}) {
+        if (!source.exists() || source.length() == 0) {
+            throw new DataException("uploaded database file is empty or missing", 400);
+        }
+        verifySqliteFile(source);
+
+        File recoveryDir = StorageLayout.ensure(ContentStoreBridge.layout(context).backupsDir(projectId));
+        if (target.exists()) {
+            File backup = new File(recoveryDir, target.getName() + ".pre-import-" + System.currentTimeMillis());
+            if (!target.renameTo(backup)) {
+                throw new DataException("could not preserve the existing database before import", 500);
+            }
+        }
+        for (String suffix : new String[]{"-wal", "-shm", "-journal"}) {
             File sidecar = new File(target.getAbsolutePath() + suffix);
-            if (sidecar.exists()) sidecar.delete();
+            if (sidecar.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                sidecar.delete();
+            }
         }
         if (!source.renameTo(target)) {
             copyFile(source, target);
-            try { source.delete(); } catch (Exception ignored) {}
+            //noinspection ResultOfMethodCallIgnored
+            source.delete();
         }
         updateDatabaseSize(context, projectId, target);
-        ProjectStore.logOperation(context, projectId, "database.import", clean);
+        ProjectStore.logOperation(context, projectId, "database.import", dbName);
     }
 
     /** Opens a candidate file read-only and asks SQLite to check it over. */
     public static void verifySqliteFile(File file) throws DataException {
+        SQLiteDatabase db = null;
         try {
-            // Accept both JSON and old SQLite files for compatibility
-            if (file.getName().endsWith(".json")) {
-                readDb(file);
-                return;
+            db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+            try (Cursor c = db.rawQuery("PRAGMA integrity_check", null)) {
+                if (c.moveToFirst()) {
+                    String status = c.getString(0);
+                    if (!"ok".equalsIgnoreCase(status)) {
+                        throw new DataException("file is not a healthy SQLite database", 400);
+                    }
+                }
             }
-            // Try to read as JSON first
-            try {
-                readDb(file);
-                return;
-            } catch (Exception ignored) {}
-            // For backward compat, accept if it's a file
-            if (file.exists() && file.length() > 0) {
-                return;
+            try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM sqlite_master", null)) {
+                c.moveToFirst();
             }
-        } catch (Exception e) {
-            // try to be lenient for tests
+        } catch (android.database.sqlite.SQLiteException e) {
+            throw new DataException("file is not a valid SQLite database", 400);
+        } finally {
+            if (db != null) db.close();
         }
-        if (file.exists() && file.length() > 0) return;
-        throw new DataException("file is not a valid database", 400);
     }
 
     // ---- helpers ----
 
     private static File requireExisting(Context context, String projectId, String dbName) throws DataException {
         File file = databaseFile(context, projectId, dbName);
-        if (!file.exists()) {
-            File alt = new File(file.getParentFile(), dbName + ".json");
-            if (!alt.exists()) alt = new File(file.getParentFile(), validateDatabaseName(dbName) + ".json");
-            if (alt.exists()) file = alt;
-            else {
-                try {
-                    Records.DbRecord record = require(context, projectId, dbName);
-                    file = databaseFile(context, projectId, record.name);
-                    if (!file.exists()) {
-                        alt = new File(file.getParentFile(), record.name + ".json");
-                        if (alt.exists()) file = alt;
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
         if (!file.exists() || file.length() == 0) {
-            // create if missing
-            try {
-                create(context, projectId, dbName);
-                file = databaseFile(context, projectId, dbName);
-            } catch (Exception ignored) {}
+            // Allow metadata-only entry to be materialised on first use.
+            if (!file.exists()) {
+                Records.DbRecord record = require(context, projectId, dbName);
+                file = databaseFile(context, projectId, record.name);
+            }
+            if (!file.exists()) throw DataException.notFound("database");
         }
-        if (!file.exists()) throw DataException.notFound("database");
         return file;
     }
 
-    private static JSONObject readDb(File file) throws Exception {
-        if (file.getName().endsWith(".db")) {
-            // try to read as JSON if it was converted
+    private static SQLiteDatabase openFile(File file, boolean writable) {
+        SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null,
+                writable ? (SQLiteDatabase.OPEN_READWRITE | SQLiteDatabase.CREATE_IF_NECESSARY)
+                        : SQLiteDatabase.OPEN_READONLY);
+        if (writable) {
+            db.setForeignKeyConstraintsEnabled(true);
             try {
-                return JsonStorage.readJson(new File(file.getParentFile(), file.getName().replace(".db", ".json")));
-            } catch (Exception ignored) {}
-            // return empty db structure
-            JSONObject dbJson = new JSONObject();
-            dbJson.put("tables", new JSONObject());
-            return dbJson;
+                db.enableWriteAheadLogging();
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("PRAGMA busy_timeout = 5000");
+            } catch (Exception ignored) {
+            }
         }
-        try {
-            return JsonStorage.readJson(file);
-        } catch (Exception e) {
-            JSONObject dbJson = new JSONObject();
-            dbJson.put("tables", new JSONObject());
-            return dbJson;
-        }
+        return db;
     }
 
-    private static void writeDb(File file, JSONObject dbJson) throws Exception {
-        if (file.getName().endsWith(".db")) {
-            file = new File(file.getParentFile(), file.getName().replace(".db", ".json"));
+    private static List<Records.ColumnInfo> columns(SQLiteDatabase db, String table) {
+        List<Records.ColumnInfo> result = new ArrayList<>();
+        try (Cursor c = db.rawQuery("PRAGMA table_info(" + quote(table) + ")", null)) {
+            while (c.moveToNext()) {
+                Records.ColumnInfo col = new Records.ColumnInfo();
+                col.name = c.getString(c.getColumnIndexOrThrow("name"));
+                col.type = c.getString(c.getColumnIndexOrThrow("type"));
+                col.notNull = c.getInt(c.getColumnIndexOrThrow("notnull")) != 0;
+                col.primaryKey = c.getInt(c.getColumnIndexOrThrow("pk")) != 0;
+                col.defaultValue = c.getString(c.getColumnIndexOrThrow("dflt_value"));
+                result.add(col);
+            }
         }
-        JsonStorage.writeJsonAtomic(file, dbJson, false);
+        return result;
+    }
+
+    private static List<Records.IndexInfo> indexes(SQLiteDatabase db, String table) {
+        List<Records.IndexInfo> result = new ArrayList<>();
+        try (Cursor c = db.rawQuery("PRAGMA index_list(" + quote(table) + ")", null)) {
+            while (c.moveToNext()) {
+                Records.IndexInfo info = new Records.IndexInfo();
+                info.name = c.getString(c.getColumnIndexOrThrow("name"));
+                info.unique = c.getInt(c.getColumnIndexOrThrow("unique")) != 0;
+                result.add(info);
+            }
+        }
+        for (Records.IndexInfo info : result) {
+            try (Cursor c = db.rawQuery("PRAGMA index_info(" + quote(info.name) + ")", null)) {
+                while (c.moveToNext()) {
+                    info.columns.add(c.getString(c.getColumnIndexOrThrow("name")));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static long countRows(SQLiteDatabase db, String table) {
+        try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM " + quote(table), null)) {
+            return c.moveToFirst() ? c.getLong(0) : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private static void updateDatabaseSize(Context context, String projectId, File file) {
@@ -772,18 +557,11 @@ public final class DatabaseManager {
         return clean;
     }
 
-    private static String validateIdentifier(String name) throws DataException {
-        if (name == null || !name.matches("[A-Za-z0-9_]+")) {
-            throw new DataException("invalid identifier", 400);
-        }
-        return name;
-    }
-
     /** Resolves a database file inside dir, rejecting anything that escapes it. */
     public static File safeDatabaseFile(File dir, String name) {
         if (!name.matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")) return null;
         if (name.contains("..")) return null;
-        File candidate = new File(dir, name + ".json");
+        File candidate = new File(dir, name + ".db");
         return PathGuard.isInside(dir, candidate) ? candidate : null;
     }
 
@@ -808,6 +586,7 @@ public final class DatabaseManager {
     private static String safeMessage(Exception e) {
         String message = e.getMessage();
         if (message == null) return e.getClass().getSimpleName();
+        // Never leak absolute paths to API clients.
         return message.replaceAll("(/[\\w./-]+)+", "<path>");
     }
 

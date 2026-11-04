@@ -3,7 +3,7 @@ package com.yadaventerprise.phoneserver.data;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,8 +67,8 @@ public final class TokenStore {
     public static Records.ApiTokenRecord verify(Context context, String token) {
         if (token == null || token.isEmpty()) return null;
         String hash = TokenUtil.hash(token);
-        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
+        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = db.rawQuery(
                 "SELECT id,name,project_id,can_write,created_at,last_used_at,revoked "
                         + "FROM api_tokens WHERE token_hash=? AND revoked=0", new String[]{hash})) {
             if (c.moveToFirst()) {
@@ -85,8 +85,8 @@ public final class TokenStore {
 
     public static List<Records.ApiTokenRecord> list(Context context) {
         List<Records.ApiTokenRecord> result = new ArrayList<>();
-        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
+        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = db.rawQuery(
                 "SELECT id,name,project_id,can_write,created_at,last_used_at,revoked "
                         + "FROM api_tokens ORDER BY created_at DESC", null)) {
             while (c.moveToNext()) result.add(fromCursor(c));
@@ -96,8 +96,8 @@ public final class TokenStore {
 
     public static List<Records.ApiTokenRecord> listForProject(Context context, String projectId) {
         List<Records.ApiTokenRecord> result = new ArrayList<>();
-        Object dbObj = SystemDatabase.get(context).getReadableDatabase();
-        try (Cursor c = ((JsonDatabaseWrapper)dbObj).rawQuery(
+        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = db.rawQuery(
                 "SELECT id,name,project_id,can_write,created_at,last_used_at,revoked "
                         + "FROM api_tokens WHERE project_id=? OR project_id IS NULL "
                         + "ORDER BY created_at DESC", new String[]{projectId})) {

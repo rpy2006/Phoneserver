@@ -90,10 +90,6 @@ button{font:inherit}
 .toolbar .hint{max-width:62ch;margin:0}
 .toolbar .btn{flex:none}
 .toolbar h2{flex:1 1 auto;margin:0;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.adminfilters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.adminfilters select{width:auto;min-width:150px}
-.adminfilters input{width:min(100%,340px)}
-.adminfilters .chip{white-space:nowrap}
 .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .row.end{justify-content:flex-end}
 .grow{flex:1 1 auto}

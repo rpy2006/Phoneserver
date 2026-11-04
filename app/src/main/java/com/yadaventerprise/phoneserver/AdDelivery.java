@@ -1,6 +1,8 @@
 package com.yadaventerprise.phoneserver;
 
 import android.content.Context;
+import android.database.sqlite.SQLiteConstraintException;
+import android.database.sqlite.SQLiteDatabase;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -307,7 +309,7 @@ final class AdDelivery {
     }
 
     /** Charges for one valid event inside the caller's transaction. Returns {advertiserCost, publisherEarning}. */
-    private long[] settle(Object w, long campaignId, boolean click) {
+    private long[] settle(SQLiteDatabase w, long campaignId, boolean click) {
         JSONObject c = db.one("SELECT c.pricing, c.bid_micros, c.total_budget_micros, c.spent_micros, u.balance_micros, u.id uid"
                 + " FROM campaigns c JOIN users u ON u.id=c.advertiser_id WHERE c.id=?", campaignId);
         if (c == null) return new long[]{0, 0};
@@ -318,52 +320,46 @@ final class AdDelivery {
         long share = Math.max(0, Math.min(100, db.settingLong("rev_share_pct", 70)));
         long pub = cost * share / 100;
         if (cost > 0) {
-            try {
-                ((AdDb)db).run("UPDATE campaigns SET spent_micros=spent_micros+?, updated_at=? WHERE id=?", cost, System.currentTimeMillis(), campaignId);
-                ((AdDb)db).run("UPDATE users SET balance_micros=balance_micros-? WHERE id=?", cost, c.optLong("uid"));
-                ((AdDb)db).run("UPDATE campaigns SET status='ended' WHERE id=? AND status='approved' AND spent_micros>=total_budget_micros", campaignId);
-            } catch (Exception ignored) {}
+            w.execSQL("UPDATE campaigns SET spent_micros=spent_micros+?, updated_at=? WHERE id=?", new Object[]{cost, System.currentTimeMillis(), campaignId});
+            w.execSQL("UPDATE users SET balance_micros=balance_micros-? WHERE id=?", new Object[]{cost, c.optLong("uid")});
+            w.execSQL("UPDATE campaigns SET status='ended' WHERE id=? AND status='approved' AND spent_micros>=total_budget_micros", new Object[]{campaignId});
         }
         return new long[]{cost, pub};
     }
 
     /** Records one tracked event (impression or click) exactly once. Returns the reason it was invalid, or null if billed. */
     private String record(Tok t, boolean click, String reason) {
-        Object w = db.getWritableDatabase();
+        SQLiteDatabase w = db.getWritableDatabase();
         String type = click ? "click" : "imp";
-        // begin
+        w.beginTransaction();
         try {
             long day = AdDb.today();
             try {
-                try {
-                    ((AdDb)db).run("INSERT INTO events(ts,type,nonce,campaign_id,creative_id,placement_id,site_id,visitor,valid,reason,cost_micros,pub_micros)"
-                                    + " VALUES(?,?,?,?,?,?,?,?,?,?,0,0)",
-                            System.currentTimeMillis(), type, t.nonce, t.campaign, t.creative, t.placement, t.site,
-                            t.visitor, reason == null ? 1 : 0, reason == null ? "" : reason);
-                } catch (Exception duplicate) {
-                    // The same token was replayed
-                    db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, 0);
-                    db.fraudLog("duplicate_" + type);
-                    return "duplicate";
-                }
-                if (reason == null) {
-                    long[] cp = settle(w, t.campaign, click);
-                    if (cp[0] > 0) {
-                        try {
-                            ((AdDb)db).run("UPDATE events SET cost_micros=?, pub_micros=? WHERE nonce=? AND type=?", cp[0], cp[1], t.nonce, type);
-                        } catch (Exception ignored) {}
-                    }
-                    db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, cp[0], cp[1]);
-                } else {
-                    db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, 0);
-                    db.fraudLog(reason);
-                }
-                return reason;
-            } catch (Exception e) {
-                return reason;
+                w.execSQL("INSERT INTO events(ts,type,nonce,campaign_id,creative_id,placement_id,site_id,visitor,valid,reason,cost_micros,pub_micros)"
+                                + " VALUES(?,?,?,?,?,?,?,?,?,?,0,0)",
+                        new Object[]{System.currentTimeMillis(), type, t.nonce, t.campaign, t.creative, t.placement, t.site,
+                                t.visitor, reason == null ? 1 : 0, reason == null ? "" : reason});
+            } catch (SQLiteConstraintException duplicate) {
+                // The same token was replayed. Nothing is charged; it is counted as invalid traffic.
+                db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, 0);
+                db.fraudLog("duplicate_" + type);
+                w.setTransactionSuccessful();
+                return "duplicate";
             }
+            if (reason == null) {
+                long[] cp = settle(w, t.campaign, click);
+                if (cp[0] > 0) {
+                    w.execSQL("UPDATE events SET cost_micros=?, pub_micros=? WHERE nonce=? AND type=?", new Object[]{cp[0], cp[1], t.nonce, type});
+                }
+                db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, cp[0], cp[1]);
+            } else {
+                db.stat(w, day, t.campaign, t.creative, t.placement, t.site, 0, 0, click ? 0 : 1, 0, click ? 1 : 0, 0, 0);
+                db.fraudLog(reason);
+            }
+            w.setTransactionSuccessful();
+            return reason;
         } finally {
-            // end
+            w.endTransaction();
         }
     }
 
