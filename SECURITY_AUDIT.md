@@ -50,7 +50,7 @@ Fix:
 - Buffered bodies are capped at `MAX_BUFFERED_API_BODY = 64 MB`
   (`SimpleHttpServer.java:151`), with oversized bodies marked `bodyTooLarge`
   (`:235`) and answered with `413 Payload Too Large` (`:363`).
-- `readExactly` (`:247`) now grows a `ByteArrayOutputStream` as bytes actually
+- `readExactly` (`:246`) now grows a `ByteArrayOutputStream` as bytes actually
   arrive instead of pre-allocating the declared length, so a client that only
   sends headers cannot reserve memory upfront.
 
