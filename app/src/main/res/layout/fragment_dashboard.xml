@@ -194,7 +194,7 @@
                                 android:textSize="12sp" />
                         </LinearLayout>
 
-                        <com.yadaventerprise.phoneserver.TrafficChartView
+                        <com.yadaventerprise.phoneserver.ui.dashboard.TrafficChartView
                             android:id="@+id/traffic_chart"
                             android:layout_width="match_parent"
                             android:layout_height="160dp" />

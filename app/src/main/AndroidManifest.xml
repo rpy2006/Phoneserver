@@ -28,7 +28,7 @@
         android:supportsRtl="true">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.yadaventerprise.phoneserver.ui.main.MainActivity"
             android:theme="@style/Theme.PhoneServer.Home"
             android:exported="true">
         </activity>
@@ -39,7 +39,7 @@
              whether the server is running. -->
         <activity-alias
             android:name=".AliasOnline"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.yadaventerprise.phoneserver.ui.main.MainActivity"
             android:icon="@drawable/ps_online"
             android:enabled="false"
             android:exported="true">
@@ -51,7 +51,7 @@
 
         <activity-alias
             android:name=".AliasOffline"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.yadaventerprise.phoneserver.ui.main.MainActivity"
             android:icon="@drawable/ps_offline"
             android:enabled="true"
             android:exported="true">
@@ -61,31 +61,31 @@
             </intent-filter>
         </activity-alias>
 
-        <activity android:name=".WebsiteFilesActivity" android:exported="false" />
-        <activity android:name=".FilesActivity" android:exported="false" />
-        <activity android:name=".ApiEditorActivity" android:exported="false" />
-        <activity android:name=".ApiEndpointEditorActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ServersListActivity" android:exported="false" />
-        <activity android:name=".AddServerActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".AccountSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".AdvancedSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ProjectsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ProjectDetailActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".SqlWorkspaceActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ProjectFilesActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ProjectBackupsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ApiTokensActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
-        <activity android:name=".RemoteBrowseActivity" android:exported="false" />
-        <activity android:name=".ImageViewerActivity" android:exported="false" />
-        <activity android:name=".VideoPlayerActivity" android:exported="false" />
-        <activity android:name=".MusicPlayerActivity" android:exported="false" />
-        <activity android:name=".TextFileViewerActivity" android:exported="false" />
-        <activity android:name=".PdfViewerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.WebsiteFilesActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.FilesActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiEditorActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiEndpointEditorActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.servers.ServersListActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.servers.AddServerActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.servers.AdvancedSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.projects.ProjectDetailActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.projects.SqlWorkspaceActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.ProjectFilesActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.projects.ProjectBackupsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiTokensActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ads.AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.RemoteBrowseActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.ImageViewerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.VideoPlayerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.MusicPlayerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.TextFileViewerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.files.PdfViewerActivity" android:exported="false" />
 
         <receiver
-            android:name=".BootReceiver"
+            android:name="com.yadaventerprise.phoneserver.service.BootReceiver"
             android:exported="true"
             android:enabled="true">
             <intent-filter>
@@ -94,7 +94,7 @@
         </receiver>
 
         <service
-            android:name=".ServerService"
+            android:name="com.yadaventerprise.phoneserver.service.ServerService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

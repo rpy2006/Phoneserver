@@ -112,7 +112,7 @@
                 android:textColor="@color/home_text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-            <com.yadaventerprise.phoneserver.SparklineView
+            <com.yadaventerprise.phoneserver.ui.dashboard.SparklineView
                 android:id="@+id/card_cpu_sparkline"
                 android:layout_width="match_parent"
                 android:layout_height="32dp"
@@ -140,7 +140,7 @@
                 android:textColor="@color/home_text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-            <com.yadaventerprise.phoneserver.SparklineView
+            <com.yadaventerprise.phoneserver.ui.dashboard.SparklineView
                 android:id="@+id/card_ram_sparkline"
                 android:layout_width="match_parent"
                 android:layout_height="32dp"
@@ -167,7 +167,7 @@
                 android:textColor="@color/home_text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-            <com.yadaventerprise.phoneserver.SparklineView
+            <com.yadaventerprise.phoneserver.ui.dashboard.SparklineView
                 android:id="@+id/card_traffic_sparkline"
                 android:layout_width="match_parent"
                 android:layout_height="32dp"

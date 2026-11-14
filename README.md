@@ -161,115 +161,74 @@ com.journeyapps:zxing-android-embedded:4.3.0       // QR scanning
 
 ## 3. Project Structure
 
+PhoneServer is a single Gradle module (`:app`) organised into layered Java
+packages. Keeping one module preserves the existing manifest, generated `R`
+class and resource pipeline while giving the same separation a multi-module
+build would provide, without a risky migration. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the full dependency rules, rationale
+and extension guide.
+
 ```
 PhoneServer/
-├── build.gradle                     # AGP 8.5.2 declared here, applied in :app
-├── settings.gradle                  # include ':app', FAIL_ON_PROJECT_REPOS
-├── gradle.properties                # UTF-8 pinning, 2 GB heap, parallel builds
-├── gradle/wrapper/                  # Gradle 9.0.0
+├── build.gradle                 # AGP 8.5.2, applied in :app
+├── settings.gradle              # include ':app'
+├── gradle.properties
+├── ARCHITECTURE.md              # layers, dependency rules, extension guide
+├── SECURITY_AUDIT.md
 └── app/
-    ├── build.gradle                 # SDK levels, arm64-v8a filter, deps
-    ├── proguard-rules.pro
+    ├── build.gradle
     └── src/main/
         ├── AndroidManifest.xml
-        ├── jniLibs/arm64-v8a/
-        │   └── libllama_bridge.so   # ~47 MB prebuilt llama.cpp JNI bridge
+        ├── jniLibs/arm64-v8a/libllama_bridge.so
+        ├── assets/adnet/        # ad dashboard + public sdk.js
         ├── java/com/yadaventerprise/phoneserver/
-        │   ├── ── Server core ──────────────────────────────────────
-        │   │   SimpleHttpServer.java     671  socket server + router + handlers
-        │   │   ServerService.java        134  foreground service, wake lock, icon
-        │   │   ServerStats.java          186  live metrics, clients, activity log
-        │   │   DeviceStats.java           60  RAM% and app-process CPU%
-        │   │   MultipartParser.java       68  single-file multipart extraction
-        │   │   ByteUtils.java             18  byte[] indexOf
-        │   │   NetworkUtils.java          28  local IPv4 discovery
-        │   │   BootReceiver.java          24  BOOT_COMPLETED → start service
-        │   │   IconSwitcher.java          33  activity-alias icon swap
-        │   │   ── Storage & config ───────────────────────────────────
-        │   │   ContentStore.java         228  all paths, prefs, traversal guard
-        │   │   ── Shells / shells ─────────────────────────────────────
-        │   │   MainActivity.java         103  ViewPager2 + BottomNavigationView
-        │   │   MainPagerAdapter.java      42  5-tab FragmentStateAdapter
-        │   │   HomeFragment.java         305  local card, overview stats, remotes
-        │   │   DashboardFragment.java    539  live monitoring tabs
-        │   │   QrFragment.java           380  show/scan QR, recent scans
-        │   │   ChatFragment.java         373  AI chat + model import
-        │   │   SettingsFragment.java     145  toggles, permission status
-        │   │   ── Activities ─────────────────────────────────────────
-        │   │   FilesActivity.java        282  local file manager
-        │   │   WebsiteFilesActivity.java 279  served-site file tree
-        │   │   WebsiteEditorActivity.java 52  legacy single-box HTML editor
-        │   │   ApiEditorActivity.java     76  endpoint list
-        │   │   ApiEndpointEditorActivity 204  endpoint create/edit form
-        │   │   ServersListActivity.java  104  saved remote servers
-        │   │   AddServerActivity.java    107  profile create/edit form
-        │   │   RemoteBrowseActivity.java 395  remote file manager
-        │   │   AccountSettingsActivity   55  username + password
-        │   │   ServerSettingsActivity    28  password only (unwired)
-        │   │   AdvancedSettingsActivity  77  cache size, clear cache, reset API
-        │   │   DashboardActivity.java   588  legacy full-screen dashboard
-        │   │   QrCodeActivity.java       74  legacy standalone QR
-        │   │   ── Viewers ────────────────────────────────────────────
-        │   │   ImageViewerActivity.java   72  BitmapFactory + inSampleSize
-        │   │   VideoPlayerActivity.java   49  VideoView + MediaController
-        │   │   MusicPlayerActivity.java  136  MediaPlayer + SeekBar
-        │   │   TextFileViewerActivity     92  read/edit (2 MB cap)
-        │   │   PdfViewerActivity.java    105  platform PdfRenderer, page by page
-        │   │   ── Remote client ──────────────────────────────────────
-        │   │   RemoteApiClient.java      347  HttpURLConnection client
-        │   │   ServerProfileStore.java   101  profiles CRUD in SharedPreferences
-        │   │   ServerProfile.java         19  profile model
-        │   │   RemoteEntry.java           16  remote browse entry model
-        │   │   StatsSnapshot.java         38  unified local-or-remote stats DTO
-        │   │   ── Models / stores ───────────────────────────────────
-        │   │   ApiEndpointStore.java     140  custom endpoint CRUD
-        │   │   ApiEndpointConfig.java     17  endpoint definition model
-        │   │   ApiEndpoint.java           11  legacy endpoint pair
-        │   │   KeyValue.java              15  header/param row
-        │   │   ── Adapters ──────────────────────────────────────────
-        │   │   FilesAdapter.java          67  local file rows
-        │   │   RemoteEntryAdapter.java    66  remote browse rows
-        │   │   ServersAdapter.java        76  server profile rows
-        │   │   ApiAdapter.java            64  endpoint rows
-        │   │   ── Custom views ─────────────────────────────────────
-        │   │   SparklineView.java         88  CPU/RAM trend line
-        │   │   TrafficChartView.java      99  up/down MB dual line
-        │   │   ── AI engine ─────────────────────────────────────────
-        │   │   LlmEngine.java            197  JNI facade, lock-guarded
-        │   │   ModelStore.java           357  model import, GGUF validation
-        │   │   FileTypeUtils.java         41  extension → MIME/viewer
-        │   │   ── Ad network (optional, port 8090) ─────────────────
-        │   │   AdNetworkManager.java          opt-in lifecycle, setup code, sweeper
-        │   │   AdHttpServer.java              HTTP/1.1, limits, CSP, routing
-        │   │   AdApi.java                     management API + validation
-        │   │   AdDelivery.java                SDK, ad selection, tracking, media
-        │   │   AdSecurity.java                PBKDF2, sessions, HMAC, visitor hash
-        │   │   AdDb.java                      adnet.db schema and settings
-        │   │   AdReports.java                 reports, CSV, billing
-        │   │   AdFraud.java                   invalid-traffic rules and site flags
-        │   │   AdHttp.java / AdRateLimiter.java   JSON I/O and sliding windows
-        │   │   ── Data platform tests ───────────────────────────────
-        │   │   (see app/src/test/java/... — JUnit + Robolectric)
-        ├── assets/adnet/
-        │   ├── dashboard.html        dashboard shell (noindex, strict CSP)
-        │   ├── dashboard.js          SPA logic, SVG icons, API client
-        │   ├── dashboard.css         responsive dashboard + mobile drawer
-        │   └── sdk.js                public embed script
-        └── res/
-            ├── layout/         38 XML layouts
-            ├── values/         colors, themes, strings
-            ├── values-night/   dark-theme colour overrides
-            ├── drawable/       ~50 vector icons + launcher artwork
-            ├── menu/           bottom_nav_menu.xml (5 tabs)
-            └── xml/            network_security_config, file_paths,
-                                backup_rules, data_extraction_rules
+        │   ├── ui/              # Activities, Fragments, Adapters, Views
+        │   │   ├── main/        # shell, home, settings, chat
+        │   │   ├── dashboard/   # live stats + Sparkline/TrafficChart
+        │   │   ├── files/       # local/remote browsers + viewers
+        │   │   ├── projects/    # projects, backups, SQL workspace
+        │   │   ├── servers/     # saved servers + connection settings
+        │   │   ├── api/         # endpoint editor, docs, tokens
+        │   │   └── qr/          # QR share/scan
+        │   ├── network/
+        │   │   ├── http/        # SimpleHttpServer, DataApi, MultipartParser
+        │   │   └── remote/      # RemoteApiClient
+        │   ├── ads/             # self-contained ad-network feature slice
+        │   ├── service/         # ServerService + BootReceiver
+        │   ├── data/
+        │   │   ├── storage/     # ContentStore, file/project/model stores, backups
+        │   │   ├── database/    # SQLite/JSON database layer
+        │   │   ├── servers/     # saved profiles + custom endpoint persistence
+        │   │   ├── stats/       # ServerStats + traffic/device snapshots
+        │   │   └── tokens/      # hashed API token store
+        │   ├── security/        # PathGuard, SqlGuard, RateLimiter, TokenUtil
+        │   ├── model/           # shared data objects (profiles, key/value, entries)
+        │   ├── util/            # bytes, MIME, formatting, networking, icon switching
+        │   └── ai/              # local LLM bridge
+        └── res/                 # layouts, values, drawables, menus, xml config
 ```
 
-The original server is ~7,900 lines of Java across 56 classes, plus the data platform (`data/`) and ad-network classes listed above. Unit tests live under `app/src/test/java/…` and are described in [testing.md](testing.md).
+The main dependency direction is `ui → network/service → data → security/model/util`.
+The `ads` package is deliberately a self-contained feature slice because its
+classes share package-private implementation details; it only reaches out to
+`Records`, `ServerService` and `NetworkUtils`. `ui` packages may depend on any
+lower layer, but lower layers never import `ui`.
+
+The `web/` folder and `index.html` are the published documentation site and are
+not compiled into the APK. `web/docs.html` keeps a historical snapshot of the
+pre-reorganisation tree; `ARCHITECTURE.md` is the source of truth for the
+current layout.
 
 ---
 
 ## 4. Architecture Design
+
+> **Note on this section.** Sections 4–12 are the original design narrative,
+> retained because they explain *why* the code is shaped this way. The package
+> layout was reorganised (see §3 and [ARCHITECTURE.md](ARCHITECTURE.md)), and
+> several security items below were fixed afterwards (see
+> [SECURITY_AUDIT.md](SECURITY_AUDIT.md)). Class names are shown without
+> packages; deleted classes are called out inline.
 
 ### 4.1 Architectural style
 
@@ -377,11 +336,11 @@ This is the most distinctive architectural decision in the codebase. **Every num
   ServerStats.recordRequest()                  ↓
   (AtomicLong accumulators,             StatsSnapshot DTO
    ConcurrentHashMap per path,                  ↓
-   ClientInfo per IP)              ┌───────────┴───────────┐
-      ↓                            │                       │
-  /api/stats builds JSON      DashboardFragment     DashboardActivity
-      │                       (fragment, live)     (legacy, unregistered)
-      └──────────────┬────────────────────────────┘
+   ClientInfo per IP)                           ↓
+      ↓                                         ↓
+  /api/stats builds JSON                 DashboardFragment
+      │                                  (fragment, live)
+      └──────────────┬──────────────────────────┘
                      ▼
            ServerStats.get()  or  StatsSnapshot
                      ▼
@@ -413,7 +372,7 @@ new Thread(() -> { /* blocking work */ handler.post(() -> { /* touch views */ })
 | LLM callbacks | `Handler(Looper.getMainLooper())` | Tokens delivered on the main thread |
 | UI polling | `Handler.postDelayed` self-reposting runnable | 2 s (Home), 3 s (QR), 4 s (Dashboard); removed in `onPause` |
 
-**Known cost of this model:** no cancellation on lifecycle change and no bound on concurrent threads. `DashboardActivity.pollRemote` and `ServersListActivity` spawn one thread per server *per poll tick*, and `RemoteBrowseActivity` keeps uploading into a dead destination after a rotation. This is listed in §12.
+**Known cost of this model:** no cancellation on lifecycle change and no bound on concurrent threads. `DashboardFragment.pollRemote` and `ServersListActivity` spawn one thread per server *per poll tick*, and `RemoteBrowseActivity` keeps uploading into a dead destination after a rotation. This is listed in §12.
 
 ### 4.5 Storage layout
 
@@ -1035,7 +994,7 @@ The codebase is unusually explicit about *why* it is built the way it is — mos
 
 ### 11.7 Background work on background threads, always
 
-**Decision:** every blocking call — HTTP, file copy, GGUF parse, model load — runs off the main thread; the *reversed* mistakes are noted as bugs in comments (main-thread file copies in `WebsiteFilesActivity`, main-thread read/write in `WebsiteEditorActivity`).
+**Decision:** every blocking call — HTTP, file copy, GGUF parse, model load — runs off the main thread; the *reversed* mistakes are noted as bugs in comments (main-thread file copies in `WebsiteFilesActivity`).
 **Why:** consistent with Android's strict-mode model, and it makes the main-thread violations obvious against the norm.
 
 ### 11.8 Descriptive names, and comments that explain history
@@ -1059,7 +1018,7 @@ Ordered roughly by how much they matter.
 | # | Issue | Where | Impact |
 |---|---|---|---|
 | 1 | **Filename appended after the traversal check.** `resolveSafePathUnder` validates the base directory, but `WebsiteFilesActivity.copyIntoWebsiteFolder` and `RemoteBrowseActivity`'s download/view paths then append an unsanitised `ContentResolver` `DISPLAY_NAME` or server-supplied `entry.name` via `new File(dir, name)`. A name containing `../` escapes the root. | `WebsiteFilesActivity`, `RemoteBrowseActivity` | Path traversal. Highest-priority fix: re-resolve with `resolveSafePath(ctx, dirPath + "/" + name)` instead of appending to a `File` |
-| 2 | `allow_remote_access` and `show_hidden_files` are written by the UI but **never read by the server** | `ContentStore`, `SettingsFragment` | Two settings switches do nothing. `ContentStore.getApiPrefs()` is likewise dead |
+| 2 | ~~Settings switches ignored~~ **Resolved:** `allow_remote_access` and `show_hidden_files` are now enforced by the server (see `SECURITY_AUDIT.md` F-09/F-10). `ContentStore.getApiPrefs()` is still unused | `ContentStore`, `SimpleHttpServer` | Settings now take effect; only `getApiPrefs()` remains dead |
 | 3 | `getUsername()` is stored and displayed but never verified in `isAuthorized` | `AccountSettingsActivity`, `SimpleHttpServer` | Basic auth accepts any username |
 | 4 | Password sent as `?pw=` query param on download | `RemoteApiClient.download` | Credential leaks into logs/history |
 | 5 | Plaintext credentials in `SharedPreferences` | `ContentStore`, `ServerProfileStore` | No encryption or hashing at rest |
@@ -1072,25 +1031,25 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Where |
 |---|---|---|
-| 10 | Unbounded thread spawning: one thread per server per poll tick, no in-flight guard. A slow offline server accumulates threads and can deliver out-of-order results that overwrite fresher data | `DashboardActivity.pollRemote`, `ServersListActivity`, `HomeFragment`, `QrFragment` |
+| 10 | Unbounded thread spawning: one thread per server per poll tick, no in-flight guard. A slow offline server accumulates threads and can deliver out-of-order results that overwrite fresher data | `DashboardFragment.pollRemote`, `ServersListActivity`, `HomeFragment`, `QrFragment` |
 | 11 | No cancellation on lifecycle change: a rotation mid-upload still writes the file; polling continues against a destroyed activity; results are posted back with no `isFinishing()`/`isDestroyed()` check | `RemoteBrowseActivity`, all pollers |
-| 12 | Main-thread I/O: file copies in `WebsiteFilesActivity`; read/write in `WebsiteEditorActivity`; `TextFileViewerActivity` read (up to 2 MB); `PdfViewerActivity.renderPage`; `AdvancedSettingsActivity.folderSize` | those classes |
-| 13 | No `ViewModel` / `SavedStateHandle` anywhere. `DashboardActivity` throws away all chart history on every `onResume`; PDF page, playback position and progress scroll do not survive rotation | all Activities |
+| 12 | Main-thread I/O: file copies in `WebsiteFilesActivity`; `TextFileViewerActivity` read (up to 2 MB); `PdfViewerActivity.renderPage`; `AdvancedSettingsActivity.folderSize` | those classes |
+| 13 | No `ViewModel` / `SavedStateHandle` anywhere. `DashboardFragment` loses chart history when the fragment is recreated; PDF page, playback position and progress scroll do not survive rotation | all Activities |
 | 14 | Player activities don't pause on `onPause`; `MusicPlayerActivity`'s progress runnable is only removed in `onDestroy`; `VideoPlayerActivity` uses `Uri.fromFile` instead of `FileProvider` | `MusicPlayerActivity`, `VideoPlayerActivity` |
 
 ### 12.3 Dead and duplicated code
 
 | # | Issue | Detail |
 |---|---|---|
-| 15 | **`DashboardActivity` (588 lines) is not declared in the manifest** and is never started — fully dead. `DashboardFragment` (539 lines) is the live implementation, and it duplicates most of the activity's logic | Delete the activity, or wire it up |
+| 15 | **`DashboardActivity` was removed** during the package reorganisation. It was never declared in the manifest and duplicated `DashboardFragment`, which remains the live implementation | Resolved: deleted |
 | 16 | **`QrCodeActivity` and `ServerSettingsActivity` are not declared in the manifest** — dead. Their functionality lives in `QrFragment` and `AccountSettingsActivity` respectively | Delete, or declare |
 | 17 | `ServerSettingsActivity` and `AccountSettingsActivity` both write `access_password`, and neither can be reached | Merge |
 | 18 | `ContentStore.getApiPrefs()` and the `api_endpoints` prefs file are unused | Remove |
-| 19 | `ApiEndpoint` (legacy 2-field model) is unused; `SparklineView.addValue` is never called | Remove |
-| 20 | Duplicated code blocks: password-visibility toggle (`AccountSettingsActivity` + `AddServerActivity`); `formatSize` with no GB branch (`FilesAdapter` + `RemoteEntryAdapter`); `openFile` type dispatch + `FileProvider` fallback (`RemoteBrowseActivity` + `WebsiteFilesActivity`); the add-server dialog (`DashboardActivity` re-implements `AddServerActivity` with a hardcoded `8080`) | Extract |
+| 19 | `ApiEndpoint` (legacy 2-field model) was removed as unused during the reorganisation; `SparklineView.addValue` is still never called | Remove `addValue` or wire it up |
+| 20 | Duplicated code blocks: password-visibility toggle (`AccountSettingsActivity` + `AddServerActivity`); `formatSize` with no GB branch (`FilesAdapter` + `RemoteEntryAdapter`); `openFile` type dispatch + `FileProvider` fallback (`RemoteBrowseActivity` + `WebsiteFilesActivity`) | Extract |
 | 21 | Raw Intent keys `"profile_id"` / `"path"` bypass the `EXTRA_*` constants defined in `AddServerActivity`; four unrelated constants all have the value `"path"` | Consolidate |
 | 22 | No `DiffUtil`/`ListAdapter` — every adapter holds a live reference to the activity's mutable list and calls `notifyDataSetChanged()` | Migrate to `ListAdapter` |
-| 23 | `DashboardActivity` mixes all servers' chart data into one shared series (`chartUploadMb`/`chartDownloadMb`) | Per-server series |
+| 23 | `DashboardFragment` mixes all servers' chart data into one shared series (`chartUploadMb`/`chartDownloadMb`) | Per-server series |
 | 24 | `ApiAdapter` renders the entire JSON body into every row with no truncation | Truncate the preview |
 | 25 | `AdvancedSettingsActivity.deleteRecursive` has no error checking; its only caller passes an app-internal path today, but it is unguarded if that path ever becomes user-influenced | Add a canonical-path check |
 
@@ -1098,12 +1057,12 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Detail |
 |---|---|---|
-| 26 | **No tests and no CI.** No `src/test` or `src/androidTest`, no JUnit dependency | Verification is manual only |
+| 26 | **No CI.** Unit tests now exist under `app/src/test` (92 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
 | 27 | `minifyEnabled false` in release — the APK ships unshrunk and un-obfuscated | Add keep rules for the JNI bridge before enabling R8 |
 | 28 | 47 MB prebuilt `.so`, arm64-v8a only. No source, no reproducibility, no x86_64 emulator support | Document the provenance of the binary; add the C++ sources or a submodule if this is to be maintained |
 | 29 | The `.so` is **modified but uncommitted** (`git status` shows `M app/src/main/jniLibs/arm64-v8a/libllama_bridge.so`) along with `gradle.properties` | Review and commit deliberately |
-| 30 | `minSdk 24` but `WebsiteEditorActivity` uses `java.nio.file.Files`, which is API 26+ | Verify or raise `minSdk` to 26, or use `FileInputStream` |
-| 31 | Two commits total: `Initial PhoneServer Android project` → `Update PhoneServer` | Very little history to bisect or understand intent from |
+| 30 | **Resolved:** the only `java.nio.file.Files` user was `WebsiteEditorActivity`, which was deleted during the reorganisation. Re-check if API-26 file APIs are reintroduced | Keep `minSdk 24` compatible |
+| 31 | History is still short, though the security audit and reorganisation are now documented in `SECURITY_AUDIT.md` and `ARCHITECTURE.md` | Keep commit messages descriptive |
 
 ### 12.5 Scalability limits (inherent to the design)
 
@@ -1233,6 +1192,6 @@ The ad network is documented in full in [ad-network.md](ad-network.md). In brief
 | Native library | `libllama_bridge.so`, arm64-v8a, ~47 MB, prebuilt binary |
 | Default model name | `smollm2-135m-instruct-q8_0.gguf` (must be a *text* model, not an `mmproj`) |
 | Prefs files | `server_config`, `server_profiles`, `api_endpoint_configs`; ad network: `adnet_prefs` |
-| Activity count | 15 declared · 3 undeclared and dead |
-| Java LOC | ~7,900 across 56 classes |
-| Tests | 88 JUnit/Robolectric tests (41 pass, 47 skip on Linux/aarch64); no ad-network tests |
+| Activity count | 23 declared · 2 undeclared and dead (`QrCodeActivity`, `ServerSettingsActivity`) |
+| Java LOC | ~18,100 across 94 classes (main source, excluding `package-info.java`) |
+| Tests | 92 JUnit/Robolectric tests (43 pass, 49 skip on aarch64 Linux); no ad-network tests |

@@ -36,7 +36,7 @@ thread pools, and CSP on the ad dashboard.
 ## Fixed findings
 
 All fixes are in
-`app/src/main/java/com/yadaventerprise/phoneserver/SimpleHttpServer.java`
+`app/src/main/java/com/yadaventerprise/phoneserver/network/http/SimpleHttpServer.java`
 unless stated otherwise.
 
 ### F-01 — Unbounded request-body allocation (High)
@@ -48,9 +48,9 @@ process.
 
 Fix:
 - Buffered bodies are capped at `MAX_BUFFERED_API_BODY = 64 MB`
-  (`SimpleHttpServer.java:151`), with oversized bodies marked `bodyTooLarge`
-  (`:235`) and answered with `413 Payload Too Large` (`:363`).
-- `readExactly` (`:246`) now grows a `ByteArrayOutputStream` as bytes actually
+  (`SimpleHttpServer.java:155`), with oversized bodies marked `bodyTooLarge`
+  (`:239`) and answered with `413 Payload Too Large` (`:367`).
+- `readExactly` (`:250`) now grows a `ByteArrayOutputStream` as bytes actually
   arrive instead of pre-allocating the declared length, so a client that only
   sends headers cannot reserve memory upfront.
 
@@ -58,25 +58,25 @@ Fix:
 
 `readLine` accumulated into an unbounded buffer.
 
-Fix: `MAX_HEADER_LINE = 8192` (`:56`); exceeding it throws
-`IOException("header line too long")` (`:177`).
+Fix: `MAX_HEADER_LINE = 8192` (`:60`); exceeding it throws
+`IOException("header line too long")` (`:181`).
 
 ### F-03 — Unbounded number of headers (High)
 
-Fix: `MAX_HEADERS = 100` (`:58`); exceeding it throws
-`IOException("too many headers")` (`:205`).
+Fix: `MAX_HEADERS = 100` (`:62`); exceeding it throws
+`IOException("too many headers")` (`:209`).
 
 ### F-04 — No socket read timeout (High)
 
-Fix: `CLIENT_TIMEOUT_MS = 15_000` (`:60`), applied with
-`s.setSoTimeout(CLIENT_TIMEOUT_MS)` (`:310`), bounding slowloris connections.
+Fix: `CLIENT_TIMEOUT_MS = 15_000` (`:64`), applied with
+`s.setSoTimeout(CLIENT_TIMEOUT_MS)` (`:314`), bounding slowloris connections.
 
 ### F-05 — Unbounded thread fan-out (High)
 
-Fix: `MAX_CLIENTS = 64` (`:62`) with a `Semaphore clientSlots` (`:66`).
+Fix: `MAX_CLIENTS = 64` (`:66`) with a `Semaphore clientSlots` (`:70`).
 `acceptLoop` sheds load with `503 Service Unavailable` when no permit is
-available (`:116`), releases on failure (`:133`), and `handleClient` releases
-in `finally` (`:325`).
+available (`:120`), releases on failure (`:137`), and `handleClient` releases
+in `finally` (`:329`).
 
 ### F-06 — Stored XSS / HTML injection (Medium)
 
@@ -84,15 +84,15 @@ in `finally` (`:325`).
 attributes. A file named `<img src=x onerror=...>` executed script in the
 browser of anyone viewing the shared-files page.
 
-Fix: added `escapeHtml` (`:685`) and `urlEncodePath` (`:703`); the listing now
-escapes the visible name and URL-encodes the link target (`:672-675`).
+Fix: added `escapeHtml` (`:689`) and `urlEncodePath` (`:707`); the listing now
+escapes the visible name and URL-encodes the link target (`:676-679`).
 
 ### F-07 — JSON injection in upload response (Medium)
 
 The upload handler built the JSON response by string concatenation, so a
 crafted filename could break out of the JSON string.
 
-Fix: the response is built with `JSONObject` (`:650-656`).
+Fix: the response is built with `JSONObject` (`:655-660`).
 
 ### F-08 — Upload filename not validated (Medium)
 
@@ -100,8 +100,8 @@ The browser-supplied filename was used directly. This was mitigated by
 `resolveSafePath`, but a filename such as `../../...` should never reach the
 filesystem layer.
 
-Fix: `PathGuard.sanitizeFileName` (`:640`) plus a containment re-check with
-`PathGuard.isInside` (`:642`); invalid names return `400`.
+Fix: `PathGuard.sanitizeFileName` (`:644`) plus a containment re-check with
+`PathGuard.isInside` (`:646`); invalid names return `400`.
 
 ### F-09 — "Allow remote access" not enforced (Medium)
 
@@ -111,7 +111,7 @@ toggle was off.
 
 Fix: `route` returns `403 Forbidden` for the file API routes (`/api/browse`,
 `/files`, `/api/mkdir`, `/api/delete`, `/api/rename`, `/api/upload`) when the
-setting is disabled (`:394`). `/` and `/status` remain reachable so the server
+setting is disabled (`:398`). `/` and `/status` remain reachable so the server
 can still report its state.
 
 ### F-10 — "Show hidden files" not enforced (Low)
@@ -119,22 +119,22 @@ can still report its state.
 `ContentStore.getShowHiddenFiles` / `isHiddenName` were unused, exposing
 dotfiles in the web UI.
 
-Fix: hidden entries are filtered in `serveBrowse` (`:522`) and
-`serveFileListingHtml` (`:668`).
+Fix: hidden entries are filtered in `serveBrowse` (`:526`) and
+`serveFileListingHtml` (`:672`).
 
 ### F-11 — Timing-unsafe password comparison (Low)
 
 `isAuthorized` used `String.equals` for the password.
 
-Fix: `TokenUtil.constantTimeEquals` for header/query auth (`:335`) and Basic
-auth (`:338`).
+Fix: `TokenUtil.constantTimeEquals` for header/query auth (`:339`) and Basic
+auth (`:342`).
 
 ## Residual risks (not changed)
 
 - **R-01 Plaintext password storage.** `ContentStore` stores the access
-  password in `SharedPreferences` (`ContentStore.java:42,123-124`), and
+  password in `SharedPreferences` (`data/storage/ContentStore.java:38,119-120`), and
   `ServerProfileStore` stores remote passwords in JSON
-  (`ServerProfileStore.java:89`). App-private storage limits exposure, but a
+  (`data/servers/ServerProfileStore.java:88`). App-private storage limits exposure, but a
   rooted device or backup extraction can read them. Recommendation: use
   `EncryptedSharedPreferences` or a Keystore-backed key.
 - **R-02 Backups.** `android:allowBackup="true"` (`AndroidManifest.xml:21`)
@@ -158,7 +158,8 @@ auth (`:338`).
 
 ## Tests
 
-Added under `app/src/test/java/com/yadaventerprise/phoneserver/`:
+Added under `app/src/test/java/com/yadaventerprise/phoneserver/` (HTTP tests in
+`network/http/`, shared helpers in `testing/`):
 
 - `SimpleHttpServerEncodingTest` — pure JVM, runs everywhere:
   HTML escaping and path URL-encoding (guards F-06).
@@ -174,8 +175,10 @@ Verification commands:
 ```sh
 ANDROID_HOME=/tmp/android-sdk sh gradlew compileDebugJavaWithJavac
 ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest
+ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
-Last results on this host (aarch64): compile `BUILD SUCCESSFUL`;
-`SimpleHttpServerEncodingTest` passed; `SimpleHttpServerSecurityTest`
-skipped by design (`tests="2" skipped="2" failures="0"`).
+Last results on this host (aarch64): compile and `assembleDebug`
+`BUILD SUCCESSFUL`; full unit suite `92 tests, 0 failures` (49 Robolectric
+tests skipped by design on this host). `SimpleHttpServerEncodingTest` passed;
+`SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).
