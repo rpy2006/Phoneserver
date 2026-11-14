@@ -3,6 +3,9 @@ package com.yadaventerprise.phoneserver;
 import android.content.Context;
 import android.util.Log;
 
+import com.yadaventerprise.phoneserver.data.PathGuard;
+import com.yadaventerprise.phoneserver.data.TokenUtil;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -15,6 +18,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -22,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 /**
  * A small, dependency-free HTTP server built on plain java.net sockets.
@@ -47,8 +52,18 @@ public class SimpleHttpServer {
 
     private static final String TAG = "SimpleHttpServer";
 
+    /** Longest request/header line accepted; anything larger is treated as a malformed request. */
+    private static final int MAX_HEADER_LINE = 8192;
+    /** Maximum number of request headers accepted. */
+    private static final int MAX_HEADERS = 100;
+    /** How long a client may stay silent before its connection is dropped (slowloris defence). */
+    private static final int CLIENT_TIMEOUT_MS = 15_000;
+    /** Maximum simultaneous client threads, so a connection flood cannot exhaust the device. */
+    private static final int MAX_CLIENTS = 64;
+
     private final int port;
     private final Context appContext;
+    private final Semaphore clientSlots = new Semaphore(MAX_CLIENTS);
     private ServerSocket serverSocket;
     private Thread acceptThread;
     private volatile boolean running = false;
@@ -91,12 +106,36 @@ public class SimpleHttpServer {
 
     private void acceptLoop() {
         while (running) {
+            Socket client;
             try {
-                Socket client = serverSocket.accept();
-                Thread t = new Thread(() -> handleClient(client), "PhoneServer-Client");
-                t.start();
+                client = serverSocket.accept();
             } catch (IOException e) {
                 if (running) Log.e(TAG, "Accept failed", e);
+                continue;
+            }
+            if (!clientSlots.tryAcquire()) {
+                // Too many clients already being served: shed load instead of spawning unbounded threads.
+                try {
+                    client.getOutputStream().write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+                            .getBytes(StandardCharsets.US_ASCII));
+                } catch (IOException ignored) {
+                }
+                try {
+                    client.close();
+                } catch (IOException ignored) {
+                }
+                continue;
+            }
+            try {
+                Thread t = new Thread(() -> handleClient(client), "PhoneServer-Client");
+                t.start();
+            } catch (Throwable t) {
+                clientSlots.release();
+                try {
+                    client.close();
+                } catch (IOException ignored) {
+                }
+                Log.e(TAG, "Could not start client thread", t);
             }
         }
     }
@@ -135,6 +174,7 @@ public class SimpleHttpServer {
                 return new String(bytes, 0, bytes.length - 1, StandardCharsets.ISO_8859_1);
             }
             buf.write(c);
+            if (buf.size() > MAX_HEADER_LINE) throw new IOException("header line too long");
             prev = c;
         }
         if (buf.size() == 0) return null;
@@ -160,7 +200,9 @@ public class SimpleHttpServer {
         }
 
         String line;
+        int headerCount = 0;
         while ((line = readLine(in)) != null && !line.isEmpty()) {
+            if (++headerCount > MAX_HEADERS) throw new IOException("too many headers");
             int colon = line.indexOf(':');
             if (colon > 0) {
                 String key = line.substring(0, colon).trim().toLowerCase(Locale.US);
@@ -187,9 +229,10 @@ public class SimpleHttpServer {
             return req;
         }
 
-        int maxBuffered = req.path != null && req.path.startsWith(DataApi.BASE)
-                ? MAX_BUFFERED_API_BODY : Integer.MAX_VALUE;
-        if (contentLength > maxBuffered) {
+        // Every non-streamed body is bounded, regardless of path. Before this
+        // cap, a request to any non-API path could declare a huge Content-Length
+        // and make the device allocate that much memory before authentication.
+        if (contentLength > MAX_BUFFERED_API_BODY) {
             req.bodyTooLarge = true;
             return req;
         }
@@ -201,19 +244,19 @@ public class SimpleHttpServer {
     }
 
     private byte[] readExactly(InputStream in, int length) throws IOException {
-        byte[] buffer = new byte[length];
-        int read = 0;
-        while (read < length) {
-            int r = in.read(buffer, read, length - read);
+        // Grow with the bytes that actually arrive instead of pre-allocating the
+        // declared Content-Length. A client that only sends a header can no
+        // longer make the device reserve (and possibly exhaust) memory upfront.
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(Math.min(length, 8192));
+        byte[] chunk = new byte[8192];
+        int remaining = length;
+        while (remaining > 0) {
+            int r = in.read(chunk, 0, Math.min(chunk.length, remaining));
             if (r == -1) break;
-            read += r;
+            buffer.write(chunk, 0, r);
+            remaining -= r;
         }
-        if (read < length) {
-            byte[] trimmed = new byte[read];
-            System.arraycopy(buffer, 0, trimmed, 0, read);
-            return trimmed;
-        }
-        return buffer;
+        return buffer.toByteArray();
     }
 
     private void parseQuery(String query, Map<String, String> out) {
@@ -264,6 +307,7 @@ public class SimpleHttpServer {
 
     private void handleClient(Socket socket) {
         try (Socket s = socket) {
+            s.setSoTimeout(CLIENT_TIMEOUT_MS);
             InputStream in = s.getInputStream();
             Request req = readRequest(in);
             if (req == null) return;
@@ -277,6 +321,8 @@ public class SimpleHttpServer {
             ServerStats.get().recordRequest(ip, userAgent, req.path, req.body.length, (int) out.count);
         } catch (IOException e) {
             Log.e(TAG, "Client handling error", e);
+        } finally {
+            clientSlots.release();
         }
     }
 
@@ -286,10 +332,10 @@ public class SimpleHttpServer {
 
         String supplied = req.headers.get("x-auth-password");
         if (supplied == null) supplied = req.query.get("pw");
-        if (stored.equals(supplied)) return true;
+        if (TokenUtil.constantTimeEquals(stored, supplied)) return true;
 
         String basicPassword = extractBasicAuthPassword(req);
-        return stored.equals(basicPassword);
+        return TokenUtil.constantTimeEquals(stored, basicPassword);
     }
 
     /** Pulls the password out of a "Authorization: Basic base64(user:pass)" header, if present. */
@@ -308,8 +354,17 @@ public class SimpleHttpServer {
         }
     }
 
-    private void route(Request req, OutputStream out) throws IOException {
+    void route(Request req, OutputStream out) throws IOException {
         String path = req.path;
+
+        // A buffered body that exceeded the cap is refused for every route, not
+        // just the versioned API, so a large Content-Length can never be used to
+        // make the device allocate unbounded memory before authentication.
+        if (req.bodyTooLarge) {
+            writeResponse(out, 413, "application/json",
+                    "{\"error\":\"request body too large\"}".getBytes(StandardCharsets.UTF_8));
+            return;
+        }
 
         // The versioned data/storage API has its own authentication, rate
         // limiting and CORS handling, so it is routed before anything else.
@@ -330,11 +385,20 @@ public class SimpleHttpServer {
             return;
         }
 
-        // everything below this line requires the access password (if one is set)
-        if (path.equals("/api/browse") || path.startsWith("/files/") || path.equals("/files")
+        boolean fileApi = path.equals("/api/browse") || path.startsWith("/files/") || path.equals("/files")
                 || path.equals("/api/mkdir") || path.equals("/api/delete")
-                || path.equals("/api/rename") || path.equals("/api/upload")
-                || path.equals("/api/stats")) {
+                || path.equals("/api/rename") || path.equals("/api/upload");
+
+        // "Allow remote access" is the documented master switch for the file
+        // management surface. It was previously saved but never checked.
+        if (fileApi && !ContentStore.getAllowRemoteAccess(appContext)) {
+            writeResponse(out, 403, "application/json",
+                    "{\"error\":\"remote file access is disabled on this device\"}".getBytes(StandardCharsets.UTF_8));
+            return;
+        }
+
+        // everything below this line requires the access password (if one is set)
+        if (fileApi || path.equals("/api/stats")) {
             if (!isAuthorized(req)) {
                 writeUnauthorized(out);
                 return;
@@ -455,6 +519,7 @@ public class SimpleHttpServer {
             File[] children = dir.listFiles();
             if (children != null) {
                 for (File f : children) {
+                    if (!ContentStore.getShowHiddenFiles(appContext) && ContentStore.isHiddenName(f.getName())) continue;
                     JSONObject entry = new JSONObject();
                     entry.put("name", f.getName());
                     entry.put("isDir", f.isDirectory());
@@ -570,14 +635,26 @@ public class SimpleHttpServer {
         }
         if (!dir.exists()) dir.mkdirs();
 
-        File destFile = new File(dir, parsed.filename);
+        // Never trust the browser-supplied filename: strip directories and
+        // reserved characters, then re-check containment before writing.
+        String filename = PathGuard.sanitizeFileName(parsed.filename);
+        File destFile = new File(dir, filename);
+        if (!PathGuard.isInside(dir, destFile)) {
+            writeResponse(out, 400, "application/json", "{\"error\":\"invalid file name\"}".getBytes(StandardCharsets.UTF_8));
+            return;
+        }
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
             fos.write(parsed.bytes);
         }
         ContentStore.scanFile(appContext, destFile);
-        ServerStats.get().logUpload(parsed.filename, parsed.bytes.length);
-        String responseJson = "{\"status\":\"ok\",\"name\":\"" + parsed.filename + "\"}";
-        writeResponse(out, 200, "application/json", responseJson.getBytes(StandardCharsets.UTF_8));
+        ServerStats.get().logUpload(filename, parsed.bytes.length);
+        JSONObject response = new JSONObject();
+        try {
+            response.put("status", "ok");
+            response.put("name", filename);
+        } catch (Exception ignored) {
+        }
+        writeResponse(out, 200, "application/json", response.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     private void serveFileListingHtml(OutputStream out) throws IOException {
@@ -588,14 +665,47 @@ public class SimpleHttpServer {
         File[] files = dir.listFiles();
         if (files != null) {
             for (File f : files) {
-                html.append("<li>")
-                        .append(f.isDirectory() ? "[folder] " : "")
-                        .append(f.isDirectory() ? f.getName() : "<a style='color:#2979FF' href='/files/" + f.getName() + "'>" + f.getName() + "</a>")
-                        .append("</li>");
+                if (!ContentStore.getShowHiddenFiles(appContext) && ContentStore.isHiddenName(f.getName())) continue;
+                String name = f.getName();
+                html.append("<li>");
+                if (f.isDirectory()) {
+                    html.append("[folder] ").append(escapeHtml(name));
+                } else {
+                    html.append("<a style='color:#2979FF' href='/files/").append(urlEncodePath(name))
+                            .append("'>").append(escapeHtml(name)).append("</a>");
+                }
+                html.append("</li>");
             }
         }
         html.append("</ul></body></html>");
         writeResponse(out, 200, "text/html; charset=utf-8", html.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Escapes text for HTML so a crafted file name cannot inject markup or script. */
+    static String escapeHtml(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '&': sb.append("&amp;"); break;
+                case '<': sb.append("&lt;"); break;
+                case '>': sb.append("&gt;"); break;
+                case '"': sb.append("&quot;"); break;
+                case '\'': sb.append("&#39;"); break;
+                default: sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Percent-encodes a single path segment for use in a URL (spaces become %20, not +). */
+    static String urlEncodePath(String name) {
+        try {
+            return URLEncoder.encode(name, "UTF-8").replace("+", "%20");
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void serveFile(OutputStream out, String encodedName) throws IOException {
@@ -663,8 +773,10 @@ public class SimpleHttpServer {
     }
 
     private void writeResponse(OutputStream out, int code, String contentType, byte[] body, List<KeyValue> extraHeaders) throws IOException {
-        String status = code == 200 ? "OK" : code == 404 ? "Not Found" : code == 400 ? "Bad Request"
-                : code == 401 ? "Unauthorized" : code == 405 ? "Method Not Allowed" : "Error";
+        String status = code == 200 ? "OK" : code == 403 ? "Forbidden" : code == 404 ? "Not Found"
+                : code == 400 ? "Bad Request" : code == 401 ? "Unauthorized" : code == 405 ? "Method Not Allowed"
+                : code == 413 ? "Payload Too Large" : code == 429 ? "Too Many Requests"
+                : code == 500 ? "Internal Server Error" : "Error";
         StringBuilder headers = new StringBuilder();
         headers.append("HTTP/1.1 ").append(code).append(" ").append(status).append("\r\n");
         headers.append("Content-Type: ").append(contentType).append("\r\n");
