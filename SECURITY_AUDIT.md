@@ -129,6 +129,28 @@ Fix: hidden entries are filtered in `serveBrowse` (`:526`) and
 Fix: `TokenUtil.constantTimeEquals` for header/query auth (`:339`) and Basic
 auth (`:342`).
 
+## Phase 1 security hardening
+
+The Security Center adds defence-in-depth on top of the fixes above. These are
+not new findings; they are controls that make attacks visible and repeatable
+failures self-limiting.
+
+| Control | Implementation |
+|---|---|
+| Request audit | `AccessLogStore` records method, path, real response status, IP, actor/token id, user agent, byte counts and duration in bounded app-private JSONL |
+| Intrusion events | `SecurityEventStore` records auth failures, suspicious paths, rate-limit hits and blocked requests |
+| Suspicious-path rejection | `IntrusionDetector.isSuspiciousPath` rejects traversal, null bytes, `.env`, `.git`, `/etc/passwd`, wp-admin/phpMyAdmin and common probe payloads before routing |
+| Automatic blocking | `IntrusionDetector` counts failures; `IpBlockStore` blocks after the configured threshold (default 5 auth failures in 10 min for 15 min, or 3 suspicious paths) |
+| Manual blocking | Access-log/event screens can permanently block an IP; loopback is always exempt |
+| Token RBAC | `TokenPolicy`/`TokenPolicyStore` add viewer/editor/admin roles, explicit permissions, project scope, expiry and per-token rate limits to the existing hashed bearer tokens |
+| Config scanner | `SecurityScanner` derives findings only from the real configuration and recent events; no invented vulnerabilities or statistics |
+| Scheduled backups | `AlarmManager` + `BackupScheduler` back up every project, rotate per project, reschedule on boot/server start, and support manual runs |
+| Private storage | Logs, settings, blocks, policies, reports and schedule live under app-private `files/security/`; no HTTP route exposes them |
+
+Residual risks R-01–R-06 below still apply. In particular, the legacy
+`isAuthorized` path is open when no password is configured, while `/api/v1`
+continues to require either the password or a token.
+
 ## Residual risks (not changed)
 
 - **R-01 Plaintext password storage.** `ContentStore` stores the access
@@ -169,6 +191,14 @@ Added under `app/src/test/java/com/yadaventerprise/phoneserver/` (HTTP tests in
   `DataTestSupport.assumeRobolectricRuntimeSupported()` so it skips on hosts
   where Robolectric's native runtime is unavailable (e.g. aarch64 Linux) and
   runs on x86_64 CI.
+- `TokenPolicyTest` — pure JVM: role presets, write detection, expiry and
+  invalid-role fallback.
+- `IntrusionDetectorTest` — pure JVM: probe paths, legitimate paths, null
+  bytes and overlong paths.
+- `BackupScheduleTest` — pure JVM: first/next/overdue run calculation and
+  interval clamping.
+- `SecurityScannerTest` — pure JVM: critical missing password, wildcard CORS,
+  disabled rate limit, clean score/grade and finding lookup.
 
 Verification commands:
 
@@ -179,6 +209,6 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `92 tests, 0 failures` (49 Robolectric
+`BUILD SUCCESSFUL`; full unit suite `107 tests, 0 failures` (49 Robolectric
 tests skipped by design on this host). `SimpleHttpServerEncodingTest` passed;
 `SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).

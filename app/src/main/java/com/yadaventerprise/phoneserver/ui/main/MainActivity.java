@@ -16,6 +16,7 @@ import com.yadaventerprise.phoneserver.ui.api.ApiEditorActivity;
 import com.yadaventerprise.phoneserver.ui.files.FilesActivity;
 import com.yadaventerprise.phoneserver.ui.files.WebsiteFilesActivity;
 import com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity;
+import com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity;
 import com.yadaventerprise.phoneserver.ui.servers.ServersListActivity;
 
@@ -194,6 +195,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (drawerNavId == R.id.nav_drawer_account) {
             return new Intent(this, AccountSettingsActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_security) {
+            return new Intent(this, SecurityCenterActivity.class);
         }
         return null;
     }

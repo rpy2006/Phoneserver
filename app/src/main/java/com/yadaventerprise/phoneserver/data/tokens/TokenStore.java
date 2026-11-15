@@ -88,6 +88,17 @@ public final class TokenStore {
         return null;
     }
 
+    public static Records.ApiTokenRecord findById(Context context, String id) {
+        if (id == null) return null;
+        SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT id,name,project_id,can_write,created_at,last_used_at,revoked "
+                        + "FROM api_tokens WHERE id=?", new String[]{id})) {
+            if (c.moveToFirst()) return fromCursor(c);
+        }
+        return null;
+    }
+
     public static List<Records.ApiTokenRecord> list(Context context) {
         List<Records.ApiTokenRecord> result = new ArrayList<>();
         SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();

@@ -2,6 +2,11 @@ package com.yadaventerprise.phoneserver.network.http;
 
 import android.content.Context;
 import android.util.Log;
+import com.yadaventerprise.phoneserver.data.security.AccessLogEntry;
+import com.yadaventerprise.phoneserver.data.security.AccessLogStore;
+import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
+import com.yadaventerprise.phoneserver.data.security.IpBlockStore;
+import com.yadaventerprise.phoneserver.data.security.SecuritySettingsStore;
 import com.yadaventerprise.phoneserver.data.servers.ApiEndpointStore;
 import com.yadaventerprise.phoneserver.data.stats.DeviceStats;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
@@ -166,6 +171,26 @@ public class SimpleHttpServer {
         long contentLength = -1;
         /** Set when a buffered body exceeded {@link #MAX_BUFFERED_API_BODY}. */
         boolean bodyTooLarge = false;
+        long startedAtMillis;
+        int responseStatus;
+        String actor = "anonymous";
+        String tokenId = "";
+        boolean blocked;
+    }
+
+    private static final ThreadLocal<Request> CURRENT_REQUEST = new ThreadLocal<>();
+
+    /** Called by response writers so the access log records the real status code. */
+    static void noteStatus(int code) {
+        Request req = CURRENT_REQUEST.get();
+        if (req != null) req.responseStatus = code;
+    }
+
+    static void noteActor(String actor, String tokenId) {
+        Request req = CURRENT_REQUEST.get();
+        if (req == null) return;
+        req.actor = actor == null ? "anonymous" : actor;
+        req.tokenId = tokenId == null ? "" : tokenId;
     }
 
     private String readLine(InputStream in) throws IOException {
@@ -307,26 +332,69 @@ public class SimpleHttpServer {
         public void flush() throws IOException {
             delegate.flush();
         }
+
+        long count() {
+            return count;
+        }
     }
 
     private void handleClient(Socket socket) {
+        Request req = null;
+        CountingOutputStream out = null;
+        long started = System.currentTimeMillis();
         try (Socket s = socket) {
             s.setSoTimeout(CLIENT_TIMEOUT_MS);
             InputStream in = s.getInputStream();
-            Request req = readRequest(in);
+            req = readRequest(in);
             if (req == null) return;
 
-            CountingOutputStream out = new CountingOutputStream(s.getOutputStream());
+            req.startedAtMillis = started;
+            out = new CountingOutputStream(s.getOutputStream());
             req.remoteIp = s.getInetAddress() != null ? s.getInetAddress().getHostAddress() : "unknown";
+            CURRENT_REQUEST.set(req);
+
+            if (IpBlockStore.get(appContext).isBlocked(req.remoteIp)) {
+                req.blocked = true;
+                IntrusionDetector.recordBlockedRequest(appContext, req.remoteIp, req.method, req.path);
+                writeResponse(out, 403, "application/json",
+                        "{\"error\":\"this IP is blocked\"}".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+
             route(req, out);
 
             String ip = req.remoteIp;
             String userAgent = req.headers.get("user-agent");
-            ServerStats.get().recordRequest(ip, userAgent, req.path, req.body.length, (int) out.count);
+            ServerStats.get().recordRequest(ip, userAgent, req.path, req.body.length, (int) out.count());
         } catch (IOException e) {
             Log.e(TAG, "Client handling error", e);
         } finally {
+            logAccess(req, out, started);
+            CURRENT_REQUEST.remove();
             clientSlots.release();
+        }
+    }
+
+    private void logAccess(Request req, CountingOutputStream out, long started) {
+        if (req == null) return;
+        try {
+            if (!SecuritySettingsStore.get(appContext).get().accessLogEnabled) return;
+            AccessLogEntry entry = new AccessLogEntry();
+            entry.time = started;
+            entry.ip = req.remoteIp == null ? "" : req.remoteIp;
+            entry.method = req.method == null ? "" : req.method;
+            entry.path = req.path == null ? "" : req.path;
+            entry.status = req.responseStatus;
+            entry.actor = req.actor;
+            entry.tokenId = req.tokenId;
+            entry.userAgent = req.headers.get("user-agent");
+            entry.bytesIn = req.contentLength > 0 ? req.contentLength : req.body.length;
+            entry.bytesOut = out == null ? 0 : out.count();
+            entry.durationMs = System.currentTimeMillis() - started;
+            entry.blocked = req.blocked;
+            AccessLogStore.get(appContext).append(entry);
+        } catch (Exception e) {
+            Log.w(TAG, "could not write access log", e);
         }
     }
 
@@ -336,10 +404,19 @@ public class SimpleHttpServer {
 
         String supplied = req.headers.get("x-auth-password");
         if (supplied == null) supplied = req.query.get("pw");
-        if (TokenUtil.constantTimeEquals(stored, supplied)) return true;
+        if (TokenUtil.constantTimeEquals(stored, supplied)) {
+            noteActor("password", "");
+            return true;
+        }
 
         String basicPassword = extractBasicAuthPassword(req);
-        return TokenUtil.constantTimeEquals(stored, basicPassword);
+        if (TokenUtil.constantTimeEquals(stored, basicPassword)) {
+            noteActor("password", "");
+            return true;
+        }
+        IntrusionDetector.recordAuthFailure(appContext, req.remoteIp, req.method, req.path,
+                "wrong access password");
+        return false;
     }
 
     /** Pulls the password out of a "Authorization: Basic base64(user:pass)" header, if present. */
@@ -360,6 +437,14 @@ public class SimpleHttpServer {
 
     void route(Request req, OutputStream out) throws IOException {
         String path = req.path;
+
+        if (IntrusionDetector.isSuspiciousPath(path)) {
+            IntrusionDetector.recordSuspicious(appContext, req.remoteIp, req.method, path,
+                    "suspicious request path");
+            writeResponse(out, 403, "application/json",
+                    "{\"error\":\"request rejected\"}".getBytes(StandardCharsets.UTF_8));
+            return;
+        }
 
         // A buffered body that exceeded the cap is refused for every route, not
         // just the versioned API, so a large Content-Length can never be used to
@@ -747,6 +832,7 @@ public class SimpleHttpServer {
     // ---- response writing ----
 
     private void writeUnauthorized(OutputStream out) throws IOException {
+        noteStatus(401);
         byte[] body = "{\"error\":\"unauthorized\"}".getBytes(StandardCharsets.UTF_8);
         String headers = "HTTP/1.1 401 Unauthorized\r\n"
                 + "Content-Type: application/json\r\n"
@@ -777,6 +863,7 @@ public class SimpleHttpServer {
     }
 
     private void writeResponse(OutputStream out, int code, String contentType, byte[] body, List<KeyValue> extraHeaders) throws IOException {
+        noteStatus(code);
         String status = code == 200 ? "OK" : code == 403 ? "Forbidden" : code == 404 ? "Not Found"
                 : code == 400 ? "Bad Request" : code == 401 ? "Unauthorized" : code == 405 ? "Method Not Allowed"
                 : code == 413 ? "Payload Too Large" : code == 429 ? "Too Many Requests"

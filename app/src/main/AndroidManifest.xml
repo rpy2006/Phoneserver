@@ -75,6 +75,11 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.ProjectFilesActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.projects.ProjectBackupsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiTokensActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.AccessLogActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.SecurityEventsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.BlockedIpsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.BackupScheduleActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ads.AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.RemoteBrowseActivity" android:exported="false" />
@@ -92,6 +97,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name="com.yadaventerprise.phoneserver.service.BackupAlarmReceiver"
+            android:exported="false"
+            android:enabled="true" />
 
         <service
             android:name="com.yadaventerprise.phoneserver.service.ServerService"

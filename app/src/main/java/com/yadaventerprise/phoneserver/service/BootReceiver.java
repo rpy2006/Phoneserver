@@ -12,6 +12,7 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
+        BackupScheduler.scheduleNext(context);
         if (!ContentStore.getStartOnBoot(context)) return;
 
         Intent start = new Intent(context, ServerService.class);

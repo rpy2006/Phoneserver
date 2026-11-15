@@ -10,7 +10,6 @@ import android.os.Looper;
 import android.text.InputType;
 import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
@@ -21,6 +20,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.yadaventerprise.phoneserver.R;
 import com.yadaventerprise.phoneserver.data.database.Records;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
 import com.yadaventerprise.phoneserver.data.storage.ProjectStore;
 import com.yadaventerprise.phoneserver.data.tokens.TokenStore;
 import com.yadaventerprise.phoneserver.network.http.DataException;
@@ -45,7 +46,17 @@ public class ApiTokensActivity extends AppCompatActivity {
         emptyText = findViewById(R.id.empty_text);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        adapter = new ApiTokensAdapter(tokens, this::confirmRevoke);
+        adapter = new ApiTokensAdapter(tokens, new ApiTokensAdapter.Listener() {
+            @Override
+            public void onRevoke(Records.ApiTokenRecord token) {
+                confirmRevoke(token);
+            }
+
+            @Override
+            public void onEdit(Records.ApiTokenRecord token) {
+                editPolicy(token);
+            }
+        });
         recyclerView.setAdapter(adapter);
 
         findViewById(R.id.back_button).setOnClickListener(v -> finish());
@@ -104,11 +115,30 @@ public class ApiTokensActivity extends AppCompatActivity {
         scopeSpinner.setAdapter(scopeAdapter);
         form.addView(scopeSpinner);
 
-        CheckBox canWriteCheck = new CheckBox(this);
-        canWriteCheck.setText("Allow writes (read & write)");
-        canWriteCheck.setChecked(true);
-        canWriteCheck.setPadding(0, dp(10), 0, 0);
-        form.addView(canWriteCheck);
+        TextView roleLabel = new TextView(this);
+        roleLabel.setText("Role");
+        roleLabel.setPadding(0, dp(10), 0, 0);
+        form.addView(roleLabel);
+
+        Spinner roleSpinner = new Spinner(this);
+        ArrayAdapter<String> roleAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Viewer (read only)", "Editor (read & write)", "Admin (full access)"});
+        roleSpinner.setAdapter(roleAdapter);
+        roleSpinner.setSelection(1);
+        form.addView(roleSpinner);
+
+        EditText rateInput = new EditText(this);
+        rateInput.setHint("Rate limit per minute (0 = global)");
+        rateInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        rateInput.setSingleLine(true);
+        form.addView(rateInput);
+
+        EditText expiryInput = new EditText(this);
+        expiryInput.setHint("Expires in days (0 = never)");
+        expiryInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        expiryInput.setSingleLine(true);
+        form.addView(expiryInput);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("New API token")
@@ -127,19 +157,27 @@ public class ApiTokensActivity extends AppCompatActivity {
             if (position > 0 && position - 1 < projects.size()) {
                 projectId = projects.get(position - 1).id;
             }
-            boolean canWrite = canWriteCheck.isChecked();
+            String role = roleForPosition(roleSpinner.getSelectedItemPosition());
+            int rate = parseNonNegative(rateInput);
+            int days = Math.min(parseNonNegative(expiryInput), 36500);
             dialog.dismiss();
-            createToken(name, projectId, canWrite);
+            createToken(name, projectId, role, rate, days);
         }));
         dialog.show();
     }
 
-    private void createToken(String name, String projectId, boolean canWrite) {
+    private void createToken(String name, String projectId, String role, int rate, int days) {
         new Thread(() -> {
             String error = null;
             TokenStore.Created created = null;
             try {
-                created = TokenStore.create(this, name, projectId, canWrite);
+                TokenPolicy policy = TokenPolicy.preset(role);
+                policy.rateLimitPerMinute = Math.max(0, Math.min(6000, rate));
+                policy.expiresAt = days > 0
+                        ? System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L : 0;
+                created = TokenStore.create(this, name, projectId, policy.canWrite());
+                policy.tokenId = created.record.id;
+                TokenPolicyStore.get(this).save(policy);
             } catch (DataException e) {
                 error = e.getMessage();
             }
@@ -154,6 +192,86 @@ public class ApiTokensActivity extends AppCompatActivity {
                 }
             });
         }).start();
+    }
+
+    private void editPolicy(Records.ApiTokenRecord token) {
+        TokenPolicy policy = TokenPolicyStore.get(this).get(token.id, token);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        form.setPadding(pad, pad / 2, pad, 0);
+
+        TextView roleLabel = new TextView(this);
+        roleLabel.setText("Role");
+        form.addView(roleLabel);
+
+        Spinner roleSpinner = new Spinner(this);
+        ArrayAdapter<String> roleAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Viewer (read only)", "Editor (read & write)", "Admin (full access)"});
+        roleSpinner.setAdapter(roleAdapter);
+        roleSpinner.setSelection(positionForRole(policy.role));
+        form.addView(roleSpinner);
+
+        EditText rateInput = new EditText(this);
+        rateInput.setHint("Rate limit per minute (0 = global)");
+        rateInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        rateInput.setSingleLine(true);
+        rateInput.setText(String.valueOf(policy.rateLimitPerMinute));
+        form.addView(rateInput);
+
+        EditText expiryInput = new EditText(this);
+        expiryInput.setHint("Expires in days (0 = never)");
+        expiryInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        expiryInput.setSingleLine(true);
+        long remainingDays = policy.expiresAt <= 0 ? 0
+                : Math.max(0, (policy.expiresAt - System.currentTimeMillis()
+                + 24L * 60L * 60L * 1000L - 1) / (24L * 60L * 60L * 1000L));
+        expiryInput.setText(String.valueOf(remainingDays));
+        form.addView(expiryInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Token policy · " + token.name)
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String role = roleForPosition(roleSpinner.getSelectedItemPosition());
+                    int rate = Math.max(0, Math.min(6000, parseNonNegative(rateInput)));
+                    int days = Math.min(parseNonNegative(expiryInput), 36500);
+                    new Thread(() -> {
+                        TokenPolicy updated = TokenPolicy.preset(role);
+                        updated.tokenId = token.id;
+                        updated.rateLimitPerMinute = rate;
+                        updated.expiresAt = days > 0
+                                ? System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L : 0;
+                        TokenPolicyStore.get(this).save(updated);
+                        handler.post(() -> {
+                            Toast.makeText(this, "Token policy updated", Toast.LENGTH_SHORT).show();
+                            load();
+                        });
+                    }).start();
+                })
+                .show();
+    }
+
+    private static String roleForPosition(int position) {
+        if (position == 2) return TokenPolicy.ROLE_ADMIN;
+        if (position == 0) return TokenPolicy.ROLE_VIEWER;
+        return TokenPolicy.ROLE_EDITOR;
+    }
+
+    private static int positionForRole(String role) {
+        if (TokenPolicy.ROLE_ADMIN.equals(role)) return 2;
+        if (TokenPolicy.ROLE_VIEWER.equals(role)) return 0;
+        return 1;
+    }
+
+    private static int parseNonNegative(EditText input) {
+        try {
+            return Math.max(0, Integer.parseInt(input.getText().toString().trim()));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private void showTokenDialog(String token) {
@@ -207,6 +325,7 @@ public class ApiTokensActivity extends AppCompatActivity {
     private void revokeToken(Records.ApiTokenRecord token) {
         new Thread(() -> {
             TokenStore.revoke(this, token.id);
+            TokenPolicyStore.get(this).delete(token.id);
             handler.post(() -> {
                 Toast.makeText(this, "Token revoked", Toast.LENGTH_SHORT).show();
                 load();

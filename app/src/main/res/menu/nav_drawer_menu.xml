@@ -22,6 +22,10 @@
             android:id="@+id/nav_drawer_settings"
             android:icon="@drawable/ic_settings_gear"
             android:title="Server Settings" />
+        <item
+            android:id="@+id/nav_drawer_security"
+            android:icon="@drawable/ic_shield"
+            android:title="Security Center" />
     </group>
 
     <group android:id="@+id/group_drawer_tools">

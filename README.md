@@ -95,7 +95,7 @@ A local-first storage layer that turns the phone into a small database + object-
 - **Databases** — many SQLite databases per project, created/queried/inspected from the UI or the HTTP API, with a guarded SQL workspace (single statements, parameterised queries, row limits, time budget)
 - **Files** — streamed upload/download (range-capable) with per-file SHA-256 checksums, folders, rename/move, MIME detection, quota and per-file size limits
 - **Backups** — validated zip archives (manifest + databases + stored files + `metadata.json`) that can be downloaded, re-validated and restored, or imported from another device
-- **API tokens** — scoped (per-project and/or read-only) bearer tokens, stored only as SHA-256 hashes
+- **API tokens** — scoped bearer tokens stored only as SHA-256 hashes, with viewer/editor/admin roles, explicit permissions, per-token rate limits and expiry
 - **Storage insights** — real per-project database/file/folder counts, byte sizes, free space and a rolling operation log
 
 Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](architecture.md), [storage.md](storage.md), [security.md](security.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
@@ -111,6 +111,22 @@ An opt-in, self-hosted ad server on a **separate port (`8090`)**, database (`adn
 - Strict CSP dashboard with sites, placements, campaigns, creatives, reports, users, billing and fraud review
 
 See [ad-network.md](ad-network.md) for setup, the embed contract, targeting, fraud rules, retention and the full API.
+
+### 1.9 Security Center, access logs and scheduled backups
+
+The Security Center turns the server's real configuration and request history
+into an actionable dashboard. It does not fabricate findings, traffic or usage
+numbers.
+
+- **Access log** — bounded app-private log of method, path, status, IP, actor/token id, user agent, byte counts and duration; searchable and filterable by status class
+- **Intrusion events** — failed authentication, suspicious paths, rate limits and blocked requests, with the IP and request that triggered them
+- **IP blocking** — automatic blocks after repeated failures (default 5 in 10 minutes for 15 minutes) plus manual permanent blocks; loopback is always exempt
+- **Configuration scan** — real findings for missing/weak passwords, wildcard CORS, disabled rate limits, backup exposure, cleartext HTTP, token scope and recent intrusion events, with severity-weighted score/grade
+- **Scheduled backups** — `AlarmManager`-driven backups for every project, with include-files and per-project retention settings, reboot rescheduling, and manual "run now"
+- **Token policies** — role-based permissions, per-token rate limits and expiry, editable from the token screen
+
+All logs, settings, block lists and reports stay in app-private storage under
+`files/security/`; no HTTP route exposes them.
 
 ---
 
@@ -189,15 +205,17 @@ PhoneServer/
         │   │   ├── projects/    # projects, backups, SQL workspace
         │   │   ├── servers/     # saved servers + connection settings
         │   │   ├── api/         # endpoint editor, docs, tokens
+        │   │   ├── security/    # Security Center, logs, blocks, backups
         │   │   └── qr/          # QR share/scan
         │   ├── network/
         │   │   ├── http/        # SimpleHttpServer, DataApi, MultipartParser
         │   │   └── remote/      # RemoteApiClient
         │   ├── ads/             # self-contained ad-network feature slice
-        │   ├── service/         # ServerService + BootReceiver
+        │   ├── service/         # ServerService, boot/backup receivers, scheduler
         │   ├── data/
         │   │   ├── storage/     # ContentStore, file/project/model stores, backups
         │   │   ├── database/    # SQLite/JSON database layer
+        │   │   ├── security/    # logs, blocks, token policies, scanner/reports
         │   │   ├── servers/     # saved profiles + custom endpoint persistence
         │   │   ├── stats/       # ServerStats + traffic/device snapshots
         │   │   └── tokens/      # hashed API token store
@@ -423,7 +441,9 @@ Handlers additionally apply name-level validation before touching the filesystem
                                              else ─▶ 401 + WWW-Authenticate: Basic
 ```
 
-Three credential channels exist so that (a) browsers get a native Basic-Auth prompt, (b) `curl` can use a header, and (c) the app's own `RemoteApiClient` can use a header while `download()` additionally appends `?pw=` for clients that cannot set headers. Comparison is plaintext `String.equals`.
+Three credential channels exist so that (a) browsers get a native Basic-Auth prompt, (b) `curl` can use a header, and (c) the app's own `RemoteApiClient` can use a header while `download()` additionally appends `?pw=` for clients that cannot set headers. Password comparisons use `TokenUtil.constantTimeEquals`.
+
+The `/api/v1` data API also accepts `Authorization: Bearer <token>`. A token resolves to a role (viewer/editor/admin), a permission set, a project scope, an optional expiry and an optional per-token rate limit. The interactive password and admin tokens act as unscoped administrators. Repeated auth failures, suspicious paths and rate-limit hits feed the intrusion detector and can auto-block the source IP.
 
 ### 4.8 Response framing
 
@@ -823,6 +843,13 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 | Component toggling | `DONT_KILL_APP` on icon swaps so the UI never dies from a cosmetic operation |
 | Server never breaks on cosmetics | `IconSwitcher` and every `SharedPreferences` write are wrapped in catch-alls |
 | Destructive-action confirmation | Delete/clear dialogs in `FilesActivity`, `WebsiteFilesActivity`, `ApiEditorActivity`, `AdvancedSettingsActivity` |
+| Credential comparison | `TokenUtil.constantTimeEquals` for header/query/Basic password checks |
+| API authorization | Bearer token roles, explicit permissions, project scope and expiry enforced in `DataApi` |
+| Token rate limits | Optional per-token limit in addition to the global per-IP limit |
+| Intrusion response | Auto-block after repeated auth failures/suspicious paths; persistent block list checked before routing |
+| Request audit | Bounded access log with status/IP/actor/token/UA/bytes/duration; no HTTP route exposes it |
+| Suspicious paths | Rejects traversal, null bytes, `.env`, `.git`, `/etc/passwd`, wp-admin/phpMyAdmin and common probe payloads before routing |
+| Backup scheduling | `AlarmManager` alarms rescheduled on boot/server start; automatic backups rotate per project |
 
 ### 9.3 Weaknesses
 
@@ -830,7 +857,7 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 |---|---|---|
 | Plaintext credentials at rest | `access_password` and `auth_username` in `server_config`; per-profile `password` in `server_profiles` | SharedPreferences XML is world-readable to root/backup. No `EncryptedSharedPreferences`, no hashing |
 | Password in a URL query | `RemoteApiClient.download()` appends `?pw=` | Leaks into server logs, browser history, proxy logs, and any `Referer` |
-| Plaintext compare | `isAuthorized` uses `String.equals` | No constant-time compare; not a practical concern on a LAN, but noted |
+| ~~Plaintext compare~~ | Fixed: `isAuthorized` and `DataApi` use `TokenUtil.constantTimeEquals` | Kept for historical context |
 | Username never checked | `getUsername()` is stored and displayed but `isAuthorized` only compares passwords | Basic auth accepts any username; a client sending `wronguser:correctpass` succeeds |
 | Custom endpoints bypass the gate | `serveCustomApi` is reached *after* the auth block and is public by design | A user-defined `/api/*` endpoint is world-readable on the LAN. Documented in the class Javadoc, but a foot-gun |
 | Endpoint shadowing | `ApiEndpointEditorActivity` does not validate against built-in paths | A user endpoint at `/api/upload` can never be reached (built-ins are matched first) — confusing, not exploitable |
@@ -1057,7 +1084,7 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Detail |
 |---|---|---|
-| 26 | **No CI.** Unit tests now exist under `app/src/test` (92 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
+| 26 | **No CI.** Unit tests now exist under `app/src/test` (107 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
 | 27 | `minifyEnabled false` in release — the APK ships unshrunk and un-obfuscated | Add keep rules for the JNI bridge before enabling R8 |
 | 28 | 47 MB prebuilt `.so`, arm64-v8a only. No source, no reproducibility, no x86_64 emulator support | Document the provenance of the binary; add the C++ sources or a submodule if this is to be maintained |
 | 29 | The `.so` is **modified but uncommitted** (`git status` shows `M app/src/main/jniLibs/arm64-v8a/libllama_bridge.so`) along with `gradle.properties` | Review and commit deliberately |

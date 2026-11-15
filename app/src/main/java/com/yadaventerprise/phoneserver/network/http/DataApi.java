@@ -5,6 +5,9 @@ import android.util.Base64;
 import android.util.Log;
 import com.yadaventerprise.phoneserver.data.database.DatabaseManager;
 import com.yadaventerprise.phoneserver.data.database.Records;
+import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
 import com.yadaventerprise.phoneserver.data.storage.BackupManager;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
@@ -64,6 +67,18 @@ public final class DataApi {
 
     private static volatile RateLimiter limiter;
     private static volatile int limiterMax;
+    private static final java.util.concurrent.ConcurrentHashMap<String, TokenLimiter> tokenLimiters =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final class TokenLimiter {
+        final int max;
+        final RateLimiter limiter;
+
+        TokenLimiter(int max) {
+            this.max = max;
+            this.limiter = new RateLimiter(max, API_TOKEN_WINDOW_MS);
+        }
+    }
 
     private DataApi() {
     }
@@ -149,6 +164,7 @@ public final class DataApi {
             sendUnauthorized(req, out, context);
             return;
         }
+        if (auth.tokenId != null && !enforceTokenRateLimit(context, req, out, auth)) return;
 
         if (head.isEmpty()) {
             requireMethod(method, "GET");
@@ -179,6 +195,8 @@ public final class DataApi {
         boolean canWrite = true;
         /** null => every project (admin or an unscoped token). */
         String projectId;
+        String tokenId;
+        TokenPolicy policy;
     }
 
     private static Auth authenticate(Context context, SimpleHttpServer.Request req) {
@@ -186,11 +204,24 @@ public final class DataApi {
         String bearer = bearerToken(req);
         if (bearer != null) {
             Records.ApiTokenRecord token = TokenStore.verify(context, bearer);
-            if (token == null) return null;
+            if (token == null) {
+                IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
+                        "invalid API token");
+                return null;
+            }
+            TokenPolicy policy = TokenPolicyStore.get(context).get(token.id, token);
+            if (policy.isExpired()) {
+                IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
+                        "expired API token");
+                return null;
+            }
             Auth auth = new Auth();
-            auth.admin = false;
-            auth.canWrite = token.canWrite;
+            auth.tokenId = token.id;
+            auth.policy = policy;
+            auth.admin = policy.isAdmin();
+            auth.canWrite = policy.canWrite();
             auth.projectId = token.projectId;
+            SimpleHttpServer.noteActor("token", token.id);
             return auth;
         }
 
@@ -198,17 +229,39 @@ public final class DataApi {
         if (stored == null || stored.isEmpty()) {
             // No password configured: refuse anonymous admin access to the data
             // API. A token is required (created from the app UI).
+            IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
+                    "no API credential");
             return null;
         }
         String supplied = req.headers.get("x-auth-password");
         if (supplied == null) supplied = req.query.get("pw");
-        if (stored.equals(supplied) || TokenUtil.constantTimeEquals(stored, supplied) || stored.equals(basicPassword(req))) {
+        if (TokenUtil.constantTimeEquals(stored, supplied)
+                || TokenUtil.constantTimeEquals(stored, basicPassword(req))) {
             Auth auth = new Auth();
             auth.admin = true;
             auth.canWrite = true;
+            SimpleHttpServer.noteActor("password", "");
             return auth;
         }
+        IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
+                "wrong access password");
         return null;
+    }
+
+    private static boolean enforceTokenRateLimit(Context context, SimpleHttpServer.Request req,
+                                                 OutputStream out, Auth auth) throws IOException {
+        if (auth.policy == null || auth.policy.rateLimitPerMinute <= 0) return true;
+        TokenLimiter tokenLimiter = tokenLimiters.get(auth.tokenId);
+        if (tokenLimiter == null || tokenLimiter.max != auth.policy.rateLimitPerMinute) {
+            tokenLimiter = new TokenLimiter(auth.policy.rateLimitPerMinute);
+            tokenLimiters.put(auth.tokenId, tokenLimiter);
+        }
+        if (tokenLimiter.limiter.tryAcquire(auth.tokenId)) return true;
+        IntrusionDetector.recordRateLimit(context, req.remoteIp, req.method, req.path);
+        String body = "{\"error\":\"token rate limit exceeded, slow down\"}";
+        writeRaw(out, 429, "Too Many Requests", "application/json",
+                body.getBytes(StandardCharsets.UTF_8), context, req, "Retry-After: 60");
+        return false;
     }
 
     private static String bearerToken(SimpleHttpServer.Request req) {
@@ -242,6 +295,7 @@ public final class DataApi {
             limiterMax = max;
         }
         if (current.tryAcquire(req.remoteIp)) return true;
+        IntrusionDetector.recordRateLimit(context, req.remoteIp, req.method, req.path);
         String body = "{\"error\":\"rate limit exceeded, slow down\"}";
         writeRaw(out, 429, "Too Many Requests", "application/json", body.getBytes(StandardCharsets.UTF_8),
                 context, req, "Retry-After: 60");
@@ -256,12 +310,20 @@ public final class DataApi {
         }
     }
 
-    private static void requireWrite(Auth auth) throws DataException {
+    private static void requirePermission(Auth auth, String permission) throws DataException {
+        if (auth.admin) return;
+        if (auth.policy == null || !auth.policy.can(permission)) {
+            throw DataException.forbidden("this token lacks the " + permission + " permission");
+        }
+    }
+
+    private static void requireWrite(Auth auth, String permission) throws DataException {
+        requirePermission(auth, permission);
         if (!auth.canWrite) throw DataException.forbidden("this credential is read-only");
     }
 
     private static void requireAdmin(Auth auth) throws DataException {
-        if (!auth.admin) throw DataException.forbidden("administrator (password) access required");
+        if (!auth.admin) throw DataException.forbidden("administrator access required");
     }
 
     // ---- system ----
@@ -342,6 +404,7 @@ public final class DataApi {
         String method = req.method.toUpperCase(Locale.US);
         if (parts.size() == 1) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.PROJECTS_READ);
                 JSONArray arr = new JSONArray();
                 for (Records.ProjectRecord p : ProjectStore.list(context)) {
                     requireProjectAccess(auth, p.id);
@@ -351,7 +414,7 @@ public final class DataApi {
                 return;
             }
             if (method.equals("POST")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.PROJECTS_WRITE);
                 JSONObject body = readJson(req);
                 requireBody(body);
                 if (!auth.admin && auth.projectId != null) {
@@ -372,11 +435,12 @@ public final class DataApi {
 
         if (parts.size() == 2) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.PROJECTS_READ);
                 sendJson(context, req, out, 200, projectJson(context, ProjectStore.require(context, projectId)));
                 return;
             }
             if (method.equals("PATCH") || method.equals("PUT")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.PROJECTS_WRITE);
                 JSONObject body = readJson(req);
                 Records.ProjectRecord updated = ProjectStore.update(context, projectId,
                         body.has("name") ? body.optString("name", null) : null,
@@ -387,7 +451,7 @@ public final class DataApi {
                 return;
             }
             if (method.equals("DELETE")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.PROJECTS_WRITE);
                 ProjectStore.delete(context, projectId, req.query.get("confirm"));
                 sendJson(context, req, out, 200, ok());
                 return;
@@ -397,10 +461,12 @@ public final class DataApi {
 
         String section = parts.get(2);
         if (section.equals("stats") && parts.size() == 3 && method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.PROJECTS_READ);
             sendJson(context, req, out, 200, projectStatsJson(context, projectId));
             return;
         }
         if (section.equals("usage") && parts.size() == 3 && method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.PROJECTS_READ);
             sendJson(context, req, out, 200, usageJson(context, projectId));
             return;
         }
@@ -480,13 +546,14 @@ public final class DataApi {
         String method = req.method.toUpperCase(Locale.US);
         if (parts.size() == 3) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.DATABASES_READ);
                 JSONArray arr = new JSONArray();
                 for (Records.DbRecord db : DatabaseManager.list(context, projectId)) arr.put(dbJson(db));
                 sendJson(context, req, out, 200, wrap("databases", arr));
                 return;
             }
             if (method.equals("POST")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.DATABASES_WRITE);
                 JSONObject body = readJson(req);
                 Records.DbRecord db = DatabaseManager.create(context, projectId, body.optString("name", null));
                 sendJson(context, req, out, 201, dbJson(db));
@@ -498,6 +565,7 @@ public final class DataApi {
         String dbName = decode(parts.get(3));
         if (parts.size() == 4) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.DATABASES_READ);
                 Records.DbRecord db = DatabaseManager.require(context, projectId, dbName);
                 JSONObject json = dbJson(db);
                 JSONArray tables = new JSONArray();
@@ -509,7 +577,7 @@ public final class DataApi {
                 return;
             }
             if (method.equals("DELETE")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.DATABASES_WRITE);
                 DatabaseManager.delete(context, projectId, dbName);
                 sendJson(context, req, out, 200, ok());
                 return;
@@ -520,6 +588,7 @@ public final class DataApi {
         String action = parts.get(4);
         if (action.equals("tables")) {
             if (parts.size() == 5 && method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.DATABASES_READ);
                 JSONArray arr = new JSONArray();
                 for (Records.TableInfo t : DatabaseManager.listTables(context, projectId, dbName)) {
                     arr.put(tableJson(t));
@@ -528,6 +597,7 @@ public final class DataApi {
                 return;
             }
             if (parts.size() == 6 && method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.DATABASES_READ);
                 Records.TableInfo table = DatabaseManager.tableInfo(context, projectId, dbName,
                         decode(parts.get(5)));
                 sendJson(context, req, out, 200, tableJson(table));
@@ -537,6 +607,7 @@ public final class DataApi {
         }
 
         if (action.equals("query") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.DATABASES_READ);
             JSONObject body = readJson(req);
             String sql = body.optString("sql", null);
             List<Object> params = toList(body.optJSONArray("params"));
@@ -552,7 +623,7 @@ public final class DataApi {
         }
 
         if (action.equals("transaction") && method.equals("POST")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.DATABASES_WRITE);
             JSONObject body = readJson(req);
             JSONArray statementsJson = body.optJSONArray("statements");
             if (statementsJson == null || statementsJson.length() == 0) {
@@ -579,6 +650,7 @@ public final class DataApi {
         }
 
         if (action.equals("export") && parts.size() == 5 && method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.DATABASES_READ);
             Records.DbRecord db = DatabaseManager.require(context, projectId, dbName);
             File tmp = ContentStore.getStorageLayout(context).newTempFile("export");
             try {
@@ -593,7 +665,7 @@ public final class DataApi {
         }
 
         if (action.equals("import") && parts.size() == 5 && method.equals("POST")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.DATABASES_WRITE);
             importDatabase(context, req, out, projectId, dbName);
             return;
         }
@@ -689,6 +761,7 @@ public final class DataApi {
         String method = req.method.toUpperCase(Locale.US);
         if (parts.size() == 3) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.FILES_READ);
                 JSONArray arr = new JSONArray();
                 List<Records.FileRecord> files;
                 if (req.query.containsKey("folder")) {
@@ -701,7 +774,7 @@ public final class DataApi {
                 return;
             }
             if (method.equals("POST") || method.equals("PUT")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.FILES_WRITE);
                 uploadFile(context, req, out, projectId);
                 return;
             }
@@ -711,11 +784,12 @@ public final class DataApi {
         String fileId = decode(parts.get(3));
         if (parts.size() == 4) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.FILES_READ);
                 sendJson(context, req, out, 200, fileJson(FileStore.require(context, projectId, fileId)));
                 return;
             }
             if (method.equals("PATCH") || method.equals("PUT")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.FILES_WRITE);
                 JSONObject body = readJson(req);
                 Records.FileRecord current = FileStore.require(context, projectId, fileId);
                 if (body.has("name")) current = FileStore.rename(context, projectId, fileId, body.optString("name"));
@@ -724,7 +798,7 @@ public final class DataApi {
                 return;
             }
             if (method.equals("DELETE")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.FILES_WRITE);
                 FileStore.delete(context, projectId, fileId);
                 sendJson(context, req, out, 200, ok());
                 return;
@@ -734,6 +808,7 @@ public final class DataApi {
 
         String action = parts.get(4);
         if (action.equals("download") && method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.FILES_READ);
             Records.FileRecord record = FileStore.require(context, projectId, fileId);
             File content = FileStore.contentFile(context, record);
             boolean inline = "1".equals(req.query.get("inline")) || "true".equals(req.query.get("inline"));
@@ -749,6 +824,7 @@ public final class DataApi {
         String method = req.method.toUpperCase(Locale.US);
         if (parts.size() != 3) throw DataException.notFound("endpoint");
         if (method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.FILES_READ);
             JSONArray arr = new JSONArray();
             for (Records.FolderRecord f : FileStore.listFolders(context, projectId)) {
                 JSONObject o = new JSONObject();
@@ -761,7 +837,7 @@ public final class DataApi {
             return;
         }
         if (method.equals("POST")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.FILES_WRITE);
             JSONObject body = readJson(req);
             String path = body.optString("path", null);
             FileStore.createFolder(context, projectId, path);
@@ -769,7 +845,7 @@ public final class DataApi {
             return;
         }
         if (method.equals("DELETE")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.FILES_WRITE);
             FileStore.deleteFolder(context, projectId, req.query.get("path"));
             sendJson(context, req, out, 200, ok());
             return;
@@ -832,13 +908,14 @@ public final class DataApi {
         String method = req.method.toUpperCase(Locale.US);
         if (parts.size() == 3) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.BACKUPS_READ);
                 JSONArray arr = new JSONArray();
                 for (Records.BackupRecord b : BackupManager.list(context, projectId)) arr.put(backupJson(b));
                 sendJson(context, req, out, 200, wrap("backups", arr));
                 return;
             }
             if (method.equals("POST")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
                 JSONObject body = readJson(req);
                 boolean includeFiles = !body.has("includeFiles") || body.optBoolean("includeFiles", true);
                 Records.BackupRecord backup = BackupManager.create(context, projectId, includeFiles,
@@ -851,17 +928,18 @@ public final class DataApi {
 
         String backupId = decode(parts.get(3));
         if (backupId.equals("import") && method.equals("POST")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
             importBackup(context, req, out, projectId);
             return;
         }
         if (parts.size() == 4) {
             if (method.equals("GET")) {
+                requirePermission(auth, TokenPolicy.BACKUPS_READ);
                 sendJson(context, req, out, 200, backupJson(BackupManager.require(context, projectId, backupId)));
                 return;
             }
             if (method.equals("DELETE")) {
-                requireWrite(auth);
+                requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
                 BackupManager.delete(context, projectId, backupId);
                 sendJson(context, req, out, 200, ok());
                 return;
@@ -871,13 +949,14 @@ public final class DataApi {
 
         String action = parts.get(4);
         if (action.equals("restore") && method.equals("POST")) {
-            requireWrite(auth);
+            requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
             JSONObject body = readJson(req);
             BackupManager.restore(context, projectId, backupId, body.optBoolean("confirm", false));
             sendJson(context, req, out, 200, ok());
             return;
         }
         if (action.equals("validate") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
             Map<String, String> manifest = BackupManager.validate(context, projectId, backupId);
             JSONObject json = new JSONObject();
             json.put("valid", true);
@@ -886,6 +965,7 @@ public final class DataApi {
             return;
         }
         if (action.equals("download") && method.equals("GET")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
             Records.BackupRecord backup = BackupManager.require(context, projectId, backupId);
             File archive = BackupManager.archiveFile(context, projectId, backupId);
             serveDownload(context, req, out, archive, "application/zip", backup.fileName, true);
@@ -929,19 +1009,12 @@ public final class DataApi {
                                      Auth auth, List<String> parts) throws Exception {
         requireAdmin(auth);
         String method = req.method.toUpperCase(Locale.US);
+        TokenPolicyStore policyStore = TokenPolicyStore.get(context);
         if (parts.size() == 1) {
             if (method.equals("GET")) {
                 JSONArray arr = new JSONArray();
                 for (Records.ApiTokenRecord t : TokenStore.list(context)) {
-                    JSONObject json = new JSONObject();
-                    json.put("id", t.id);
-                    json.put("name", t.name);
-                    json.put("projectId", t.projectId == null ? JSONObject.NULL : t.projectId);
-                    json.put("canWrite", t.canWrite);
-                    json.put("createdAt", t.createdAt);
-                    json.put("lastUsedAt", t.lastUsedAt);
-                    json.put("revoked", t.revoked);
-                    arr.put(json);
+                    arr.put(tokenJson(t, policyStore.get(t.id, t)));
                 }
                 sendJson(context, req, out, 200, wrap("tokens", arr));
                 return;
@@ -950,15 +1023,19 @@ public final class DataApi {
                 JSONObject body = readJson(req);
                 String projectId = body.has("projectId") && !body.isNull("projectId")
                         ? body.optString("projectId") : null;
-                boolean canWrite = !body.has("canWrite") || body.optBoolean("canWrite", true);
+                String role = body.optString("role", "");
+                if (!TokenPolicy.isValidRole(role)) {
+                    boolean canWrite = !body.has("canWrite") || body.optBoolean("canWrite", true);
+                    role = canWrite ? TokenPolicy.ROLE_EDITOR : TokenPolicy.ROLE_VIEWER;
+                }
+                TokenPolicy policy = TokenPolicy.preset(role);
+                applyPolicyBody(policy, body);
+                boolean canWrite = policy.canWrite();
                 TokenStore.Created created = TokenStore.create(context, body.optString("name", null),
                         projectId, canWrite);
-                JSONObject json = new JSONObject();
-                json.put("id", created.record.id);
-                json.put("name", created.record.name);
-                json.put("projectId", created.record.projectId == null ? JSONObject.NULL : created.record.projectId);
-                json.put("canWrite", created.record.canWrite);
-                json.put("createdAt", created.record.createdAt);
+                policy.tokenId = created.record.id;
+                policyStore.save(policy);
+                JSONObject json = tokenJson(created.record, policy);
                 json.put("token", created.token);
                 json.put("warning", "store this token now; it cannot be shown again");
                 sendJson(context, req, out, 201, json);
@@ -969,10 +1046,72 @@ public final class DataApi {
         String id = decode(parts.get(1));
         if (method.equals("DELETE")) {
             TokenStore.revoke(context, id);
+            policyStore.delete(id);
             sendJson(context, req, out, 200, ok());
             return;
         }
+        if (method.equals("PATCH") || method.equals("PUT")) {
+            Records.ApiTokenRecord record = TokenStore.findById(context, id);
+            if (record == null) throw DataException.notFound("token");
+            TokenPolicy policy = policyStore.get(id, record);
+            applyPolicyBody(policy, readJson(req));
+            policyStore.save(policy);
+            sendJson(context, req, out, 200, tokenJson(record, policy));
+            return;
+        }
         throw new DataException("method not allowed", 405);
+    }
+
+    private static JSONObject tokenJson(Records.ApiTokenRecord token, TokenPolicy policy) throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("id", token.id);
+        json.put("name", token.name);
+        json.put("projectId", token.projectId == null ? JSONObject.NULL : token.projectId);
+        json.put("canWrite", policy.canWrite());
+        json.put("role", policy.role);
+        JSONArray permissions = new JSONArray();
+        for (String permission : policy.permissions) permissions.put(permission);
+        json.put("permissions", permissions);
+        json.put("rateLimitPerMinute", policy.rateLimitPerMinute);
+        json.put("expiresAt", policy.expiresAt);
+        json.put("createdAt", token.createdAt);
+        json.put("lastUsedAt", token.lastUsedAt);
+        json.put("revoked", token.revoked);
+        return json;
+    }
+
+    private static void applyPolicyBody(TokenPolicy policy, JSONObject body) throws DataException {
+        if (body.has("role")) {
+            String role = body.optString("role", "");
+            if (!TokenPolicy.isValidRole(role)) throw new DataException("unknown token role", 400);
+            policy.role = role;
+            policy.permissions.clear();
+            policy.permissions.addAll(TokenPolicy.permissionsForRole(role));
+        }
+        if (body.has("permissions")) {
+            JSONArray array = body.optJSONArray("permissions");
+            if (array == null) throw new DataException("'permissions' must be an array", 400);
+            policy.permissions.clear();
+            for (int i = 0; i < array.length(); i++) {
+                String permission = array.optString(i, "");
+                if (!TokenPolicy.allPermissions().contains(permission)) {
+                    throw new DataException("unknown permission: " + permission, 400);
+                }
+                policy.permissions.add(permission);
+            }
+        }
+        if (body.has("rateLimitPerMinute")) {
+            int limit = body.optInt("rateLimitPerMinute", 0);
+            if (limit < 0 || limit > 6000) {
+                throw new DataException("rateLimitPerMinute must be between 0 and 6000", 400);
+            }
+            policy.rateLimitPerMinute = limit;
+        }
+        if (body.has("expiresAt")) {
+            long expiresAt = body.optLong("expiresAt", 0);
+            if (expiresAt < 0) throw new DataException("expiresAt must be positive or 0", 400);
+            policy.expiresAt = expiresAt;
+        }
     }
 
     // ---- helpers: request parsing ----
@@ -1163,6 +1302,7 @@ public final class DataApi {
     private static void writeRaw(OutputStream out, int code, String status, String contentType, byte[] body,
                                  Context context, SimpleHttpServer.Request req, String extraHeaders)
             throws IOException {
+        SimpleHttpServer.noteStatus(code);
         StringBuilder headers = new StringBuilder();
         headers.append("HTTP/1.1 ").append(code).append(' ').append(status).append("\r\n");
         headers.append("Content-Type: ").append(contentType).append("\r\n");
@@ -1207,6 +1347,7 @@ public final class DataApi {
                 end = length - 1;
             }
             if (start > end || start >= length) {
+                SimpleHttpServer.noteStatus(416);
                 String headers = "HTTP/1.1 416 Range Not Satisfiable\r\n"
                         + "Content-Range: bytes */" + length + "\r\n"
                         + "Content-Length: 0\r\nConnection: close\r\n\r\n";
@@ -1218,6 +1359,7 @@ public final class DataApi {
             code = 206;
         }
         long contentLength = end - start + 1;
+        SimpleHttpServer.noteStatus(code);
 
         StringBuilder headers = new StringBuilder();
         headers.append("HTTP/1.1 ").append(code).append(' ').append(code == 206 ? "Partial Content" : "OK").append("\r\n");

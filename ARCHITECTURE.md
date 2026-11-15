@@ -42,18 +42,18 @@ PhoneServer/
         │   ├── jniLibs/arm64-v8a/libllama_bridge.so
         │   ├── assets/adnet/    # dashboard.html/css/js + public sdk.js
         │   ├── java/com/yadaventerprise/phoneserver/
-        │   │   ├── ui/          # presentation
+        │   │   ├── ui/          # presentation (incl. ui.security)
         │   │   ├── network/     # HTTP + remote client
         │   │   ├── ads/         # self-contained ad feature
-        │   │   ├── service/     # Android lifecycle
-        │   │   ├── data/        # persistence
-        │   │   ├── security/    # guards
+        │   │   ├── service/     # Android lifecycle + backup alarms
+        │   │   ├── data/        # persistence (incl. data.security)
+        │   │   ├── security/    # path/SQL/rate/token guards
         │   │   ├── model/       # shared DTOs
         │   │   ├── util/        # helpers
         │   │   └── ai/          # local LLM bridge
         │   └── res/             # Android resources (fixed by the platform)
         └── test/java/com/yadaventerprise/phoneserver/
-            ├── data/            # storage/database/token tests
+            ├── data/            # storage, database, token, policy, backup tests
             ├── network/http/    # HTTP security tests
             ├── security/        # guard/limiter tests
             ├── util/            # MIME tests
@@ -72,13 +72,14 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `ui.*` | Activities, Fragments, RecyclerView adapters and custom views. Renders state and calls into lower layers. | `MainActivity`, `DashboardFragment`, `FilesActivity` |
 | `network.http` | Socket HTTP server, request parsing, multipart uploads and the `/api/v1` facade. | `SimpleHttpServer`, `DataApi`, `MultipartParser` |
 | `network.remote` | Client for talking to another PhoneServer instance. | `RemoteApiClient` |
-| `service` | Foreground service and boot receiver that own the server lifecycle. | `ServerService`, `BootReceiver` |
+| `service` | Foreground service, boot receiver and `AlarmManager` backup scheduling. | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver` |
 | `ads` | Vertical feature slice for the optional ad network (HTTP, delivery, fraud, reports, DB, screen). | `AdHttpServer`, `AdDelivery`, `AdNetworkActivity` |
 | `data.storage` | Storage layout, shared preferences-backed settings, file/project/model stores, backups. | `ContentStore`, `ProjectStore`, `BackupManager` |
 | `data.database` | SQLite/JSON database access, schema helpers, cursors and records. | `DatabaseManager`, `SystemDatabase`, `Records` |
 | `data.servers` | Persistence for saved remote-server profiles and custom endpoints. | `ServerProfileStore`, `ApiEndpointStore` |
 | `data.stats` | Traffic and device statistics collection and snapshots. | `ServerStats`, `DeviceStats` |
 | `data.tokens` | Hashed API token persistence. | `TokenStore` |
+| `data.security` | Access/event logs, IP blocks, intrusion settings, token policies, security scanner/reports. | `AccessLogStore`, `IpBlockStore`, `TokenPolicyStore`, `SecurityScanner` |
 | `security` | Path containment, SQL safety, rate limiting and constant-time comparison. | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` | Plain data objects shared across layers. | `ServerProfile`, `KeyValue`, `RemoteEntry` |
 | `util` | Small cross-cutting helpers. | `ByteUtils`, `MimeTypes`, `TimeFormat`, `NetworkUtils` |
@@ -94,16 +95,18 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `ui.projects` (6) | `ProjectsActivity`, `ProjectsAdapter`, `ProjectDetailActivity`, `ProjectBackupsActivity`, `ProjectBackupsAdapter`, `SqlWorkspaceActivity` |
 | `ui.servers` (6) | `ServersListActivity`, `ServersAdapter`, `AddServerActivity`, `ServerSettingsActivity`, `AccountSettingsActivity`, `AdvancedSettingsActivity` |
 | `ui.api` (6) | `ApiEditorActivity`, `ApiEndpointEditorActivity`, `ApiDocsActivity`, `ApiTokensActivity`, `ApiAdapter`, `ApiTokensAdapter` |
+| `ui.security` (9) | `SecurityCenterActivity`, `AccessLogActivity`, `SecurityEventsActivity`, `BlockedIpsActivity`, `BackupScheduleActivity`, `AccessLogAdapter`, `SecurityEventAdapter`, `BlockedIpAdapter`, `SecurityFindingAdapter` |
 | `ui.qr` (2) | `QrCodeActivity`, `QrFragment` |
 | `network.http` (4) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser` |
 | `network.remote` (1) | `RemoteApiClient` |
-| `service` (2) | `ServerService`, `BootReceiver` |
+| `service` (4) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver` |
 | `ads` (11) | `AdApi`, `AdDb`, `AdDelivery`, `AdFraud`, `AdHttp`, `AdHttpServer`, `AdNetworkActivity`, `AdNetworkManager`, `AdRateLimiter`, `AdReports`, `AdSecurity` |
-| `data.storage` (8) | `ContentStore`, `ContentStoreBridge`, `StorageLayout`, `FileStore`, `ProjectStore`, `ModelStore`, `BackupManager`, `BackupArchive` |
+| `data.storage` (10) | `ContentStore`, `ContentStoreBridge`, `StorageLayout`, `FileStore`, `ProjectStore`, `ModelStore`, `BackupManager`, `BackupArchive`, `BackupSchedule`, `BackupScheduleStore` |
 | `data.database` (7) | `DatabaseManager`, `SystemDatabase`, `SystemStore`, `JsonCursor`, `JsonMetaStore`, `JsonStorage`, `Records` |
 | `data.servers` (2) | `ServerProfileStore`, `ApiEndpointStore` |
 | `data.stats` (3) | `ServerStats`, `StatsSnapshot`, `DeviceStats` |
 | `data.tokens` (1) | `TokenStore` |
+| `data.security` (16) | `SecurityPaths`, `AccessLogEntry`, `AccessLogStore`, `SecurityEvent`, `SecurityEventStore`, `SecuritySettings`, `SecuritySettingsStore`, `IpBlockStore`, `IntrusionDetector`, `TokenPolicy`, `TokenPolicyStore`, `SecurityConfig`, `SecurityFinding`, `SecurityReport`, `SecurityScanner`, `SecurityReportStore` |
 | `security` (4) | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` (4) | `ApiEndpointConfig`, `KeyValue`, `RemoteEntry`, `ServerProfile` |
 | `util` (6) | `ByteUtils`, `FileTypeUtils`, `IconSwitcher`, `MimeTypes`, `NetworkUtils`, `TimeFormat` |
@@ -134,6 +137,10 @@ Rules:
    because several classes share package-private members.
 6. Android framework imports (`android.*`, `androidx.*`) are allowed in any
    layer, but only `ui` and `service` should need UI framework classes.
+7. `data.security.SecurityConfig` reads `ServerService.isServerRunning()` so
+   the scanner reports the real server state. That one service import is the
+   documented exception to rule 3; it is read-only and does not start the
+   service.
 
 These rules are enforced by review, not by the compiler, because the project is
 a single Gradle module.
@@ -148,11 +155,19 @@ ServerService (foreground service)
         │  owns
         ▼
 SimpleHttpServer (network.http)
+        │  IP block check ──► IpBlockStore
+        │  suspicious-path check ──► IntrusionDetector
         │  routes /api/v1 ──► DataApi ──► data.storage / data.database
+        │       ├─ global + per-token rate limits
+        │       ├─ password (admin) or bearer token (role/permissions/expiry)
+        │       └─ project scope + permission checks
         │  routes /api/*   ──► custom endpoints (data.servers)
         │  routes files    ──► data.storage.ContentStore
         ▼
 security guards (PathGuard, RateLimiter, TokenUtil)
+        │
+        ├── access log / security events (data.security)
+        └── auto-block after repeated failures (IpBlockStore)
         │
         ▼
 Android storage / SQLite
@@ -181,13 +196,47 @@ Configuration stays out of Java code:
 | User settings (password, toggles, data root) | `ContentStore` SharedPreferences |
 | Saved server profiles | `ServerProfileStore` SharedPreferences |
 | Custom endpoints | `ApiEndpointStore` SharedPreferences |
-| API tokens | `TokenStore` (SHA-256 hashes only) |
+| API tokens | `TokenStore` (SHA-256 hashes only) + `data.security.TokenPolicyStore` (encrypted JSON sidecar) |
+| Security settings / block list / logs / reports | app-private `files/security/*` via `SecurityPaths`; logs are plain JSONL, settings/policies/reports are encrypted JSON |
+| Backup schedule | app-private encrypted JSON via `BackupScheduleStore` |
 | Ad network data | `adnet.db` + app-private files |
 | Debug signing key | `app/debug.keystore` (debug-only, standard public password) |
 
 No secrets are committed to Java source. See `SECURITY_AUDIT.md` for the
 residual risks (plaintext access password in app-private preferences,
 `allowBackup`, cleartext HTTP, FileProvider root).
+
+## 6a. Security Center and scheduled backups
+
+The Security Center is a read-only view over real persisted state, plus a
+scanner that derives findings from the current configuration. It never invents
+traffic, vulnerabilities or usage numbers.
+
+- **Access log** (`AccessLogStore`) — bounded JSONL, one rotated file, records
+  method, path, status, IP, actor/token id, user agent, byte counts and
+  duration. Response writers call `SimpleHttpServer.noteStatus()` so the log
+  records the actual status, including errors written directly by `DataApi`.
+- **Security events** (`SecurityEventStore`) — bounded JSONL for auth failures,
+  suspicious paths, rate limits and blocked requests.
+- **IP blocks** (`IpBlockStore`) — persisted allow/block decisions with optional
+  expiry. Loopback is always exempt. The HTTP server checks it before routing.
+- **Intrusion detection** (`IntrusionDetector`) — in-memory failure counters;
+  persisted events/blocks survive process restarts. Thresholds and duration
+  live in `SecuritySettings`.
+- **Token policies** (`TokenPolicy`, `TokenPolicyStore`) — viewer/editor/admin
+  roles, explicit permissions, per-token rate limit and expiry. The SQLite
+  `TokenStore` still owns the token hash; the policy sidecar is keyed by token
+  id. Admin tokens and the interactive password bypass project scoping.
+- **Scanner** (`SecurityScanner`) — checks real password/CORS/rate/backup/token/
+  event state and returns concrete findings with severity weights.
+- **Scheduled backups** (`BackupScheduler`) — `AlarmManager` schedules the next
+  run from the persisted `BackupSchedule`; `BackupAlarmReceiver` runs the pass
+  with `goAsync()`, backs up every project, then rotates old automatic backups.
+  The server service and boot receiver reschedule after start/reboot.
+
+The scanner's `SecurityConfig` is the only place that reads across storage,
+tokens, security stores and the running-service flag; it does not mutate
+anything.
 
 ## 7. Old-to-new package map
 
@@ -241,10 +290,10 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest
 ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
-Last verification after the reorganisation:
+Last verification after the security phase:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 92 tests, 0 failures.
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 107 tests, 0 failures.
   49 Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
 - `assembleDebug` — see the build log; the APK packages the manifest,

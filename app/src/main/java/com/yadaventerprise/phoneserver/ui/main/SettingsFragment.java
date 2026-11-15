@@ -22,6 +22,7 @@ import com.yadaventerprise.phoneserver.R;
 import com.yadaventerprise.phoneserver.ads.AdNetworkActivity;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.service.ServerService;
+import com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AdvancedSettingsActivity;
 
@@ -107,6 +108,9 @@ public class SettingsFragment extends Fragment {
                 Toast.makeText(getContext(),
                         "PhoneServer doesn't use Device Admin - there's nothing to enable here",
                         Toast.LENGTH_LONG).show());
+
+        view.findViewById(R.id.row_security_center).setOnClickListener(v ->
+                startActivity(new Intent(getContext(), SecurityCenterActivity.class)));
 
         view.findViewById(R.id.row_advanced_settings).setOnClickListener(v ->
                 startActivity(new Intent(getContext(), AdvancedSettingsActivity.class)));

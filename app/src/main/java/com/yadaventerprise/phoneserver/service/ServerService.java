@@ -64,6 +64,7 @@ public class ServerService extends Service {
         }
         // Ad Network Manager: opt-in, own port and database; does nothing unless enabled in its settings screen.
         AdNetworkManager.startIfEnabled(this);
+        BackupScheduler.scheduleNext(this);
     }
 
     private void stopServer() {
