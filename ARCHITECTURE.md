@@ -42,7 +42,7 @@ PhoneServer/
         │   ├── jniLibs/arm64-v8a/libllama_bridge.so
         │   ├── assets/adnet/    # dashboard.html/css/js + public sdk.js
         │   ├── java/com/yadaventerprise/phoneserver/
-        │   │   ├── ui/          # presentation (incl. ui.security)
+        │   │   ├── ui/          # presentation (incl. ui.security/ui.sharing)
         │   │   ├── network/     # HTTP, TLS, pairing, WebDAV + remote client
         │   │   ├── ads/         # self-contained ad feature
         │   │   ├── service/     # lifecycle, watchdog, backup/task alarms
@@ -82,6 +82,7 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.stats` | Traffic and device statistics collection and snapshots. | `ServerStats`, `DeviceStats` |
 | `data.tokens` | Hashed API token persistence. | `TokenStore` |
 | `data.security` | Access/event logs, IP blocks, intrusion settings, token policies, security scanner/reports. | `AccessLogStore`, `IpBlockStore`, `TokenPolicyStore`, `SecurityScanner` |
+| `data.sharing` | Share-link models/stores, token/password hashing, in-memory unlock sessions, URL construction and bounded access log. | `ShareStore`, `SharePassword`, `ShareToken`, `ShareSessionStore`, `ShareUrlBuilder` |
 | `data.webhooks` | Webhook configs, signed delivery, retries and bounded delivery history. | `WebhookStore`, `WebhookDispatcher`, `WebhookHistoryStore` |
 | `data.tasks` | Repeating task model/store and backup/webhook execution. | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
 | `security` | Path containment, SQL safety, rate limiting and constant-time comparison. | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
@@ -101,7 +102,8 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `ui.api` (6) | `ApiEditorActivity`, `ApiEndpointEditorActivity`, `ApiDocsActivity`, `ApiTokensActivity`, `ApiAdapter`, `ApiTokensAdapter` |
 | `ui.security` (15) | `SecurityCenterActivity`, `AccessLogActivity`, `SecurityEventsActivity`, `BlockedIpsActivity`, `BackupScheduleActivity`, `HttpsSetupActivity`, `WebDavActivity`, `WebhookActivity`, `WebhookEditActivity`, `TasksActivity`, `TaskEditActivity`, `AccessLogAdapter`, `SecurityEventAdapter`, `BlockedIpAdapter`, `SecurityFindingAdapter` |
 | `ui.qr` (2) | `QrCodeActivity`, `QrFragment` |
-| `network.http` (6) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser`, `PairingApi`, `WebDavHandler` |
+| `ui.sharing` (7) | `SharingOverviewActivity`, `ShareListActivity`, `ShareEditActivity`, `SharePathPickerActivity`, `ShareQrActivity`, `ShareAccessHistoryActivity`, `SharingSettingsActivity` |
+| `network.http` (7) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser`, `PairingApi`, `WebDavHandler`, `ShareHandler` |
 | `network.tls` (8) | `HttpsConfig`, `HttpsConfigStore`, `NetworkPaths`, `TlsCertificateFactory`, `TlsCertificateStore`, `TlsClient`, `TlsContextFactory`, `TlsIdentity` |
 | `network.pairing` (3) | `PairingCode`, `PairingPayload`, `PairingStore` |
 | `network.remote` (1) | `RemoteApiClient` |
@@ -113,6 +115,7 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.stats` (3) | `ServerStats`, `StatsSnapshot`, `DeviceStats` |
 | `data.tokens` (1) | `TokenStore` |
 | `data.security` (16) | `SecurityPaths`, `AccessLogEntry`, `AccessLogStore`, `SecurityEvent`, `SecurityEventStore`, `SecuritySettings`, `SecuritySettingsStore`, `IpBlockStore`, `IntrusionDetector`, `TokenPolicy`, `TokenPolicyStore`, `SecurityConfig`, `SecurityFinding`, `SecurityReport`, `SecurityScanner`, `SecurityReportStore` |
+| `data.sharing` (11) | `ShareAccessEvent`, `ShareAccessLogStore`, `ShareLink`, `SharePassword`, `SharePaths`, `ShareSessionStore`, `ShareSettings`, `ShareSettingsStore`, `ShareStore`, `ShareToken`, `ShareUrlBuilder` |
 | `data.webhooks` (5) | `WebhookConfig`, `WebhookDispatcher`, `WebhookHistoryEntry`, `WebhookHistoryStore`, `WebhookStore` |
 | `data.tasks` (3) | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
 | `security` (4) | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
@@ -166,6 +169,7 @@ SimpleHttpServer (network.http, optional SSLServerSocket)
         │  IP block check ──► IpBlockStore
         │  suspicious-path check ──► IntrusionDetector
         │  routes /api/pair ──► PairingApi ──► PairingStore + TokenStore
+        │  routes /s/*    ──► ShareHandler ──► data.sharing + ContentStore public root
         │  routes /dav/*   ──► WebDavHandler ──► data.storage.ContentStore
         │  routes /api/v1 ──► DataApi ──► data.storage / data.database
         │       ├─ global + per-token rate limits
@@ -213,6 +217,8 @@ Configuration stays out of Java code:
 | HTTPS config / TLS identity | app-private encrypted JSON under `files/network/` |
 | Webhooks / delivery history | app-private encrypted JSON under `files/webhooks/` |
 | Scheduled tasks | app-private encrypted JSON under `files/tasks/` |
+| Share links/settings | app-private encrypted JSON under `files/shares/`; access log is bounded plain JSONL |
+| Share unlock sessions | in-memory only (`ShareSessionStore`); never persisted |
 | Ad network data | `adnet.db` + app-private files |
 | Debug signing key | `app/debug.keystore` (debug-only, standard public password) |
 
@@ -309,7 +315,7 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 Last verification after the security phase:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 107 tests, 0 failures.
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 127 tests, 0 failures, 49 skipped.
   49 Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
 - `assembleDebug` — see the build log; the APK packages the manifest,

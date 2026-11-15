@@ -180,6 +180,36 @@ continues to require either the password or a token.
   certificate SAN and HTTPS settings, but clients need the LAN IP or a DNS
   record they control.
 
+## Phase 3 sharing hardening
+
+| Control | Implementation |
+|---|---|
+| Unpredictable link secrets | `ShareToken` generates `pss_` + 256 bits of randomness; `ShareStore` persists only the SHA-256 hash |
+| Password storage | `SharePassword` uses PBKDF2-HMAC-SHA256, 120,000 iterations and a 16-byte random salt, with PBKDF2-HMAC-SHA1 fallback for imported/legacy hashes; verification is constant-time |
+| No secret disclosure | Raw tokens are returned only from create/rotate; the UI warns that they cannot be recovered; URLs are not stored or logged |
+| Server-side authorization | Every share request re-checks revocation, expiry, permission, password session and remaining downloads |
+| Download limits | `ShareStore.consumeDownload` atomically increments and persists the counter under the store lock before streaming |
+| Password sessions | `ShareSessionStore` keeps random 32-byte session ids in memory only; cookie is `HttpOnly`, `SameSite=Lax`, 30-minute TTL, `Secure` on HTTPS; sessions are revoked on rotation, password change, revoke and delete |
+| Brute-force limits | 240 share requests/min/IP and 20 password attempts/min/IP+link; password failures are audited |
+| Path containment | Share roots are non-empty relative paths under the public files directory, canonicalised with `PathGuard`; hidden segments and escaped symlinks are rejected |
+| Response hardening | `Cache-Control: no-store`, restrictive CSP, `nosniff`, `Referrer-Policy: no-referrer`; HTML/SVG are never inline-previewed |
+| Transport honesty | HTTP share pages and the app display an explicit “not encrypted” warning; served pages no longer claim “secure” when TLS is off |
+| Bounded audit | `ShareAccessLogStore` rotates at 2 MB and records link id/name, event, status, IP, relative path and user-agent only; never tokens or passwords |
+
+### Phase 3 residual risks
+
+- **R-11 Share links can still use plain HTTP.** Enabling HTTPS changes new links
+  to `https://`, but existing HTTP links remain unencrypted and the HTTP server
+  stays open. The app and served pages warn explicitly. Recommendation: share
+  only over HTTPS outside a trusted LAN and block port `8080` at the firewall.
+- **R-12 Inline previews are still retrievable.** A view-only share prevents the
+  browser's Download action and does not consume the download counter, but any
+  inline-previewable bytes can be saved by the client. Do not share confidential
+  media with untrusted recipients.
+- **R-13 Share audit data is sensitive.** The access log records client IP,
+  requested paths and user-agent strings in app-private storage. It is not
+  encrypted and is included in app backups. Recommendation: keep
+  `allowBackup="false"` for production or exclude `files/shares/`.
 ## Residual risks (not changed)
 
 - **R-01 Plaintext password storage.** `ContentStore` stores the access
@@ -232,6 +262,9 @@ Added under `app/src/test/java/com/yadaventerprise/phoneserver/` (HTTP tests in
   disabled rate limit, clean score/grade and finding lookup.
 - `TlsCertificateFactoryTest` — pure JVM: certificate generation, SAN/subject,
   fingerprint formatting and self-signature verification.
+- `ShareTokenTest`, `SharePasswordTest`, `ShareLinkTest`, `ShareStoreTest`,
+  `ShareAccessLogStoreTest` — token shape/hashing, PBKDF2 verification,
+  expiry/limit state, store lifecycle, session invalidation and access-log filtering (14 tests).
 - `WebhookConfigTest`, `ScheduledTaskTest` — JSON round-trip and event/interval
   validation.
 - `WebhookDispatcherTest` — Robolectric: signed JSON delivery to a loopback
@@ -246,6 +279,6 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `113 tests, 0 failures` (49 Robolectric
-tests skipped by design on this host). `SimpleHttpServerEncodingTest` passed;
+`BUILD SUCCESSFUL`; full unit suite `127 tests, 0 failures` (49 Robolectric
+tests skipped by design on this host; 78 passed, including all 14 sharing tests). `SimpleHttpServerEncodingTest` passed;
 `SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).

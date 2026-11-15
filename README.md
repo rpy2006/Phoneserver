@@ -138,6 +138,18 @@ All logs, settings, block lists and reports stay in app-private storage under
 - **Scheduled tasks** — repeating project backups or webhook deliveries driven by `AlarmManager`, rescheduled after boot/server start, with run-now and last-result status.
 - **Recovery watchdog** — a five-minute alarm restarts the foreground service only when the user intended it to be running.
 
+### 1.11 Expiring, revocable share links
+
+A dedicated **File Sharing** section creates browser links for individual files or whole folders without exposing the normal file API.
+
+- **Unpredictable links** — `pss_` + 64 random hex characters; only a SHA-256 hash is stored, so the URL is shown once and can be rotated.
+- **Access control** — optional salted PBKDF2 password (SHA-256 with SHA-1 fallback), view-only or view-and-download permission, expiry, and a maximum download count.
+- **Folder sharing** — browse shared subfolders in a clean HTML page, preview safe file types inline, and download individual files.
+- **Management** — active/expired/revoked lists, rename, edit, rotate secret, revoke/restore, delete, QR code, and copy/share actions.
+- **Audit trail** — bounded access log for visits, previews, downloads, password unlocks, management actions and denied attempts; no passwords or link secrets are recorded.
+- **Transport honesty** — HTTPS links are used when HTTPS is enabled; HTTP links display an explicit “not encrypted” warning in the app and on the served page, without a false “secure” label.
+- **Abuse limits** — 240 share requests/min/IP and 20 password attempts/min/IP+link; password unlock sessions are in-memory, HTTP-only cookies with a 30-minute lifetime.
+
 ---
 
 ## 2. Tech Stack & Requirements
@@ -216,9 +228,10 @@ PhoneServer/
         │   │   ├── servers/     # saved servers + connection settings
         │   │   ├── api/         # endpoint editor, docs, tokens
         │   │   ├── security/    # Security Center, logs, blocks, backups
+        │   │   ├── sharing/     # share overview, editor, picker, QR, history
         │   │   └── qr/          # QR share/scan
         │   ├── network/
-        │   │   ├── http/        # SimpleHttpServer, DataApi, MultipartParser
+        │   │   ├── http/        # SimpleHttpServer, DataApi, ShareHandler
         │   │   └── remote/      # RemoteApiClient
         │   ├── ads/             # self-contained ad-network feature slice
         │   ├── service/         # ServerService, boot/backup receivers, scheduler
@@ -226,6 +239,7 @@ PhoneServer/
         │   │   ├── storage/     # ContentStore, file/project/model stores, backups
         │   │   ├── database/    # SQLite/JSON database layer
         │   │   ├── security/    # logs, blocks, token policies, scanner/reports
+        │   │   ├── sharing/     # share links, passwords, sessions, URL builder
         │   │   ├── servers/     # saved profiles + custom endpoint persistence
         │   │   ├── stats/       # ServerStats + traffic/device snapshots
         │   │   └── tokens/      # hashed API token store
@@ -416,6 +430,8 @@ new Thread(() -> { /* blocking work */ handler.post(() -> { /* touch views */ })
 | Ad-network database | — (always private) | `databases/adnet.db` (plus `-wal`/`-shm`) |
 | Ad creative images | — (always private) | `filesDir/adnet/creatives/<24-hex>.<ext>` |
 | Ad-network prefs | — (always private) | `SharedPreferences` file `adnet_prefs` |
+| Share links / settings | — (always private) | `filesDir/shares/links.json`, `settings.json` (encrypted JSON) |
+| Share access log | — (always private) | `filesDir/shares/access-log.jsonl` (plain JSONL, 2 MB rotation) |
 
 ### 4.6 Path-traversal defence
 
@@ -666,7 +682,22 @@ WebDAV does not implement locking (`LOCK`/`UNLOCK`) or property updates (`PROPPA
 
 Codes are single-use, hashed at rest, limited to eight attempts, expire after ten minutes, and the endpoint is rate-limited to 12 requests per minute per IP. The returned token is an editor token with a 30-day expiry and a 240 request/minute policy.
 
-### 5.6 Ad Network API (`:8090`)
+### 5.6 Expiring share links (`/s/`)
+
+Share links are created, rotated and revoked **only from the in-app File Sharing screen**; there is no remote management endpoint. The URL is `/s/<token>`, where the token is `pss_` followed by 64 hex characters. Only the token's SHA-256 hash is stored.
+
+| Method | Path | Behaviour |
+|---|---|---|
+| `GET` | `/s/<token>` | File landing page, or folder listing at the share root |
+| `GET` | `/s/<token>/view[/<path>]` | Safe inline preview, or folder listing |
+| `GET` | `/s/<token>/download[/<path>]` | Streams a file and consumes one download when permitted |
+| `POST` | `/s/<token>[/<action>[/<path>]]` | Password unlock form; sets `ps_share` session cookie and redirects |
+
+Status codes: `200` normal, `303` after password unlock, `401` password required/incorrect, `403` download disabled, `404` missing/invalid link or path, `405` unsupported method, `410` expired/revoked link or exhausted download limit, `429` share/password rate limit.
+
+Expiry, download limits, revocation and permission checks are enforced server-side on every request. Password checks use salted PBKDF2; unlock sessions last 30 minutes, are kept in memory, and are revoked when the secret is rotated, the password changes, or the link is revoked/deleted. Share responses are `Cache-Control: no-store` with CSP, `nosniff` and `Referrer-Policy: no-referrer`. HTML and SVG files are never rendered inline. Pages show an explicit HTTP “not encrypted” warning when HTTPS is off.
+
+### 5.7 Ad Network API (`:8090`)
 
 The optional ad server is a separate origin with its own API. Public delivery is unauthenticated and protected by placement keys, site-domain checks, signed single-use tokens and rate limits; management paths require `Authorization: Bearer <session-token>`.
 
@@ -752,7 +783,13 @@ MainActivity (Theme.PhoneServer.Home — light)
                     ImageViewerActivity · VideoPlayerActivity
                     MusicPlayerActivity · TextFileViewerActivity
                     PdfViewerActivity
+                    SharingOverviewActivity · ShareListActivity
+                    ShareEditActivity · SharePathPickerActivity
+                    ShareQrActivity · ShareAccessHistoryActivity
+                    SharingSettingsActivity
 ```
+
+The drawer also exposes **File Sharing**, which opens `SharingOverviewActivity`; share creation/editing stays in the light `Theme.PhoneServer.Home` theme.
 
 `MainActivity` saves `STATE_SELECTED_PAGE` in `onSaveInstanceState`. Its Javadoc records the reason: without it, "every activity recreation (rotation, theme/font change, or the system reclaiming this process while a large model is mapped) started a fresh adapter at page 0" — the 47 MB native model makes process reclaimation a routine event, not an edge case.
 
@@ -899,6 +936,13 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 | WebDAV auth | Bearer tokens require `files.read`/`files.write`; remote-access setting is checked before routing |
 | Webhook signing | Optional HMAC-SHA256 over the exact JSON body in `X-PhoneServer-Signature` |
 | Scheduled tasks | Inexact `AlarmManager` alarms; no exact-alarm permission required |
+| Share link secrets | `pss_` + 256-bit random tokens; only SHA-256 hashes at rest; raw URL shown once; rotation invalidates the old URL |
+| Share passwords | PBKDF2-HMAC-SHA256 with SHA-1 fallback, random salt, constant-time verification; never logged |
+| Share sessions | In-memory `ps_share` cookie, `HttpOnly`, `SameSite=Lax`, 30-minute TTL, `Secure` on HTTPS; revoked on rotation, password change, revoke and delete |
+| Share abuse limits | 240 requests/min/IP; 20 password attempts/min/IP+link across all share routes |
+| Share response safety | `no-store`, CSP, `nosniff`, `no-referrer`; HTML/SVG never previewed inline; HTTP pages explicitly labelled not encrypted |
+| Share path safety | Relative public-files root, canonical containment, hidden-segment rejection, no empty/root shares |
+| Share audit | Bounded 2 MB JSONL log of events/IP/path/UA/status; excludes tokens and passwords; in-app history only |
 
 ### 9.3 Weaknesses
 
@@ -984,7 +1028,7 @@ sh gradlew :app:testDebugUnitTest
 sh gradlew :app:assembleDebug
 ```
 
-The recorded result on the development host is **88 tests, 41 passed, 47 skipped, 0 failed**. The 47 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive) run everywhere. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
+The recorded result after Phase 3 is **127 tests, 78 passed, 49 skipped, 0 failed**. The 49 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive/sharing) run everywhere. The Phase 3 suite adds 14 sharing tests covering token shape/hashing, PBKDF2 password verification, link expiry/limits, store creation/update/rotation/revocation/download consumption, session invalidation and access-log filtering. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
 
 There are **no automated tests for the ad network or the dashboard assets** yet, and no CI configuration. Verify those manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, and watch `/serve`, `/imp`, `/c` and the reports move.
 
@@ -1135,7 +1179,7 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Detail |
 |---|---|---|
-| 26 | **No CI.** Unit tests now exist under `app/src/test` (107 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
+| 26 | **No CI.** Unit tests now exist under `app/src/test` (127 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
 | 27 | `minifyEnabled false` in release — the APK ships unshrunk and un-obfuscated | Add keep rules for the JNI bridge before enabling R8 |
 | 28 | 47 MB prebuilt `.so`, arm64-v8a only. No source, no reproducibility, no x86_64 emulator support | Document the provenance of the binary; add the C++ sources or a submodule if this is to be maintained |
 | 29 | The `.so` is **modified but uncommitted** (`git status` shows `M app/src/main/jniLibs/arm64-v8a/libllama_bridge.so`) along with `gradle.properties` | Review and commit deliberately |

@@ -17,6 +17,8 @@ Use `--offline` when the dependency cache is already populated.
 - `data/webhooks/` — webhook config round-trip and signed delivery to a
   loopback HTTP server.
 - `data/tasks/` — scheduled task JSON round-trip and interval validation.
+- `data/sharing/` — token shape/hashing, PBKDF2 verification, link state,
+  store lifecycle, download consumption and access-log queries.
 - `network/http/` — request parsing, encoding and HTTP security regression
   tests.
 - `network/tls/` — self-signed certificate generation, fingerprinting and
@@ -32,4 +34,5 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Last full run: `113 tests, 0 failures, 49 skipped`.
+Last full run after Phase 3: `127 tests, 0 failures, 49 skipped` (78 passed).
+The 14 sharing tests run as pure-JVM/unit tests and pass on this host.

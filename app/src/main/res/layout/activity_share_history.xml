@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/home_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="18dp"
+            android:paddingBottom="8dp">
+
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_back_arrow" />
+
+            <TextView
+                android:id="@+id/screen_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Access History"
+                android:textColor="@color/home_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/clear_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="Clear"
+                android:textColor="@color/offline_red"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="10dp">
+
+            <EditText
+                android:id="@+id/search_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_home_card"
+                android:hint="Search link, path or IP"
+                android:inputType="text"
+                android:padding="10dp"
+                android:singleLine="true"
+                android:textColor="@color/home_text_primary"
+                android:textColorHint="@color/home_text_secondary"
+                android:textSize="13sp" />
+
+            <Spinner
+                android:id="@+id/event_filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_home_card"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/history_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="8dp"
+            android:text=""
+            android:textColor="@color/home_text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/event_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="20dp"
+            android:clipToPadding="false" />
+
+        <TextView
+            android:id="@+id/event_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No sharing access recorded yet."
+            android:textColor="@color/home_text_secondary"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:padding="30dp"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

@@ -527,6 +527,11 @@ public class SimpleHttpServer {
             return;
         }
 
+        if (ShareHandler.isSharePath(path)) {
+            ShareHandler.handle(appContext, req, out, isSecure());
+            return;
+        }
+
         if (path.equals("/") || path.equals("/index.html")) {
             serveWebsite(out);
             return;
@@ -935,12 +940,15 @@ public class SimpleHttpServer {
         if (code == 201) return "Created";
         if (code == 204) return "No Content";
         if (code == 207) return "Multi-Status";
+        if (code == 302) return "Found";
+        if (code == 303) return "See Other";
         if (code == 400) return "Bad Request";
         if (code == 401) return "Unauthorized";
         if (code == 403) return "Forbidden";
         if (code == 404) return "Not Found";
         if (code == 405) return "Method Not Allowed";
         if (code == 409) return "Conflict";
+        if (code == 410) return "Gone";
         if (code == 412) return "Precondition Failed";
         if (code == 413) return "Payload Too Large";
         if (code == 423) return "Locked";
@@ -987,6 +995,7 @@ public class SimpleHttpServer {
         String status = code == 200 ? "OK" : code == 403 ? "Forbidden" : code == 404 ? "Not Found"
                 : code == 400 ? "Bad Request" : code == 401 ? "Unauthorized" : code == 405 ? "Method Not Allowed"
                 : code == 413 ? "Payload Too Large" : code == 429 ? "Too Many Requests"
+                : code == 410 ? "Gone" : code == 303 ? "See Other"
                 : code == 500 ? "Internal Server Error" : "Error";
         StringBuilder headers = new StringBuilder();
         headers.append("HTTP/1.1 ").append(code).append(" ").append(status).append("\r\n");

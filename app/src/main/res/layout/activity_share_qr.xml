@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/home_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="18dp"
+            android:paddingBottom="8dp">
+
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_back_arrow" />
+
+            <TextView
+                android:id="@+id/screen_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Share link"
+                android:textColor="@color/home_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="30dp">
+
+                <TextView
+                    android:id="@+id/qr_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Shared link"
+                    android:textColor="@color/home_text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="6dp" />
+
+                <TextView
+                    android:id="@+id/qr_subtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Scan to open"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="20dp" />
+
+                <FrameLayout
+                    android:layout_width="280dp"
+                    android:layout_height="280dp"
+                    android:background="@drawable/bg_home_card">
+
+                    <ImageView
+                        android:id="@+id/qr_image"
+                        android:layout_width="236dp"
+                        android:layout_height="236dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Share link QR code" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/qr_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="@color/home_accent"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:textIsSelectable="true"
+                    android:layout_marginTop="20dp" />
+
+                <TextView
+                    android:id="@+id/qr_warning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="@color/offline_red"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/copy_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Copy link"
+                    android:textAllCaps="false"
+                    android:background="@drawable/bg_button_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:layout_marginTop="22dp" />
+
+                <Button
+                    android:id="@+id/share_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Share via another app"
+                    android:textAllCaps="false"
+                    android:background="@drawable/bg_button_primary"
+                    android:textColor="@android:color/white"
+                    android:layout_marginTop="10dp" />
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+</FrameLayout>

@@ -17,6 +17,7 @@ import com.yadaventerprise.phoneserver.ui.files.FilesActivity;
 import com.yadaventerprise.phoneserver.ui.files.WebsiteFilesActivity;
 import com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity;
 import com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity;
+import com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity;
 import com.yadaventerprise.phoneserver.ui.servers.ServersListActivity;
 
@@ -174,6 +175,9 @@ public class MainActivity extends AppCompatActivity {
     private Intent drawerNavIdToIntent(int drawerNavId) {
         if (drawerNavId == R.id.nav_drawer_files) {
             return new Intent(this, FilesActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_sharing) {
+            return new Intent(this, SharingOverviewActivity.class);
         }
         if (drawerNavId == R.id.nav_drawer_servers) {
             return new Intent(this, ServersListActivity.class);

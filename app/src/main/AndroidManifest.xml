@@ -88,6 +88,13 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.TaskEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ads.AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareListActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.SharePathPickerActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareQrActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareAccessHistoryActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.SharingSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.RemoteBrowseActivity" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.ImageViewerActivity" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.VideoPlayerActivity" android:exported="false" />
