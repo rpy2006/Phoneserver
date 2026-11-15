@@ -29,9 +29,28 @@ No code was classified as malicious without supporting evidence.
 | R-06 | Low      | Legacy buffered bodies up to 64 MB per request                 | Mitigated |
 
 No backdoors, hidden command execution, dynamic code loading, hardcoded
-credentials, or SQL injection were found. The `/api/v1` and `adnet` surfaces
-use parameterized SQL, ownership checks, PBKDF2 password hashing, bounded
-thread pools, and CSP on the ad dashboard.
+credentials, or SQL injection were found. The `/api/v1` surface uses
+parameterized SQL; the `adnet` surface uses an encrypted JSON store with atomic
+writes and transactional rollback. Both enforce ownership checks, PBKDF2
+password hashing, bounded thread pools and CSP on the ad dashboard.
+
+The Phase 4 review added conversion tracking, experiments, payouts, offline
+geography and SMTP summaries:
+
+- **Conversion attribution** requires a valid click token; server-to-server
+  postbacks are HMAC-SHA256 signed with a key derived per advertiser account,
+  transaction ids are deduplicated, and only admins can approve/reject a
+  conversion. Rejected conversions never affect billing.
+- **Offline geography** stores only a two-letter country on events/aggregates,
+  never the source address. Uploads are admin-only, capped at 12 MiB and
+  replaced atomically.
+- **Payout statements** are role-scoped; publishers can read/export only their
+  own rows.
+- **SMTP** uses a minimal client with STARTTLS or implicit TLS, a write-only
+  password stored in the encrypted JSON document, CR/LF-stripped headers and
+  no credential logging. Delivery failures are recorded without passwords.
+- **Dashboard** additions use the same strict CSP: no inline scripts, styles or
+  event handlers.
 
 ## Fixed findings
 
@@ -282,6 +301,6 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `137 tests, 0 failures` (49 Robolectric
-tests skipped by design on this host; 88 passed, including all 14 sharing tests). `SimpleHttpServerEncodingTest` passed;
+`BUILD SUCCESSFUL`; full unit suite `144 tests, 0 failures` (49 Robolectric
+tests skipped by design on this host; 95 passed, including all 14 sharing tests and 7 ad-network storage tests). `SimpleHttpServerEncodingTest` passed;
 `SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).

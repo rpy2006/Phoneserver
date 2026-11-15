@@ -102,7 +102,7 @@ Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](AP
 
 ### 1.8 Optional ad network
 
-An opt-in, self-hosted ad server on a **separate port (`8090`)**, database (`adnet.db`), file store and account system. Publishers register a domain and placement, copy a small tag, and serve approved creatives; advertisers manage campaigns, creatives, budgets and targeting; admins approve sites/campaigns, manage users, credit/pay balances, review fraud and export reports. It is fully offline and never shares authentication or data with the file server.
+An opt-in, self-hosted ad server on a **separate port (`8090`)**, encrypted JSON data store (`adnet/adnet.json`), file store and account system. Publishers register a domain and placement, copy a small tag, and serve approved creatives; advertisers manage campaigns, creatives, budgets and targeting; admins approve sites/campaigns, manage users, credit/pay balances, review fraud and export reports. It is fully offline and never shares authentication or data with the file server.
 
 - Public delivery: `/sdk.js`, `/serve`, `/imp`, `/c`, `/media/<id>`; management API under `/api/*`
 - Real, server-signed impression/click tokens; viewability ≥50% for 1 s; no fake ads or simulated numbers
@@ -164,7 +164,7 @@ A dedicated **File Sharing** section creates browser links for individual files 
 | Package | `com.yadaventerprise.phoneserver` |
 | Version | 1.0 (`versionCode 1`) |
 | NDK ABI | `arm64-v8a` only |
-| Persistence | SQLite (`system.db`, project databases, `adnet.db`) + `SharedPreferences` (JSON-encoded blobs) + private files — **no DI framework** |
+| Persistence | SQLite (`system.db`, project databases) + encrypted JSON (`adnet/adnet.json`) + `SharedPreferences` (JSON-encoded blobs) + private files — **no DI framework** |
 | Serialization | `org.json` (platform built-in) |
 | UI | AndroidX + Material Components + View system (no Compose) |
 
@@ -427,7 +427,8 @@ new Thread(() -> { /* blocking work */ handler.post(() -> { /* touch views */ })
 | Downloaded remote files | `Download/PhoneServer/` | `getExternalFilesDir("downloads")` |
 | Model files | — (always private) | `filesDir/models/` |
 | View cache (for `FileProvider` handoff) | — (always private) | `cacheDir/view_cache/` |
-| Ad-network database | — (always private) | `databases/adnet.db` (plus `-wal`/`-shm`) |
+| Ad-network data store | — (always private) | `filesDir/adnet/adnet.json` (encrypted JSON) |
+| Ad geo database | — (always private) | `filesDir/adnet/geo.csv` |
 | Ad creative images | — (always private) | `filesDir/adnet/creatives/<24-hex>.<ext>` |
 | Ad-network prefs | — (always private) | `SharedPreferences` file `adnet_prefs` |
 | Share links / settings | — (always private) | `filesDir/shares/links.json`, `settings.json` (encrypted JSON) |
@@ -508,12 +509,12 @@ ServerService (foreground, port 8080)
    └── AdNetworkManager.startIfEnabled() ──► AdHttpServer (port 8090)
                                                 ├── AdApi      (authenticated /api/*)
                                                 ├── AdDelivery (/sdk.js /serve /imp /c /media)
-                                                ├── AdDb       (adnet.db)
+                                                ├── AdDb       (encrypted adnet.json)
                                                 └── 4–24 worker pool + AdNet-Sweeper thread
 ```
 
 - **Separate port and pool:** ad traffic cannot exhaust the file server's thread-per-connection accept loop, and the file server cannot starve ad delivery.
-- **Separate database and files:** `adnet.db` and `filesDir/adnet/creatives/` are not reachable through `/files`, `/api/v1` or the project backup format.
+- **Separate data and files:** `filesDir/adnet/` (encrypted `adnet.json`, geo CSV and creative images) is not reachable through `/files`, `/api/v1` or the project backup format.
 - **Separate auth:** the file server's access password does not log anyone into the ad dashboard; the ad dashboard uses PBKDF2-backed accounts and 12-hour bearer sessions.
 - **Separate privacy surface:** public delivery needs `Origin`/`Referer` and a placement key, but deliberately has no password gate because the SDK runs on third-party pages.
 - **Hard limits:** 8 KiB header lines, 64 headers, 128 KiB buffered API body, 2 MiB creative uploads, 300 req/min/user and per-IP public endpoint limits.
@@ -703,13 +704,15 @@ The optional ad server is a separate origin with its own API. Public delivery is
 
 | Area | Endpoints |
 |---|---|
-| Public | `GET /health`, `GET /sdk.js`, `GET /serve`, `POST /imp`, `GET /c`, `GET /media/<id>` |
+| Public | `GET /health`, `GET /sdk.js`, `GET /serve`, `POST /imp`, `GET /c`, `GET /media/<id>`, `GET /conv`, `GET /postback` |
 | Auth | `GET /api/setup/status`, `POST /api/setup`, `POST /api/auth/login`, `POST /api/auth/signup`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/password`, `GET /api/meta` |
 | Users (admin) | `GET|POST /api/users`, `PATCH|DELETE /api/users/:id`, `POST /api/users/:id/credit`, `POST /api/users/:id/payout` |
 | Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
 | Campaigns / creatives | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST …/{id}/submit|approve|reject|pause|resume`, `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST …/{id}/image|approve|reject` |
-| Reports / billing | `GET /api/reports/summary`, `/breakdown`, `/export`, `GET /api/billing` |
-| Admin | `GET /api/admin/overview`, `/fraud`, `GET|PUT /api/admin/settings` |
+| Conversions | `GET /api/conversions`, `GET /api/conversions/postback-key`, `POST /api/conversions/:id/{approve,reject}` |
+| Experiments / payouts | `GET|POST /api/experiments`, `POST …/:id/{start,pause,finish,winner}`, `GET|POST /api/payouts`, `GET /api/payouts/:id/export` |
+| Reports / billing | `GET /api/reports/summary`, `/breakdown`, `/export`, `/geo`, `/geo/export`, `GET /api/billing` |
+| Admin | `GET /api/admin/overview`, `/fraud`, `/geo`, `/summary`, `GET|PUT /api/admin/settings`, `POST /api/admin/geo`, `POST /api/admin/summary/send` |
 
 `/api/setup` is the only way to create the first administrator and requires the one-time setup code shown on the phone. Sign-up is disabled by default. Full request/response details, targeting keys, billing rules and limits are in [ad-network.md](ad-network.md).
 
@@ -719,7 +722,7 @@ The optional ad server is a separate origin with its own API. Public delivery is
 
 The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
-The **ad network** has a third, fully separate SQLite database (`adnet.db`) with users, sessions, sites, placements, campaigns, creatives, events, daily stats, billing, audit and settings tables; its preference file is `adnet_prefs`, and creative images live under `filesDir/adnet/creatives/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](ad-network.md).
+The **ad network** has a third, fully separate encrypted JSON data store (`filesDir/adnet/adnet.json`) with users, sessions, sites, placements, campaigns, creatives, experiments, events, conversions, daily/geo stats, payouts, summary history, billing, audit and settings; its preference file is `adnet_prefs`, and creative images plus the optional geo CSV live under `filesDir/adnet/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](ad-network.md).
 
 | Prefs file | Key | Contents | Written by |
 |---|---|---|---|
@@ -974,9 +977,9 @@ The ad network is a separate origin and does not reuse the file server's passwor
 | Delivery auth | Placement key + approved site + active placement + `Origin`/`Referer` domain match |
 | Event integrity | HMAC-SHA256 tokens, 6 h/24 h expiry, single-use nonces, prior-impression requirement for clicks |
 | Rate limits | Per-IP serve/beacon/click limits, per-user management limit, upload limit |
-| Input safety | Length/range/allow-list validation, strict image sniffing (no SVG), bound SQL parameters, fixed report group expressions |
+| Input safety | Length/range/allow-list validation, strict image sniffing (no SVG), fixed report grouping expressions, atomic JSON writes and transactional rollback |
 | Response safety | CR/LF stripping in headers, `nosniff`, `no-store` on API, `X-Frame-Options: DENY`, sandbox CSP on media, strict CSP on the dashboard |
-| Privacy | No cookies, no raw IP stored with the visitor hash, daily-rotating hash, DNT/GPC honoured for visitor tracking |
+| Privacy | No cookies, no raw IP stored, offline country lookup without retaining addresses, daily-rotating visitor hash, DNT/GPC honoured for visitor tracking |
 
 Residual risks: plaintext HTTP/LAN exposure, no TLS, no email verification or password reset, no CAPTCHA, and invalid traffic cannot be eliminated with certainty. The ad dashboard is only as safe as the admin's password and network. See [ad-network.md](ad-network.md) §11.
 
@@ -1028,9 +1031,9 @@ sh gradlew :app:testDebugUnitTest
 sh gradlew :app:assembleDebug
 ```
 
-The recorded result after Phase 3 is **137 tests, 88 passed, 49 skipped, 0 failed**. The 49 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive/sharing/HTTPS-config) run everywhere. The Phase 3 suite adds 14 sharing tests covering token shape/hashing, PBKDF2 password verification, link expiry/limits, store creation/update/rotation/revocation/download consumption, session invalidation and access-log filtering. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
+The recorded result after Phase 4 is **144 tests, 95 passed, 49 skipped, 0 failed**. The 49 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive/sharing/HTTPS-config/ads) run everywhere. The sharing suite adds 14 tests covering token shape/hashing, PBKDF2 password verification, link expiry/limits, store creation/update/rotation/revocation/download consumption, session invalidation and access-log filtering. Seven ad-network tests cover encrypted JSON round-trip/rollback, filtered deletes, geo lookup, conversion attribution/dedupe and signed postbacks, experiment creation and payout CSV/ownership. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
 
-There are **no automated tests for the ad network or the dashboard assets** yet, and no CI configuration. Verify those manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, and watch `/serve`, `/imp`, `/c` and the reports move.
+The ad-network **storage/attribution core has automated tests**, but the dashboard assets have no browser tests and there is no CI configuration. Verify the UI and delivery manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, watch `/serve`, `/imp`, `/c` and the reports move, then record and review a conversion.
 
 ### 10.5 Quick manual smoke test
 
@@ -1179,7 +1182,7 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Detail |
 |---|---|---|
-| 26 | **No CI.** Unit tests now exist under `app/src/test` (137 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
+| 26 | **No CI.** Unit tests now exist under `app/src/test` (144 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
 | 27 | `minifyEnabled false` in release — the APK ships unshrunk and un-obfuscated | Add keep rules for the JNI bridge before enabling R8 |
 | 28 | 47 MB prebuilt `.so`, arm64-v8a only. No source, no reproducibility, no x86_64 emulator support | Document the provenance of the binary; add the C++ sources or a submodule if this is to be maintained |
 | 29 | The `.so` is **modified but uncommitted** (`git status` shows `M app/src/main/jniLibs/arm64-v8a/libllama_bridge.so`) along with `gradle.properties` | Review and commit deliberately |
@@ -1200,10 +1203,10 @@ Ordered roughly by how much they matter.
 - **Plain HTTP, no TLS**, and no email verification, password reset, CAPTCHA or account recovery. The ad dashboard is LAN-grade.
 - **Delivery needs a hostname.** The domain regex rejects bare IPs, so a quick `http://192.168.x.x` test page cannot pass the `Origin`/`Referer` check; register a hostname (or `localhost` when appropriate).
 - **HTTPS pages need `public_base_url`.** Without an HTTPS base URL the browser blocks the SDK as mixed content.
-- **No geo targeting.** The app has no IP-location database, so geo fields are intentionally absent from targeting.
+- **No geo targeting.** Country is resolved offline for reporting, but there is no country targeting key. Upload a geo CSV in Settings; without it all public traffic appears as `ZZ`.
 - **Single-process memory limiter.** Rate limits and the asset cache are in-memory and reset when the ad server restarts; multiple app processes would not share them.
 - **Event retention is destructive.** Events older than `retention_days` are deleted, so long-term history must be exported (CSV) or backed up externally.
-- **Ad data is outside project backups.** Back up `adnet.db` and `filesDir/adnet/creatives/` separately; `/api/v1` backups do not include them.
+- **Ad data is outside project backups.** Back up `filesDir/adnet/adnet.json`, `adnet/geo.csv`, `adnet/creatives/` and `adnet_prefs` separately; `/api/v1` backups do not include them.
 - **Fraud detection is heuristic.** Bot UA matching, per-IP/visitor caps and site flagging reduce invalid traffic but cannot prove a human viewed an ad.
 
 ---
@@ -1275,8 +1278,8 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 2. Validate every parameter explicitly (`AdHttp.str/num`, `AdSecurity.normalizeDomain/isHttpUrl/micros`); throw `AdHttp.bad/forbidden/notFound` rather than returning ad-hoc strings.
 3. Check ownership with the existing `siteFor` / `placementFor` / `campaignRow` / `creativeFor` helpers before reading or writing.
 4. Use bound parameters for all values. Report grouping expressions must come from a fixed allow-list (`AdReports.groupExpr`), never from raw input.
-5. If it can change money, wrap the update and the ledger/stat write in one SQLite transaction (copy `AdDelivery.record`/`settle`).
-6. Add the endpoint to [ad-network.md](ad-network.md) and to the dashboard client, then smoke-test with `curl` (there are no automated ad tests).
+5. If it can change money, wrap the update and the ledger/stat write in one `AdDb.transaction` (copy `AdDelivery.record`/`settle`).
+6. Add the endpoint to [ad-network.md](ad-network.md), add or update an `ads/` unit test, then smoke-test the dashboard and `curl` paths.
 
 ---
 
@@ -1284,15 +1287,15 @@ Copy `ServerProfileStore` for a keyed collection, or `ApiEndpointStore` for one 
 
 The ad network is documented in full in [ad-network.md](ad-network.md). In brief:
 
-- **Opt-in, separate service** on port `8090`, started by `ServerService` only when enabled; its own `adnet.db`, creative files, thread pool and `adnet_prefs`.
-- **Three roles:** admin (users, approvals, credits/payouts, settings, fraud), advertiser (campaigns/creatives/budgets/targeting), publisher (sites/placements/tags/earnings).
+- **Opt-in, separate service** on port `8090`, started by `ServerService` only when enabled; its own encrypted `adnet.json`, geo CSV, creative files, thread pool and `adnet_prefs`.
+- **Three roles:** admin (users, approvals, credits/payouts, experiments, geo, summary mail, settings, fraud), advertiser (campaigns/creatives/experiments/budgets/targeting), publisher (sites/placements/tags/payout statements/earnings).
 - **Accounts:** PBKDF2-HMAC-SHA256 passwords, 12-hour hashed bearer sessions, one-time phone-shown setup code for the first admin, sign-up off by default.
-- **Delivery:** a single `<script async src="…:8090/sdk.js">` plus `data-adnet-placement="pl_…"`; `/serve` chooses an eligible creative, `/imp` records a viewable impression (≥50% for 1 s), `/c` counts a click and redirects; no fill is `204`, never a fake ad.
+- **Delivery:** a single `<script async src="…:8090/sdk.js">` plus `data-adnet-placement="pl_…"`; `/serve` chooses an eligible creative, `/imp` records a viewable impression (≥50% for 1 s), `/c` counts a click and redirects, `/conv` and signed `/postback` record conversions; no fill is `204`, never a fake ad.
 - **Sites:** hostnames only (bare IPs rejected); subdomains match; HTTPS pages require `public_base_url`.
 - **Campaigns:** CPM/CPC bids, total/daily budgets, start/end dates, prepaid advertiser balance, targeting by device/language/site/hour/weekday/URL/frequency; creatives are banner/native/text with strict validation and admin review.
-- **Billing:** integer micros; CPM charges `bid/1000` per valid impression, CPC charges `bid` per valid click; publisher share default 70%; invalid traffic is stored but never billed.
+- **Billing:** integer micros; CPM charges `bid/1000` per valid impression, CPC charges `bid` per valid click; publisher share default 70%; invalid traffic and rejected conversions are stored but never billed.
 - **Privacy/security:** no cookies, no raw-IP visitor storage, daily-rotating visitor hash, DNT/GPC honoured for tracking, HMAC-signed single-use tokens, strict CSP dashboard, CR/LF-stripped headers, rate limits, bot filtering and site flagging.
-- **Data:** `adnet.db` tables (`users`, `sessions`, `sites`, `placements`, `campaigns`, `creatives`, `events`, `stats_daily`, `fraud_log`, `billing`, `audit`, `settings`); hourly sweeper expires sessions, ends campaigns, prunes events after `retention_days` (30) and removes orphaned images.
+- **Data:** encrypted `adnet.json` collections (`users`, `sessions`, `sites`, `placements`, `campaigns`, `creatives`, `experiments`, `events`, `conversions`, `stats_daily`, `geo_daily`, `payout_reports`, `daily_summaries`, `fraud_log`, `billing`, `audit`, `settings`); the hourly sweeper expires sessions, ends campaigns/experiments, sends the due summary, prunes events after `retention_days` (30) and removes orphaned images. Legacy `adnet.db` is imported once and renamed `.migrated`.
 - **User deletion:** admin-only; cannot delete self or the last admin; purges owned stats/events, cascades dependent rows, deletes creative images and writes `user.delete` to the audit log.
 
 ---
@@ -1316,4 +1319,4 @@ The ad network is documented in full in [ad-network.md](ad-network.md). In brief
 | Prefs files | `server_config`, `server_profiles`, `api_endpoint_configs`; ad network: `adnet_prefs` |
 | Activity count | 23 declared · 2 undeclared and dead (`QrCodeActivity`, `ServerSettingsActivity`) |
 | Java LOC | ~18,100 across 94 classes (main source, excluding `package-info.java`) |
-| Tests | 92 JUnit/Robolectric tests (43 pass, 49 skip on aarch64 Linux); no ad-network tests |
+| Tests | 144 JUnit/Robolectric tests (95 pass, 49 skip on aarch64 Linux), including 7 ad-network storage/attribution tests |

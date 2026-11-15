@@ -81,7 +81,7 @@
   function clearSession() { S.token = ''; S.user = null; localStorage.removeItem('adnet_token'); }
 
   // ------------------------------------------------------------ API
-  function api(method, path, body, raw) {
+  function api(method, path, body, raw, extraHeaders) {
     var o = { method: method, headers: {} };
     var ctrl = null, timer = null;
     if (window.AbortController) {
@@ -94,6 +94,7 @@
       if (raw) { o.body = body; o.headers['Content-Type'] = body.type || 'application/octet-stream'; }
       else { o.body = JSON.stringify(body); o.headers['Content-Type'] = 'application/json'; }
     }
+    if (extraHeaders) Object.keys(extraHeaders).forEach(function (k) { o.headers[k] = extraHeaders[k]; });
     function done() { if (timer) clearTimeout(timer); }
     return fetch(path, o).then(function (r) {
       done();
@@ -554,9 +555,9 @@
 
   // ------------------------------------------------------------ shell + navigation
   var NAV = {
-    admin: [['overview', 'Overview'], ['users', 'Users'], ['sites', 'Sites'], ['campaigns', 'Campaigns'], ['approvals', 'Creatives'], ['reports', 'Reports'], ['billing', 'Billing'], ['fraud', 'Fraud'], ['settings', 'Settings']],
-    advertiser: [['campaigns', 'Campaigns'], ['reports', 'Reports'], ['billing', 'Billing']],
-    publisher: [['sites', 'My sites'], ['reports', 'Reports'], ['billing', 'Earnings']]
+    admin: [['overview', 'Overview'], ['users', 'Users'], ['sites', 'Sites'], ['campaigns', 'Campaigns'], ['approvals', 'Creatives'], ['reports', 'Reports'], ['conversions', 'Conversions'], ['geo', 'Geography'], ['experiments', 'Experiments'], ['payouts', 'Payouts'], ['billing', 'Billing'], ['fraud', 'Fraud'], ['settings', 'Settings']],
+    advertiser: [['campaigns', 'Campaigns'], ['experiments', 'Experiments'], ['reports', 'Reports'], ['conversions', 'Conversions'], ['geo', 'Geography'], ['billing', 'Billing']],
+    publisher: [['sites', 'My sites'], ['reports', 'Reports'], ['geo', 'Geography'], ['payouts', 'Payouts'], ['billing', 'Earnings']]
   };
   var VIEWS = {};
   function shell() {
@@ -897,7 +898,9 @@
       { k: 'weekdays', t: 'Days of week (none = all)', type: 'checks', opts: [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['7', 'Sun']], val: (t.weekdays || []).map(String) },
       { k: 'url_contains', t: 'Only pages whose path contains (comma-separated)', val: (t.url_contains || []).join(',') },
       { k: 'url_excludes', t: 'Never on pages whose path contains', val: (t.url_excludes || []).join(',') },
-      { k: 'freq_cap', t: 'Max views per visitor per day', type: 'number', min: 0, val: t.freq_cap_per_day || '', hint: 'Blank means unlimited.' }
+      { k: 'freq_cap', t: 'Max views per visitor per day', type: 'number', min: 0, val: t.freq_cap_per_day || '', hint: 'Blank means unlimited.' },
+      { k: 'conversion_event', t: 'Conversion event (optional)', val: c && c.conversion_event || '', maxlen: 40, hint: 'If set, only this event name is accepted (A-Z, 0-9, . _ -).' },
+      { k: 'conversion_value', t: 'Default conversion value', type: 'number', min: 0, val: c && c.conversion_value_micros ? c.conversion_value_micros / 1e6 : '', hint: 'Used when the pixel/postback omits v.' }
     ];
     if (advertisers) f.unshift({ k: 'advertiser_id', t: 'Advertiser', type: 'select', opts: advertisers });
     return f;
@@ -917,6 +920,7 @@
     var p = {
       name: v.name, pricing: v.pricing, bid: v.bid, total_budget: v.total_budget, daily_budget: v.daily_budget || 0,
       start: v.start || null, end: v.end || null,
+      conversion_event: v.conversion_event, conversion_value: v.conversion_value || 0,
       targeting: { devices: v.devices, languages: csvList(v.languages), hours: parseHours(v.hours), weekdays: v.weekdays.map(Number), url_contains: csvList(v.url_contains), url_excludes: csvList(v.url_excludes), freq_cap_per_day: Number(v.freq_cap) || 0 }
     };
     if (v.advertiser_id) p.advertiser_id = Number(v.advertiser_id);
@@ -1183,7 +1187,8 @@
         var cards = [
           statCard('Ads served', num(t.served)), statCard('Valid impressions', num(t.imps)),
           statCard('Valid clicks', num(t.clicks)), statCard('CTR', pct(t.clicks, t.imps)),
-          statCard('Invalid impressions', num(t.invalid_imps)), statCard('Invalid clicks', num(t.invalid_clicks))
+          statCard('Conversions', num(t.conversions)), statCard('Invalid impressions', num(t.invalid_imps)),
+          statCard('Invalid clicks', num(t.invalid_clicks))
         ];
         if (role !== 'publisher') cards.push(statCard('Spend', money(t.spend_micros)), statCard('Effective CPM', money(t.imps ? t.spend_micros * 1000 / t.imps : 0)));
         if (role !== 'advertiser') cards.push(statCard(role === 'admin' ? 'Publisher earnings' : 'Estimated revenue', money(t.earnings_micros)));
@@ -1195,6 +1200,7 @@
           { t: 'Impr.', num: true, f: function (r) { return num(r.imps); } },
           { t: 'Clicks', num: true, f: function (r) { return num(r.clicks); } },
           { t: 'CTR', num: true, f: function (r) { return pct(r.clicks, r.imps); } },
+          { t: 'Conversions', num: true, f: function (r) { return num(r.conversions); } },
           { t: 'Invalid', num: true, f: function (r) { return num(r.invalid_imps + r.invalid_clicks); } }
         ];
         if (role !== 'publisher') cols.push({ t: 'Spend', num: true, f: function (r) { return money(r.spend_micros); } });
@@ -1242,6 +1248,248 @@
       ss.forEach(function (s) { inSite.appendChild(h('option', { value: s.id }, s.domain)); });
     }));
     Promise.all(jobs).then(run);
+  };
+
+  // ------------------------------------------------------------ conversions
+  function downloadResponse(res, name) {
+    return res.blob().then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = h('a', { href: url, download: name || 'download.csv' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+    });
+  }
+  VIEWS.conversions = function (box) {
+    var role = S.user.role;
+    var to = new Date(), from = new Date(Date.now() - 29 * 864e5);
+    var inFrom = h('input', { type: 'date', value: ymd(from) });
+    var inTo = h('input', { type: 'date', value: ymd(to) });
+    var inStatus = h('select', null, h('option', { value: '' }, 'All statuses'), h('option', { value: 'valid' }, 'Valid'), h('option', { value: 'invalid' }, 'Invalid / rejected'));
+    var inCamp = h('select', null, h('option', { value: '' }, 'All campaigns'));
+    var out = h('div');
+    function run() {
+      var q = { from: inFrom.value, to: inTo.value, status: inStatus.value, campaign_id: inCamp.value };
+      guard(out, api('GET', '/api/conversions' + qs(q)), function (rows) {
+        out.appendChild(card('Conversion ledger', table([
+          { t: 'Time', f: function (r) { return new Date(r.ts).toLocaleString(); } },
+          { t: 'Campaign', k: 'campaign_name' },
+          { t: 'Event', k: 'event' },
+          { t: 'Value', num: true, f: function (r) { return money(r.value_micros); } },
+          { t: 'Status', f: function (r) { return chip(r.status); } },
+          { t: 'Detail', f: function (r) { return r.reason || r.source || '-'; } },
+          { t: '', f: function (r) {
+            if (role !== 'admin') return '-';
+            return h('div', { class: 'row' },
+              r.status === 'invalid' ? btn('Approve', function () {
+                api('POST', '/api/conversions/' + r.id + '/approve').then(function () { toast('Conversion approved', 'ok'); run(); }).catch(fail);
+              }) : null,
+              r.status === 'valid' ? btn('Reject', function () {
+                api('POST', '/api/conversions/' + r.id + '/reject').then(function () { toast('Conversion rejected', 'ok'); run(); }).catch(fail);
+              }, 'danger') : null);
+          } }], rows, 'No conversions in this period.')));
+      }, run);
+    }
+
+    box.appendChild(card(null, h('div', { class: 'fields' },
+      h('div', { class: 'field' }, h('label', null, 'From'), inFrom),
+      h('div', { class: 'field' }, h('label', null, 'To'), inTo),
+      h('div', { class: 'field' }, h('label', null, 'Status'), inStatus),
+      role !== 'publisher' ? h('div', { class: 'field' }, h('label', null, 'Campaign'), inCamp) : null),
+      h('div', { class: 'row end' }, h('button', { class: 'btn', type: 'button', onclick: run }, 'Search'))));
+    box.appendChild(out);
+
+    var origin = location.origin;
+    var pixel = h('pre', { class: 'code' }, origin + '/conv?t=CLICK_TOKEN&e=purchase&v=1.25&tx=ORDER-123');
+    var post = h('pre', { class: 'code' }, origin + '/postback?t=CLICK_TOKEN&e=purchase&v=1.25&tx=ORDER-123&sig=SIGNATURE');
+    box.appendChild(card('Conversion tracking', h('p', { class: 'muted' }, 'A conversion is accepted only after a valid click on the same ad. The value is optional; the campaign default is used when omitted. Duplicate transaction ids inside the dedupe window are ignored.'),
+      h('p', { class: 'hint' }, 'Image pixel (browser)'), pixel,
+      h('p', { class: 'hint' }, 'Server-to-server postback (signed)'), post));
+    if (role === 'advertiser') {
+      api('GET', '/api/conversions/postback-key').then(function (k) {
+        box.appendChild(card('Your postback key', h('p', { class: 'muted' }, 'Sign the query string exactly as sent: HMAC-SHA256 of t + "|" + e + "|" + v + "|" + tx. The signature is lowercase hex.'),
+          h('pre', { class: 'code' }, k.secret), h('div', { class: 'row' }, copyButton(k.secret))));
+      }).catch(function () {});
+    }
+    if (role !== 'publisher') {
+      api('GET', '/api/campaigns').then(function (cs) {
+        cs.forEach(function (c) { inCamp.appendChild(h('option', { value: c.id }, c.name)); });
+      }).catch(function () {});
+    }
+    run();
+  };
+
+  // ------------------------------------------------------------ experiments
+  VIEWS.experiments = function (box) {
+    var campaigns = [], creatives = [];
+    var out = h('div');
+    function creativeOptions() {
+      return [['', 'Choose a creative']].concat(creatives.map(function (c) {
+        var camp = campaigns.filter(function (x) { return x.id === c.campaign_id; })[0];
+        return [String(c.id), c.title + (camp ? ' - ' + camp.name : '') + ' (#' + c.id + ')'];
+      }));
+    }
+    function newExperiment() {
+      formModal('New creative experiment', [
+        { k: 'campaign_id', t: 'Campaign', type: 'select', opts: campaigns.map(function (c) { return [String(c.id), c.name]; }) },
+        { k: 'name', t: 'Experiment name', req: true, maxlen: 100 },
+        { k: 'metric', t: 'Winning metric', type: 'select', opts: [['ctr', 'Click-through rate'], ['clicks', 'Clicks'], ['conversions', 'Conversions']] },
+        { k: 'end', t: 'End date (optional)', type: 'date' },
+        { k: 'creative1', t: 'Variant A creative', type: 'select', opts: creativeOptions() },
+        { k: 'weight1', t: 'Variant A weight', type: 'number', val: 50, min: 1, max: 100 },
+        { k: 'creative2', t: 'Variant B creative', type: 'select', opts: creativeOptions() },
+        { k: 'weight2', t: 'Variant B weight', type: 'number', val: 50, min: 1, max: 100 },
+        { k: 'creative3', t: 'Variant C creative (optional)', type: 'select', opts: creativeOptions() },
+        { k: 'weight3', t: 'Variant C weight', type: 'number', val: 50, min: 1, max: 100 }
+      ], 'Create experiment', function (v) {
+        var variants = [];
+        [1, 2, 3].forEach(function (i) {
+          if (!v['creative' + i]) return;
+          variants.push({ creative_id: Number(v['creative' + i]), weight: Number(v['weight' + i] || 50) });
+        });
+        if (variants.length < 2) throw new Error('Choose at least two different creatives.');
+        return api('POST', '/api/experiments', {
+          campaign_id: Number(v.campaign_id), name: v.name, metric: v.metric, end: v.end, variants: variants
+        });
+      }, function () { toast('Experiment created', 'ok'); load(); });
+    }
+    function choose(r) {
+      var opts = [['', 'Auto - best by ' + r.metric]].concat((r.metrics && r.metrics.variants || []).map(function (v) {
+        return [String(v.creative_id), v.label + ' - ' + v.clicks + ' clicks / ' + v.imps + ' impressions'];
+      }));
+      formModal('Choose experiment winner', [{ k: 'creative_id', t: 'Winner', type: 'select', opts: opts }], 'Choose winner', function (v) {
+        return api('POST', '/api/experiments/' + r.id + '/winner', v.creative_id ? { creative_id: Number(v.creative_id) } : {});
+      }, function () { toast('Winner saved', 'ok'); load(); });
+    }
+    function load() {
+      guard(out, Promise.all([api('GET', '/api/campaigns'), api('GET', '/api/experiments'), api('GET', '/api/creatives')]), function (res) {
+        campaigns = res[0]; creatives = res[2];
+        out.appendChild(h('div', { class: 'toolbar' },
+          h('p', { class: 'hint' }, 'Experiments split delivery between creatives in the same campaign. Delivery uses variant weights while the experiment is running.'),
+          h('button', { class: 'btn', type: 'button', onclick: newExperiment }, 'New experiment')));
+        out.appendChild(card('Experiments', table([
+          { t: 'Campaign', k: 'campaign_name' },
+          { t: 'Name', k: 'name' },
+          { t: 'Status', f: function (r) { return chip(r.status); } },
+          { t: 'Variants', f: function (r) {
+            var vs = r.metrics && r.metrics.variants || [];
+            return h('div', null, vs.map(function (v) {
+              return h('div', null, v.label + ' · ' + v.imps + ' impr · ' + v.clicks + ' clicks · ' + v.ctr_percent + '% CTR');
+            }));
+          } },
+          { t: 'Winner', f: function (r) {
+            var vs = r.metrics && r.metrics.variants || [];
+            var w = vs.filter(function (v) { return v.creative_id === r.winner_creative_id; })[0];
+            return w ? w.label : '-';
+          } },
+          { t: '', f: function (r) {
+            var a = h('div', { class: 'row' });
+            if (r.status === 'draft' || r.status === 'paused') a.appendChild(btn('Start', function () {
+              api('POST', '/api/experiments/' + r.id + '/start').then(function () { toast('Experiment started', 'ok'); load(); }).catch(fail);
+            }));
+            if (r.status === 'running') a.appendChild(btn('Pause', function () {
+              api('POST', '/api/experiments/' + r.id + '/pause').then(function () { toast('Experiment paused', 'ok'); load(); }).catch(fail);
+            }));
+            if (r.status === 'running' || r.status === 'paused') a.appendChild(btn('Finish', function () {
+              confirmDo('Finish this experiment? Delivery will use the campaign default creative selection.', function () {
+                api('POST', '/api/experiments/' + r.id + '/finish').then(function () { toast('Experiment finished', 'ok'); load(); }).catch(fail);
+              });
+            }));
+            a.appendChild(btn('Pick winner', function () { choose(r); }));
+            return a;
+          } }], res[1], 'No experiments yet.')));
+      }, load);
+    }
+    box.appendChild(out);
+    load();
+  };
+
+  // ------------------------------------------------------------ geography
+  VIEWS.geo = function (box) {
+    var role = S.user.role;
+    var to = new Date(), from = new Date(Date.now() - 29 * 864e5);
+    var inFrom = h('input', { type: 'date', value: ymd(from) });
+    var inTo = h('input', { type: 'date', value: ymd(to) });
+    var out = h('div');
+    var q = function () { return { from: inFrom.value, to: inTo.value }; };
+    function run() {
+      guard(out, api('GET', '/api/reports/geo' + qs(q())), function (d) {
+        var t = d.total, rows = d.countries;
+        var cards = [statCard('Impressions', num(t.imps)), statCard('Clicks', num(t.clicks)),
+          statCard('Conversions', num(t.conversions)), statCard('CTR', pct(t.clicks, t.imps))];
+        if (role !== 'publisher') cards.push(statCard('Spend', money(t.spend_micros)));
+        if (role !== 'advertiser') cards.push(statCard(role === 'admin' ? 'Publisher earnings' : 'Estimated earnings', money(t.earnings_micros)));
+        out.appendChild(h('div', { class: 'stats' }, cards));
+        var cols = [
+          { t: 'Country', k: 'country' },
+          { t: 'Impressions', num: true, f: function (r) { return num(r.imps); } },
+          { t: 'Clicks', num: true, f: function (r) { return num(r.clicks); } },
+          { t: 'CTR', num: true, f: function (r) { return pct(r.clicks, r.imps); } },
+          { t: 'Conversions', num: true, f: function (r) { return num(r.conversions); } }
+        ];
+        if (role !== 'publisher') cols.push({ t: 'Spend', num: true, f: function (r) { return money(r.spend_micros); } });
+        if (role !== 'advertiser') cols.push({ t: role === 'admin' ? 'Earnings' : 'Est. earnings', num: true, f: function (r) { return money(r.earnings_micros); } });
+        out.appendChild(card(null, h('div', { class: 'toolbar' }, h('h2', null, 'Countries'),
+          btn('Export CSV', function () {
+            api('GET', '/api/reports/geo/export' + qs(q())).then(function (r) { return downloadResponse(r, 'adnet-geo.csv'); }).catch(fail);
+          })), table(cols, rows, 'No country data in this period.')));
+        out.appendChild(h('p', { class: 'footnote' }, 'Country is derived from an offline IP database. Private addresses are not stored, and unknown public addresses appear as ZZ. No raw IP address is kept in reports.'));
+      }, run);
+    }
+    box.appendChild(card(null, h('div', { class: 'fields' },
+      h('div', { class: 'field' }, h('label', null, 'From'), inFrom),
+      h('div', { class: 'field' }, h('label', null, 'To'), inTo)),
+      h('div', { class: 'row end' }, h('button', { class: 'btn', type: 'button', onclick: run }, 'Run report'))));
+    box.appendChild(out);
+    run();
+  };
+
+  // ------------------------------------------------------------ payouts
+  VIEWS.payouts = function (box) {
+    var admin = S.user.role === 'admin';
+    var publishers = [];
+    var out = h('div');
+    function createReport() {
+      formModal('New payout statement', [
+        { k: 'user_id', t: 'Publisher', type: 'select', opts: publishers.map(function (u) { return [String(u.id), u.name + ' - ' + u.email]; }) },
+        { k: 'from', t: 'From', type: 'date', req: true },
+        { k: 'to', t: 'To', type: 'date', req: true },
+        { k: 'note', t: 'Note (optional)', maxlen: 200 }
+      ], 'Create statement', function (v) {
+        return api('POST', '/api/payouts', { user_id: Number(v.user_id), from: v.from, to: v.to, note: v.note });
+      }, function () { toast('Payout statement created', 'ok'); load(); });
+    }
+    function load() {
+      guard(out, api('GET', '/api/payouts'), function (rows) {
+        if (admin) out.appendChild(h('div', { class: 'toolbar' },
+          h('p', { class: 'hint' }, 'Statements summarise publisher earnings for a date range. Recording an actual payout still happens from Users or the billing page.'),
+          h('button', { class: 'btn', type: 'button', onclick: createReport }, 'New statement')));
+        out.appendChild(card(admin ? 'Payout statements' : 'My payout statements', table([
+          { t: 'Publisher', f: function (r) { return admin ? (r.publisher_name || r.publisher_email) : 'You'; } },
+          { t: 'Period', f: function (r) { return r.from + ' to ' + r.to; } },
+          { t: 'Lines', num: true, f: function (r) { return num(r.line_count); } },
+          { t: 'Amount', num: true, f: function (r) { return money(r.amount_micros); } },
+          { t: 'Status', f: function (r) { return chip(r.status); } },
+          { t: '', f: function (r) {
+            return btn('Download CSV', function () {
+              api('GET', '/api/payouts/' + r.id + '/export').then(function (res) {
+                return downloadResponse(res, 'adnet-payout-' + r.id + '.csv');
+              }).catch(fail);
+            });
+          } }], rows, 'No payout statements yet.')));
+        out.appendChild(h('p', { class: 'footnote' }, 'A statement contains only valid impressions, clicks and publisher earnings. It never includes advertiser spend or other publishers.'));
+      }, load);
+    }
+    box.appendChild(out);
+    if (admin) {
+      api('GET', '/api/users').then(function (us) {
+        publishers = us.filter(function (u) { return u.role === 'publisher'; });
+        load();
+      }).catch(function (e) { fail(e); load(); });
+    } else {
+      load();
+    }
   };
 
   // ------------------------------------------------------------ billing
@@ -1320,6 +1568,55 @@
     }
     load();
   };
+  function geoSettingsCard(box) {
+    var holder = h('div');
+    box.appendChild(holder);
+    function load() {
+      guard(holder, api('GET', '/api/admin/geo'), function (g) {
+        var file = h('input', { type: 'file', accept: '.csv,text/csv,text/plain' });
+        var version = h('input', { type: 'text', maxlength: 60, placeholder: 'e.g. dbip-2026-11' });
+        holder.appendChild(card('Offline geography database', h('div', { class: 'stats' },
+          statCard('Version', g.version || 'none'), statCard('IPv4 ranges', num(g.ranges)),
+          statCard('Installed', g.installed ? 'Yes' : 'No')),
+          h('p', { class: 'muted' }, 'Upload a CSV of IPv4 ranges. Accepted formats: start,end,CC or CIDR,CC. The file is limited to 12 MB and replaces the previous database atomically.'),
+          h('div', { class: 'fields' },
+            h('div', { class: 'field' }, h('label', null, 'Database file'), file),
+            h('div', { class: 'field' }, h('label', null, 'Version label'), version)),
+          h('div', { class: 'row end' }, h('button', { class: 'btn', type: 'button', onclick: function () {
+            if (!file.files[0]) { toast('Choose a CSV file first', 'err'); return; }
+            if (file.files[0].size > 12 * 1024 * 1024) { toast('That file is larger than 12 MB', 'err'); return; }
+            api('POST', '/api/admin/geo', file.files[0], true, { 'X-Geo-Version': version.value.trim() })
+              .then(function () { toast('Geography database updated', 'ok'); clear(holder); load(); }).catch(fail);
+          } }, 'Upload database'))));
+      }, load);
+    }
+    load();
+  }
+  function summarySettingsCard(box) {
+    var holder = h('div');
+    box.appendChild(holder);
+    function load() {
+      guard(holder, api('GET', '/api/admin/summary'), function (s) {
+        holder.appendChild(card('Daily email summary', h('p', { class: 'muted' },
+          s.email_enabled ? 'Enabled' : 'Disabled', ' · ', s.smtp_configured ? 'SMTP configured' : 'SMTP not configured',
+          ' · ', s.recipients || 'no recipients', ' · ', 'sends after ' + s.hour_utc + ':00 UTC'),
+          h('div', { class: 'row end' }, h('button', { class: 'btn sm', type: 'button', onclick: function () {
+            confirmDo('Send a summary email now using the configured SMTP settings?', function () {
+              api('POST', '/api/admin/summary/send', {}).then(function (r) {
+                toast('Summary sent for ' + r.day, 'ok'); clear(holder); load();
+              }).catch(fail);
+            });
+          } }, 'Send now')),
+          table([
+            { t: 'Date', k: 'date' },
+            { t: 'Status', f: function (r) { return chip(r.status); } },
+            { t: 'Recipients', k: 'recipients' },
+            { t: 'Error', f: function (r) { return r.error || '-'; } }
+          ], s.history, 'No summary emails attempted yet.')));
+      }, load);
+    }
+    load();
+  }
   VIEWS.settings = function (box) {
     function load() {
       guard(box, api('GET', '/api/admin/settings'), function (s) {
@@ -1333,7 +1630,19 @@
           { k: 'fraud_repeat_clicks_hour', t: 'Max valid clicks per visitor per campaign per hour', type: 'number', val: s.fraud_repeat_clicks_hour, min: 0 },
           { k: 'fraud_ip_clicks_min', t: 'Max clicks per IP per minute', type: 'number', val: s.fraud_ip_clicks_min, min: 0 },
           { k: 'fraud_max_imps_visitor_day', t: 'Max valid impressions per visitor per campaign per day', type: 'number', val: s.fraud_max_imps_visitor_day, min: 0 },
-          { k: 'retention_days', t: 'Keep raw events for (days)', type: 'number', val: s.retention_days, min: 1 }
+          { k: 'retention_days', t: 'Keep raw events for (days)', type: 'number', val: s.retention_days, min: 1 },
+          { k: 'conversion_tracking', t: 'Enable conversion tracking', type: 'checkbox', val: s.conversion_tracking === '1' },
+          { k: 'conversion_attribution_days', t: 'Click attribution window (days)', type: 'number', val: s.conversion_attribution_days, min: 1, max: 90 },
+          { k: 'conversion_dedupe_hours', t: 'Conversion dedupe window (hours)', type: 'number', val: s.conversion_dedupe_hours, min: 1, max: 720 },
+          { k: 'email_enabled', t: 'Enable the daily email summary', type: 'checkbox', val: s.email_enabled === '1' },
+          { k: 'email_recipients', t: 'Summary recipients', val: s.email_recipients, maxlen: 500, hint: 'Comma-separated email addresses.' },
+          { k: 'email_hour_utc', t: 'Send after this UTC hour', type: 'number', val: s.email_hour_utc, min: 0, max: 23 },
+          { k: 'smtp_host', t: 'SMTP host', val: s.smtp_host, maxlen: 200 },
+          { k: 'smtp_port', t: 'SMTP port', type: 'number', val: s.smtp_port, min: 1, max: 65535 },
+          { k: 'smtp_security', t: 'SMTP security', type: 'select', opts: [['starttls', 'STARTTLS'], ['tls', 'TLS (implicit)'], ['none', 'None']], val: s.smtp_security },
+          { k: 'smtp_username', t: 'SMTP username', val: s.smtp_username, maxlen: 200 },
+          { k: 'smtp_password', t: 'SMTP password', type: 'password', maxlen: 200, hint: s.smtp_password_set ? 'A password is saved. Leave blank to keep it.' : 'No password saved.' },
+          { k: 'smtp_from', t: 'From address', type: 'email', val: s.smtp_from, maxlen: 200 }
         ];
         box.appendChild(card('Settings', formBody(fields, 'Save settings', function (v) {
           var p = {};
@@ -1343,6 +1652,8 @@
             return api('GET', '/api/meta').then(function (m) { S.meta = m; });
           });
         })));
+        geoSettingsCard(box);
+        summarySettingsCard(box);
       }, load);
     }
     load();

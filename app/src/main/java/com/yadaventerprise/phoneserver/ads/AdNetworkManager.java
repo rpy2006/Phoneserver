@@ -2,14 +2,15 @@ package com.yadaventerprise.phoneserver.ads;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import com.yadaventerprise.phoneserver.service.ServerService;
 import java.io.File;
 import java.io.IOException;
-import org.json.JSONArray;
+import java.util.HashSet;
+import java.util.Set;
+import org.json.JSONObject;
 
 /**
  * Entry point for the Custom Ads Network Manager. It is opt-in (disabled until switched on in Ad Network settings)
- * and fully separate from the existing PhoneServer HTTP server: its own port, its own database, its own files.
+ * and fully separate from the existing PhoneServer HTTP server: its own port, its own files.
  */
 public final class AdNetworkManager {
     public static final int PORT = 8090;
@@ -36,18 +37,16 @@ public final class AdNetworkManager {
         return server != null && server.isRunning();
     }
 
-    /** Called from ServerService: starts only if the owner has enabled the ad network. */
     public static void startIfEnabled(Context c) {
         if (isEnabled(c)) start(c);
     }
 
-    /** Returns null on success, otherwise a short reason. */
     public static synchronized String start(Context c) {
         if (isRunning()) return null;
         Context app = c.getApplicationContext();
         try {
             AdDb db = AdDb.get(app);
-            db.getWritableDatabase(); // creates or opens the schema
+            db.open();
             setupCode(app);
             AdHttpServer s = new AdHttpServer(app, db, PORT);
             s.start();
@@ -67,12 +66,11 @@ public final class AdNetworkManager {
         sweeper = null;
     }
 
-    /** One-time code, shown only on the phone, required to create the first administrator. */
     public static synchronized String setupCode(Context c) {
         SharedPreferences p = prefs(c);
         String code = p.getString("setup_code", "");
         if (code.isEmpty()) {
-            code = AdSecurity.randomHex(4).toUpperCase(java.util.Locale.ROOT); // 8 characters
+            code = AdSecurity.randomHex(4).toUpperCase(java.util.Locale.ROOT);
             p.edit().putString("setup_code", code).apply();
         }
         return code;
@@ -88,25 +86,30 @@ public final class AdNetworkManager {
     }
 
     public static boolean needsSetup(Context c) {
-        return AdDb.get(c).scalar("SELECT COUNT(*) FROM users", 0) == 0;
+        return AdDb.get(c).count(AdDb.USERS) == 0;
     }
 
-    /** Housekeeping: expired sessions, fraud review, event pruning, campaign end dates. */
     private static void startSweeper(final Context app, final AdDb db) {
         final Thread t = new Thread(() -> {
             long tick = 0;
             while (sweeper == Thread.currentThread()) {
                 try {
                     long now = System.currentTimeMillis();
-                    db.run("DELETE FROM sessions WHERE expires_at<?", now);
+                    db.deleteWhere(AdDb.SESSIONS, s -> s.optLong("expires_at") < now);
                     AdRateLimiter.sweep();
                     if (tick % 10 == 0) AdFraud.reviewSites(db);
                     if (tick % 60 == 0) {
                         long keep = db.settingLong("retention_days", 30) * 86_400_000L;
-                        db.run("DELETE FROM events WHERE ts<?", now - keep);
-                        db.run("DELETE FROM fraud_log WHERE day<?", AdDb.today() - 90);
-                        db.run("UPDATE campaigns SET status='ended' WHERE status IN('approved','paused') AND end_at IS NOT NULL AND end_at<=?", now);
+                        db.deleteWhere(AdDb.EVENTS, e -> e.optLong("ts") < now - keep);
+                        db.deleteWhere(AdDb.FRAUD_LOG, f -> f.optLong("day") < AdDb.today() - 90);
+                        db.updateWhere(AdDb.CAMPAIGNS, c -> "approved".equals(c.optString("status"))
+                                        || "paused".equals(c.optString("status")),
+                                c -> {
+                                    if (!c.isNull("end_at") && c.optLong("end_at") <= now) AdHttp.put(c, "status", "ended");
+                                });
                         removeOrphanFiles(app, db);
+                        AdSummaryMailer.maybeSend(db);
+                        AdExperimentEngine.finishExpired(db);
                     }
                     tick++;
                     Thread.sleep(60_000);
@@ -126,14 +129,14 @@ public final class AdNetworkManager {
         t.start();
     }
 
-    /** Deletes creative image files no database row refers to any more. */
     private static void removeOrphanFiles(Context app, AdDb db) {
         File[] files = AdDelivery.creativesDir(app).listFiles();
         if (files == null) return;
-        JSONArray rows = db.query("SELECT image_file FROM creatives WHERE image_file<>''");
-        java.util.HashSet<String> used = new java.util.HashSet<>();
-        for (int i = 0; i < rows.length(); i++) used.add(rows.optJSONObject(i).optString("image_file"));
-        long cutoff = System.currentTimeMillis() - 3600_000L; // ignore files still being written
+        Set<String> used = new HashSet<>();
+        for (JSONObject row : db.list(AdDb.CREATIVES, c -> !c.optString("image_file").isEmpty())) {
+            used.add(row.optString("image_file"));
+        }
+        long cutoff = System.currentTimeMillis() - 3600_000L;
         for (File f : files) {
             if (!used.contains(f.getName()) && f.lastModified() < cutoff) f.delete();
         }

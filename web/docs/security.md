@@ -143,8 +143,9 @@ not attach ambient credentials cross-origin.
 - **The access password and tokens are bearer secrets.** Anyone who obtains
   them has the associated scope. Tokens can be revoked from the app/API.
 - **No audit-grade logging or login throttling beyond the per-IP rate limit.**
-- **No encryption at rest.** Files and databases are stored unencrypted in the
-  app-private data root. Device-level encryption is the only protection.
+- **No encryption at rest (data platform).** Project databases and files are
+  stored unencrypted in the app-private data root. Device-level encryption is
+  the only protection. (The separate ad-network JSON store is encrypted.)
 - **No protection against a malicious local app** on a rooted/compromised
   device.
 
@@ -154,15 +155,18 @@ Do not treat this as production security for sensitive or multi-user data.
 
 The optional ad network has a separate threat model and auth system from `/api/v1`:
 
-- **Separate origin and data.** Port `8090`, `adnet.db`, creative files and `adnet_prefs`; no shared sessions, tokens or access password.
+- **Separate origin and data.** Port `8090`, encrypted `adnet/adnet.json`, geo CSV, creative files and `adnet_prefs`; no shared sessions, tokens or access password.
 - **Accounts.** PBKDF2-HMAC-SHA256 (60,000 iterations, 16-byte salt), 10–128 character passwords with letters and digits, 12-hour bearer sessions stored only as SHA-256 hashes, revocation on logout/password change/disable.
 - **First admin.** `/api/setup` requires a one-time code shown on the phone and is refused once any user exists; setup attempts are rate-limited.
 - **Login abuse.** Per IP+email and per-IP windows; unknown emails run a dummy PBKDF2 hash so timing cannot reveal account existence.
 - **Authorisation.** Admin-only routes are checked server-side. Publishers can only manage their sites/placements; advertisers can only manage their campaigns/creatives. Foreign ids return 404.
 - **Delivery.** `/serve` requires a valid `pl_` key, an approved site, an active placement and an `Origin`/`Referer` host matching the registered domain (subdomains allowed). `/imp` and `/c` require HMAC-signed, single-use, expiring tokens; clicks require a prior valid impression. Bots get `204`; no fill gets `204`.
 - **Invalid traffic.** Bot UA filtering, per-IP serve/beacon/click limits, visitor/day caps, minimum click delay, repeat-click caps and site flagging. Invalid events are recorded but never billed.
-- **Input handling.** Strict email/domain/URL/number validation, image content sniffing (PNG/JPEG/GIF/WebP only, no SVG), exact banner dimensions, bound SQL parameters, fixed report grouping expressions.
+- **Conversions.** Pixels require a valid click token. Postbacks require HMAC-SHA256 over `t|e|v|tx` with a key derived per advertiser account; transaction ids are deduplicated; only admins can approve/reject, and rejected conversions never affect billing.
+- **Geography.** Admin-only CSV upload (12 MiB cap) parsed into IPv4 ranges; only the two-letter country is stored with events/aggregates, never the address. Private addresses are dropped and unknowns use `ZZ`.
+- **Payouts and email.** Payout statements are role-scoped (owner or admin) for list/read/export. SMTP passwords are write-only, stored in the encrypted store, and headers are stripped of CR/LF; failures are logged without credentials.
+- **Input handling.** Strict email/domain/URL/number validation, image content sniffing (PNG/JPEG/GIF/WebP only, no SVG), exact banner dimensions, fixed report grouping expressions, atomic JSON writes and transactional rollback.
 - **Response safety.** Header values strip CR/LF; API responses are `no-store`; every response has `X-Content-Type-Options: nosniff`; creative media is served with a `default-src 'none'; sandbox` CSP; the dashboard has a strict self-only CSP plus `X-Frame-Options: DENY`.
-- **Privacy.** No cookies and no raw-IP visitor storage. The visitor id is a daily-rotating HMAC of IP+UA used only for frequency capping/fraud, and `DNT: 1`/`Sec-GPC: 1` suppresses it. No third-party requests or cloud services are involved.
+- **Privacy.** No cookies and no raw-IP storage. The visitor id is a daily-rotating HMAC of IP+UA used only for frequency capping/fraud, and `DNT: 1`/`Sec-GPC: 1` suppresses it. No third-party requests or cloud services are involved; optional summary email uses the admin's own SMTP server.
 
 Residual risks: plaintext HTTP on the LAN, no TLS in the app, no email verification/password reset/CAPTCHA, heuristic fraud detection, and no guarantee against determined invalid traffic. Treat this as a small private ad server, not an ad exchange. See [ad-network.md](ad-network.md) §11.

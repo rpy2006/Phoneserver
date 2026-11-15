@@ -135,10 +135,10 @@ button{font:inherit}
   background:var(--surface-2);color:var(--text-2);font-size:12px;font-weight:600;line-height:1.6;
   text-transform:capitalize;white-space:nowrap;
 }
-.chip.approved,.chip.active{background:var(--ok-bg);color:var(--ok)}
+.chip.approved,.chip.active,.chip.valid,.chip.running,.chip.sent{background:var(--ok-bg);color:var(--ok)}
 .chip.pending{background:var(--warn-bg);color:var(--warn)}
-.chip.rejected,.chip.disabled,.chip.ended,.chip.removed{background:var(--bad-bg);color:var(--bad)}
-.chip.paused,.chip.draft{background:var(--surface-2);color:var(--text-2)}
+.chip.rejected,.chip.disabled,.chip.ended,.chip.removed,.chip.invalid,.chip.failed{background:var(--bad-bg);color:var(--bad)}
+.chip.paused,.chip.draft,.chip.completed{background:var(--surface-2);color:var(--text-2)}
 .chip.balance{background:var(--brand-weak);color:var(--brand);font-variant-numeric:tabular-nums}
 
 /* ---------------------------------------------------------------- tables */

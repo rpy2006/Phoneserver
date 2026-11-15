@@ -102,36 +102,44 @@ client cannot bypass the upload limit by lying about `Content-Length`.
 
 ## Ad network data
 
-The optional ad network keeps its data outside the project data root and outside `system.db`:
+The optional ad network keeps its data outside the project data root and outside `system.db`. It uses one encrypted JSON document with atomic writes plus separate files:
 
 ```
 app private storage/
-  databases/
-    adnet.db                 # users, sessions, sites, placements, campaigns,
-                             # creatives, events, stats_daily, fraud_log,
-                             # billing, audit, settings (+ -wal/-shm)
   files/
-    adnet/creatives/
-      <24-hex>.<png|jpg|gif|webp>
+    adnet/
+      adnet.json             # all ad collections (ENC: encrypted JSON)
+      geo.csv                # optional offline IPv4 country database
+      creatives/
+        <24-hex>.<png|jpg|gif|webp>
+  databases/
+    adnet.db.migrated        # legacy SQLite database after one-time import
   shared_prefs/
     adnet_prefs.xml          # enabled flag + one-time setup code
 ```
 
-| Table | Purpose |
+| Collection | Purpose |
 |---|---|
 | `users` | email, PBKDF2 hash, role, status, prepaid balance (micros) |
 | `sessions` | SHA-256 token hashes, user id, expiry |
 | `sites` | owner, domain, moderation status, fraud flag/reason |
 | `placements` | site, format/size, `pl_` key, status |
-| `campaigns` | advertiser, pricing/bid/budgets, schedule, targeting JSON, review status |
+| `campaigns` | advertiser, pricing/bid/budgets, schedule, targeting, review status |
 | `creatives` | campaign, type/text/URL, image file/mime/dimensions, review status |
-| `events` | one row per impression/click, validity/reason, cost and publisher share |
+| `experiments` | campaign, variants/weights, metric, lifecycle, winner |
+| `events` | one record per impression/click/conversion, validity/reason, cost and publisher share |
+| `conversions` | click attribution, event, value, transaction id, review status |
 | `stats_daily` | daily aggregates per campaign/creative/placement/site |
+| `geo_daily` | country aggregates for impressions, clicks, conversions and money |
+| `payout_reports` | publisher payout statements and status |
+| `daily_summaries` | daily email attempts, recipients, result and error |
 | `fraud_log` | invalid-traffic counts by day and reason |
 | `billing` | top-ups, adjustments, payouts and resulting balances |
 | `audit` | admin actions (setup, user create/delete, approvals, billing) |
-| `settings` | platform configuration and the HMAC secret |
+| `settings` | platform configuration, HMAC/postback secrets and SMTP password |
 
-Retention is managed by the ad-network sweeper: expired sessions are deleted every minute, fraud review runs every 10 minutes, and events older than `retention_days` (default **30**) plus fraud-log days older than 90 are removed hourly. Orphaned creative images are deleted after one hour. Ad data is **not** part of `/api/v1` project backups; back up `adnet.db` and `adnet/creatives/` separately.
+Legacy `adnet.db` is imported once on first start and renamed `adnet.db.migrated` (its WAL/SHM sidecars are renamed too). Writes go through a temporary file plus rename, so a crash cannot leave a partially written collection.
+
+Retention is managed by the ad-network sweeper: expired sessions are deleted every minute, fraud review runs every 10 minutes, and events older than `retention_days` (default **30**) plus fraud-log days older than 90 are removed hourly. Expired experiments are finished, the daily email summary is sent when due, orphaned creative images are deleted after one hour, and payout/conversion cleanup follows the same sweep. Ad data is **not** part of `/api/v1` project backups; back up `adnet/adnet.json`, `adnet/geo.csv` (if used), `adnet/creatives/` and `adnet_prefs.xml` separately.
 
 See [ad-network.md](ad-network.md) for delivery-count semantics and the full API.

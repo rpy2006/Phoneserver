@@ -142,5 +142,24 @@ HTTP status matching the failure.
 
 ## Ad network API
 
-The ad network is a separate origin on `:8090` with its own database, accounts
-and bearer sessions. See [ad-network.md](ad-network.md).
+The ad network is a separate origin on `:8090` with its own encrypted JSON data
+store, accounts and bearer sessions. See [ad-network.md](ad-network.md) for the
+full reference.
+
+| Area | Endpoints |
+|---|---|
+| Public | `GET /health`, `/sdk.js`, `/serve`, `/c`, `/media/<id>`, `/conv`, `/postback`; `POST /imp` |
+| Auth | `GET /api/setup/status`, `GET /api/meta`, `POST /api/setup`, `/api/auth/login`, `/api/auth/signup`, `/api/auth/logout`, `/api/auth/password` |
+| Users | `GET|POST /api/users`, `PATCH|DELETE /api/users/:id`, `POST /api/users/:id/credit`, `/api/users/:id/payout` |
+| Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
+| Campaigns / creatives | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, lifecycle actions, `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, image/review actions |
+| Conversions | `GET /api/conversions`, `GET /api/conversions/postback-key`, `POST /api/conversions/:id/approve|reject` |
+| Experiments | `GET|POST /api/experiments`, `GET|PATCH /api/experiments/:id`, `POST …/:id/start|pause|finish|winner` |
+| Payouts | `GET|POST /api/payouts`, `GET /api/payouts/:id/export` |
+| Reports | `GET /api/reports/summary`, `/breakdown`, `/export`, `/geo`, `/geo/export`, `GET /api/billing` |
+| Admin | `GET /api/admin/overview`, `/fraud`, `/geo`, `/summary`, `GET|PUT /api/admin/settings`, `POST /api/admin/geo`, `POST /api/admin/summary/send` |
+
+Postbacks sign `t|e|v|tx` as lowercase hex HMAC-SHA256 with the advertiser's
+per-account key from `/api/conversions/postback-key`. Geo uploads are CSV
+(`start,end,CC` or `CIDR,CC`) and capped at 12 MiB. SMTP passwords are
+write-only; `GET /api/admin/settings` reports `smtp_password_set` instead.

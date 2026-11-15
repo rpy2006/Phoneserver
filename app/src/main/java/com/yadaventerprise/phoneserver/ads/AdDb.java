@@ -3,203 +3,465 @@ package com.yadaventerprise.phoneserver.ads;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
-import android.database.sqlite.SQLiteStatement;
 import android.util.Base64;
+import com.yadaventerprise.phoneserver.data.database.JsonStorage;
+import java.io.File;
+import java.io.IOException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Persistent SQL storage for the Ad Network Manager: one app-private SQLite database.
- * Every query uses bound parameters - user input is never concatenated into SQL.
- * Money is stored as integer micro-units (1 currency unit = 1,000,000) so nothing drifts.
+ * Persistent file-backed storage for the Ad Network Manager. The whole database is a single
+ * encrypted JSON document written atomically; there is no SQL database in use after the one-time
+ * import of a legacy adnet.db file.
  */
-final class AdDb extends SQLiteOpenHelper {
-    private static final int VERSION = 1;
+final class AdDb {
+    static final String USERS = "users";
+    static final String SESSIONS = "sessions";
+    static final String SITES = "sites";
+    static final String PLACEMENTS = "placements";
+    static final String CAMPAIGNS = "campaigns";
+    static final String CREATIVES = "creatives";
+    static final String EVENTS = "events";
+    static final String STATS = "stats_daily";
+    static final String GEO = "geo_daily";
+    static final String CONVERSIONS = "conversions";
+    static final String EXPERIMENTS = "experiments";
+    static final String PAYOUT_REPORTS = "payout_reports";
+    static final String SUMMARIES = "daily_summaries";
+    static final String FRAUD_LOG = "fraud_log";
+    static final String BILLING = "billing";
+    static final String AUDIT = "audit";
+
+    private static final String[] TABLES = {
+            USERS, SESSIONS, SITES, PLACEMENTS, CAMPAIGNS, CREATIVES, EVENTS, STATS, GEO,
+            CONVERSIONS, EXPERIMENTS, PAYOUT_REPORTS, SUMMARIES, FRAUD_LOG, BILLING, AUDIT
+    };
+
+    private static final String[][] DEFAULTS = {
+            {"rev_share_pct", "70"}, {"currency", "USD"}, {"public_base_url", ""}, {"allow_signup", "0"},
+            {"trust_proxy", "0"}, {"fraud_min_click_ms", "500"}, {"fraud_repeat_clicks_hour", "3"},
+            {"fraud_ip_clicks_min", "10"}, {"fraud_max_imps_visitor_day", "50"}, {"retention_days", "30"},
+            {"conversion_tracking", "0"}, {"conversion_attribution_days", "30"}, {"conversion_dedupe_hours", "24"},
+            {"email_enabled", "0"}, {"email_recipients", ""}, {"email_hour_utc", "7"},
+            {"smtp_host", ""}, {"smtp_port", "587"}, {"smtp_security", "starttls"},
+            {"smtp_username", ""}, {"smtp_password", ""}, {"smtp_from", ""},
+            {"geo_db_version", "none"}, {"geo_last_updated", "0"}
+    };
+
     private static AdDb instance;
-    private volatile byte[] secretCache;
+    private final File file;
+    private final File legacyFile;
+    private final Object lock = new Object();
+    private JSONObject data;
+    private int batchDepth;
 
     static synchronized AdDb get(Context c) {
-        if (instance == null) instance = new AdDb(c.getApplicationContext());
+        if (instance == null) {
+            instance = new AdDb(new File(c.getFilesDir(), "adnet/adnet.json"),
+                    c.getDatabasePath("adnet.db"));
+        }
         return instance;
     }
 
-    private AdDb(Context c) {
-        super(c, "adnet.db", null, VERSION);
-        setWriteAheadLoggingEnabled(true);
+    AdDb(File file, File legacyFile) {
+        this.file = file;
+        this.legacyFile = legacyFile;
     }
 
-    @Override
-    public void onConfigure(SQLiteDatabase db) {
-        db.setForeignKeyConstraintsEnabled(true);
+    AdDb(File file) {
+        this(file, new File(file.getParentFile(), "adnet.db"));
     }
 
-    private static final String[] SCHEMA = {
-            "CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    File file() {
+        return file;
+    }
 
-            "CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                    + " email TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL, company TEXT NOT NULL DEFAULT '',"
-                    + " role TEXT NOT NULL CHECK(role IN('admin','publisher','advertiser')),"
-                    + " pass_hash TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN('active','disabled')),"
-                    + " balance_micros INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
-
-            "CREATE TABLE sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-                    + " created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
-            "CREATE INDEX ix_sessions_user ON sessions(user_id)",
-
-            "CREATE TABLE sites(id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-                    + " name TEXT NOT NULL, domain TEXT NOT NULL,"
-                    + " status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN('pending','approved','rejected','removed')),"
-                    + " flagged INTEGER NOT NULL DEFAULT 0, flag_reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)",
-            "CREATE UNIQUE INDEX ux_sites_domain ON sites(domain) WHERE status<>'removed'",
-
-            "CREATE TABLE placements(id INTEGER PRIMARY KEY AUTOINCREMENT, site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,"
-                    + " name TEXT NOT NULL, format TEXT NOT NULL CHECK(format IN('banner','native','text')),"
-                    + " width INTEGER NOT NULL DEFAULT 0, height INTEGER NOT NULL DEFAULT 0, key TEXT NOT NULL UNIQUE,"
-                    + " status TEXT NOT NULL DEFAULT 'active' CHECK(status IN('active','paused','removed')), created_at INTEGER NOT NULL)",
-
-            "CREATE TABLE campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT, advertiser_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-                    + " name TEXT NOT NULL,"
-                    + " status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN('draft','pending','approved','rejected','paused','ended')),"
-                    + " pricing TEXT NOT NULL CHECK(pricing IN('CPM','CPC')), bid_micros INTEGER NOT NULL,"
-                    + " daily_budget_micros INTEGER NOT NULL DEFAULT 0, total_budget_micros INTEGER NOT NULL,"
-                    + " spent_micros INTEGER NOT NULL DEFAULT 0, start_at INTEGER, end_at INTEGER,"
-                    + " targeting TEXT NOT NULL DEFAULT '{}', reject_reason TEXT NOT NULL DEFAULT '',"
-                    + " created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
-            "CREATE INDEX ix_campaigns_adv ON campaigns(advertiser_id)",
-
-            "CREATE TABLE creatives(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,"
-                    + " type TEXT NOT NULL CHECK(type IN('banner','native','text')),"
-                    + " title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', cta TEXT NOT NULL DEFAULT '', click_url TEXT NOT NULL,"
-                    + " image_file TEXT NOT NULL DEFAULT '', image_mime TEXT NOT NULL DEFAULT '',"
-                    + " width INTEGER NOT NULL DEFAULT 0, height INTEGER NOT NULL DEFAULT 0,"
-                    + " status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN('pending','approved','rejected')),"
-                    + " reject_reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)",
-            "CREATE INDEX ix_creatives_campaign ON creatives(campaign_id)",
-
-            // Raw billable/verified events. A (nonce,type) pair can exist only once, which blocks replayed tokens.
-            "CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, type TEXT NOT NULL CHECK(type IN('imp','click')),"
-                    + " nonce TEXT NOT NULL, campaign_id INTEGER NOT NULL, creative_id INTEGER NOT NULL, placement_id INTEGER NOT NULL,"
-                    + " site_id INTEGER NOT NULL, visitor TEXT NOT NULL DEFAULT '', valid INTEGER NOT NULL, reason TEXT NOT NULL DEFAULT '',"
-                    + " cost_micros INTEGER NOT NULL DEFAULT 0, pub_micros INTEGER NOT NULL DEFAULT 0)",
-            "CREATE UNIQUE INDEX ux_events_once ON events(nonce, type)",
-            "CREATE INDEX ix_events_ts ON events(ts)",
-            "CREATE INDEX ix_events_visitor ON events(visitor, campaign_id, type, ts)",
-
-            // Daily roll-up that all reports read. It outlives raw-event pruning.
-            "CREATE TABLE stats_daily(day INTEGER NOT NULL, campaign_id INTEGER NOT NULL, creative_id INTEGER NOT NULL,"
-                    + " placement_id INTEGER NOT NULL, site_id INTEGER NOT NULL,"
-                    + " served INTEGER NOT NULL DEFAULT 0, imps INTEGER NOT NULL DEFAULT 0, invalid_imps INTEGER NOT NULL DEFAULT 0,"
-                    + " clicks INTEGER NOT NULL DEFAULT 0, invalid_clicks INTEGER NOT NULL DEFAULT 0,"
-                    + " spend_micros INTEGER NOT NULL DEFAULT 0, pub_micros INTEGER NOT NULL DEFAULT 0,"
-                    + " PRIMARY KEY(day, creative_id, placement_id))",
-            "CREATE INDEX ix_stats_campaign ON stats_daily(campaign_id, day)",
-            "CREATE INDEX ix_stats_site ON stats_daily(site_id, day)",
-
-            // Unattributable rejections (forged / expired tokens) and per-reason counters.
-            "CREATE TABLE fraud_log(day INTEGER NOT NULL, reason TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, reason))",
-
-            // Manual ledger: advertiser top-ups, adjustments and publisher payouts. Spend/earnings are derived from stats_daily.
-            "CREATE TABLE billing(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL,"
-                    + " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-                    + " type TEXT NOT NULL CHECK(type IN('topup','adjustment','payout')), amount_micros INTEGER NOT NULL,"
-                    + " balance_after_micros INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', created_by INTEGER NOT NULL)",
-            "CREATE INDEX ix_billing_user ON billing(user_id, ts)",
-
-            "CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, user_id INTEGER NOT NULL,"
-                    + " action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '')"
-    };
-
-    @Override
-    public void onCreate(SQLiteDatabase db) {
-        for (String s : SCHEMA) db.execSQL(s);
-        String[][] defaults = {
-                {"rev_share_pct", "70"}, {"currency", "USD"}, {"public_base_url", ""}, {"allow_signup", "0"},
-                {"trust_proxy", "0"}, {"fraud_min_click_ms", "500"}, {"fraud_repeat_clicks_hour", "3"},
-                {"fraud_ip_clicks_min", "10"}, {"fraud_max_imps_visitor_day", "50"}, {"retention_days", "30"}
-        };
-        for (String[] kv : defaults) {
-            db.execSQL("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", new Object[]{kv[0], kv[1]});
+    synchronized void open() {
+        synchronized (lock) {
+            if (data != null) return;
+            try {
+                if (file.isFile()) {
+                    data = JsonStorage.readJson(file);
+                } else if (legacyFile != null && legacyFile.isFile()) {
+                    data = importLegacy(legacyFile);
+                } else {
+                    data = new JSONObject();
+                }
+                initialize();
+                save();
+                if (legacyFile != null && legacyFile.isFile()) retireLegacy(legacyFile);
+            } catch (IOException | JSONException e) {
+                throw new IllegalStateException("Could not open ad storage: " + e.getMessage(), e);
+            }
         }
-        byte[] secret = new byte[32];
-        new SecureRandom().nextBytes(secret);
-        db.execSQL("INSERT OR IGNORE INTO settings(key,value) VALUES('hmac_secret',?)",
-                new Object[]{Base64.encodeToString(secret, Base64.NO_WRAP)});
     }
 
-    @Override
-    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Version 1 is the first schema. Future migrations go here.
+    private void initialize() throws JSONException {
+        if (!data.has("next_id")) data.put("next_id", new JSONObject());
+        if (!data.has("settings")) data.put("settings", new JSONObject());
+        for (String table : TABLES) {
+            if (!data.has(table)) data.put(table, new JSONArray());
+            JSONArray rows = data.getJSONArray(table);
+            if (!data.getJSONObject("next_id").has(table)) {
+                long max = 0;
+                for (int i = 0; i < rows.length(); i++) {
+                    max = Math.max(max, rows.optJSONObject(i).optLong("id"));
+                }
+                data.getJSONObject("next_id").put(table, max + 1);
+            }
+        }
+        JSONObject settings = data.getJSONObject("settings");
+        for (String[] kv : DEFAULTS) {
+            if (!settings.has(kv[0])) settings.put(kv[0], kv[1]);
+        }
+        if (!settings.has("hmac_secret")) {
+            byte[] secret = new byte[32];
+            new SecureRandom().nextBytes(secret);
+            settings.put("hmac_secret", Base64.encodeToString(secret, Base64.NO_WRAP));
+        }
+        if (!settings.has("postback_secret")) {
+            byte[] secret = new byte[32];
+            new SecureRandom().nextBytes(secret);
+            settings.put("postback_secret", Base64.encodeToString(secret, Base64.NO_WRAP));
+        }
+        data.put("schema", 2);
     }
 
-    // ---- query helpers ----
+    private JSONObject importLegacy(File dbFile) throws IOException, JSONException {
+        JSONObject root = new JSONObject();
+        root.put("settings", new JSONObject());
+        root.put("next_id", new JSONObject());
+        for (String table : TABLES) root.put(table, new JSONArray());
+        SQLiteDatabase legacy = null;
+        try {
+            legacy = SQLiteDatabase.openDatabase(dbFile.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+            for (String table : TABLES) {
+                if (!tableExists(legacy, table)) continue;
+                JSONArray rows = root.getJSONArray(table);
+                long max = 0;
+                try (Cursor c = legacy.rawQuery("SELECT * FROM " + table, null)) {
+                    while (c.moveToNext()) {
+                        JSONObject row = new JSONObject();
+                        for (int i = 0; i < c.getColumnCount(); i++) {
+                            Object value;
+                            switch (c.getType(i)) {
+                                case Cursor.FIELD_TYPE_NULL: value = JSONObject.NULL; break;
+                                case Cursor.FIELD_TYPE_INTEGER:
+                                    value = c.getLong(i);
+                                    if ("id".equals(c.getColumnName(i))) max = Math.max(max, c.getLong(i));
+                                    break;
+                                case Cursor.FIELD_TYPE_FLOAT: value = c.getDouble(i); break;
+                                default: value = c.getString(i);
+                            }
+                            AdHttp.put(row, c.getColumnName(i), value);
+                        }
+                        rows.put(row);
+                    }
+                }
+                root.getJSONObject("next_id").put(table, max + 1);
+            }
+            if (tableExists(legacy, "settings")) {
+                try (Cursor c = legacy.rawQuery("SELECT key,value FROM settings", null)) {
+                    JSONObject settings = root.getJSONObject("settings");
+                    while (c.moveToNext()) {
+                        if ("hmac_secret".equals(c.getString(0))) continue;
+                        settings.put(c.getString(0), c.getString(1));
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            throw new IOException("legacy ad database could not be imported: " + e.getMessage(), e);
+        } finally {
+            if (legacy != null) legacy.close();
+        }
+        return root;
+    }
 
-    private static String[] strs(Object[] args) {
-        String[] out = new String[args.length];
-        for (int i = 0; i < args.length; i++) out[i] = String.valueOf(args[i]);
+    private static boolean tableExists(SQLiteDatabase db, String table) {
+        try (Cursor c = db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", new String[]{table})) {
+            return c.moveToFirst();
+        }
+    }
+
+    private static void retireLegacy(File dbFile) {
+        for (String suffix : new String[]{"", "-wal", "-shm"}) {
+            File f = new File(dbFile.getPath() + suffix);
+            if (!f.isFile()) continue;
+            File dest = new File(f.getPath() + ".migrated");
+            if (dest.isFile()) dest.delete();
+            if (!f.renameTo(dest)) return;
+        }
+    }
+
+    private void save() {
+        try {
+            JsonStorage.writeJsonAtomic(file, data, true);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not save ad storage: " + e.getMessage(), e);
+        }
+    }
+
+    private void changed() {
+        if (batchDepth == 0) save();
+    }
+
+    synchronized void transaction(Runnable work) {
+        transaction(() -> {
+            work.run();
+            return null;
+        });
+    }
+
+    synchronized <T> T transaction(Supplier<T> work) {
+        synchronized (lock) {
+            open();
+            JSONObject backup = copy(data);
+            batchDepth++;
+            try {
+                T result = work.get();
+                batchDepth--;
+                if (batchDepth == 0) save();
+                return result;
+            } catch (RuntimeException | Error e) {
+                data = backup;
+                if (batchDepth > 0) batchDepth--;
+                if (batchDepth == 0) save();
+                throw e;
+            }
+        }
+    }
+
+    synchronized JSONObject copy(String table, long id) {
+        synchronized (lock) {
+            open();
+            JSONObject row = find(table, r -> r.optLong("id") == id);
+            return row == null ? null : copy(row);
+        }
+    }
+
+    synchronized JSONArray rows(String table) {
+        synchronized (lock) {
+            open();
+            return copy(data.optJSONArray(table));
+        }
+    }
+
+    synchronized JSONArray rows(String table, Predicate<JSONObject> filter) {
+        synchronized (lock) {
+            open();
+            JSONArray out = new JSONArray();
+            JSONArray rows = data.optJSONArray(table);
+            if (rows == null) return out;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) out.put(copy(row));
+            }
+            return out;
+        }
+    }
+
+    synchronized List<JSONObject> list(String table, Predicate<JSONObject> filter) {
+        synchronized (lock) {
+            open();
+            List<JSONObject> out = new ArrayList<>();
+            JSONArray rows = data.optJSONArray(table);
+            if (rows == null) return out;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) out.add(copy(row));
+            }
+            return out;
+        }
+    }
+
+    synchronized JSONObject find(String table, Predicate<JSONObject> filter) {
+        synchronized (lock) {
+            open();
+            JSONArray rows = data.optJSONArray(table);
+            if (rows == null) return null;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) return copy(row);
+            }
+            return null;
+        }
+    }
+
+    synchronized long count(String table) {
+        return count(table, r -> true);
+    }
+
+    synchronized long count(String table, Predicate<JSONObject> filter) {
+        synchronized (lock) {
+            open();
+            JSONArray rows = data.optJSONArray(table);
+            long n = 0;
+            if (rows == null) return 0;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) n++;
+            }
+            return n;
+        }
+    }
+
+    synchronized long insert(String table, JSONObject values) {
+        synchronized (lock) {
+            open();
+            JSONObject next = data.optJSONObject("next_id");
+            long id = next == null ? 1 : next.optLong(table, 1);
+            JSONObject row = copy(values);
+            AdHttp.put(row, "id", id);
+            data.optJSONArray(table).put(row);
+            if (next != null) AdHttp.put(next, table, id + 1);
+            changed();
+            return id;
+        }
+    }
+
+    synchronized boolean update(String table, long id, JSONObject patch) {
+        synchronized (lock) {
+            open();
+            JSONObject row = raw(table, r -> r.optLong("id") == id);
+            if (row == null) return false;
+            copyInto(row, patch);
+            changed();
+            return true;
+        }
+    }
+
+    synchronized boolean update(String table, long id, Consumer<JSONObject> mutator) {
+        synchronized (lock) {
+            open();
+            JSONObject row = raw(table, r -> r.optLong("id") == id);
+            if (row == null) return false;
+            mutator.accept(row);
+            changed();
+            return true;
+        }
+    }
+
+    synchronized int updateWhere(String table, Predicate<JSONObject> filter, Consumer<JSONObject> mutator) {
+        synchronized (lock) {
+            open();
+            JSONArray rows = data.optJSONArray(table);
+            int n = 0;
+            if (rows == null) return 0;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) {
+                    mutator.accept(row);
+                    n++;
+                }
+            }
+            if (n > 0) changed();
+            return n;
+        }
+    }
+
+    synchronized boolean delete(String table, long id) {
+        return deleteWhere(table, r -> r.optLong("id") == id) > 0;
+    }
+
+    synchronized int deleteWhere(String table, Predicate<JSONObject> filter) {
+        synchronized (lock) {
+            open();
+            JSONArray rows = data.optJSONArray(table);
+            if (rows == null) return 0;
+            JSONArray kept = new JSONArray();
+            int removed = 0;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row != null && filter.test(row)) removed++;
+                else if (row != null) kept.put(row);
+            }
+            if (removed > 0) {
+                AdHttp.put(data, table, kept);
+                changed();
+            }
+            return removed;
+        }
+    }
+
+    synchronized boolean insertEvent(JSONObject event) {
+        synchronized (lock) {
+            open();
+            String nonce = event.optString("nonce");
+            String type = event.optString("type");
+            boolean duplicate = find(EVENTS, r -> nonce.equals(r.optString("nonce")) && type.equals(r.optString("type"))) != null;
+            if (!duplicate) insert(EVENTS, event);
+            return !duplicate;
+        }
+    }
+
+    private JSONObject raw(String table, Predicate<JSONObject> filter) {
+        JSONArray rows = data.optJSONArray(table);
+        if (rows == null) return null;
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.optJSONObject(i);
+            if (row != null && filter.test(row)) return row;
+        }
+        return null;
+    }
+
+    private static JSONObject copy(JSONObject o) {
+        if (o == null) return null;
+        try {
+            return new JSONObject(o.toString());
+        } catch (JSONException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static JSONArray copy(JSONArray a) {
+        if (a == null) return new JSONArray();
+        try {
+            return new JSONArray(a.toString());
+        } catch (JSONException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static void copyInto(JSONObject target, JSONObject patch) {
+        java.util.Iterator<String> it = patch.keys();
+        while (it.hasNext()) {
+            String key = it.next();
+            AdHttp.put(target, key, patch.opt(key));
+        }
+    }
+
+    static List<JSONObject> sorted(JSONArray rows, Comparator<JSONObject> comparator) {
+        List<JSONObject> out = new ArrayList<>();
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.optJSONObject(i);
+            if (row != null) out.add(row);
+        }
+        out.sort(comparator);
         return out;
     }
 
-    /** Runs a SELECT with bound parameters and returns rows as JSON objects keyed by column name. */
-    JSONArray query(String sql, Object... args) {
-        JSONArray rows = new JSONArray();
-        try (Cursor c = getReadableDatabase().rawQuery(sql, strs(args))) {
-            int n = c.getColumnCount();
-            while (c.moveToNext()) {
-                JSONObject o = new JSONObject();
-                for (int i = 0; i < n; i++) {
-                    Object v;
-                    switch (c.getType(i)) {
-                        case Cursor.FIELD_TYPE_NULL: v = JSONObject.NULL; break;
-                        case Cursor.FIELD_TYPE_INTEGER: v = c.getLong(i); break;
-                        case Cursor.FIELD_TYPE_FLOAT: v = c.getDouble(i); break;
-                        default: v = c.getString(i);
-                    }
-                    AdHttp.put(o, c.getColumnName(i), v);
-                }
-                rows.put(o);
-            }
-        }
-        return rows;
-    }
-
-    JSONObject one(String sql, Object... args) {
-        JSONArray rows = query(sql, args);
-        return rows.length() == 0 ? null : rows.optJSONObject(0);
-    }
-
-    long scalar(String sql, long def, Object... args) {
-        try (Cursor c = getReadableDatabase().rawQuery(sql, strs(args))) {
-            return c.moveToFirst() && !c.isNull(0) ? c.getLong(0) : def;
+    JSONObject settings() {
+        synchronized (lock) {
+            open();
+            return copy(data.optJSONObject("settings"));
         }
     }
-
-    void run(String sql, Object... args) {
-        getWritableDatabase().execSQL(sql, args);
-    }
-
-    /** Inserts and returns the new row id (uses a compiled statement so the id comes from the same connection). */
-    long insert(String sql, Object... args) {
-        SQLiteStatement st = getWritableDatabase().compileStatement(sql);
-        try {
-            for (int i = 0; i < args.length; i++) {
-                Object a = args[i];
-                if (a == null) st.bindNull(i + 1);
-                else if (a instanceof Number) st.bindLong(i + 1, ((Number) a).longValue());
-                else st.bindString(i + 1, String.valueOf(a));
-            }
-            return st.executeInsert();
-        } finally {
-            st.close();
-        }
-    }
-
-    // ---- settings ----
 
     String setting(String key, String def) {
-        JSONObject r = one("SELECT value FROM settings WHERE key=?", key);
-        return r == null ? def : r.optString("value", def);
+        synchronized (lock) {
+            open();
+            JSONObject s = data.optJSONObject("settings");
+            return s == null || !s.has(key) ? def : s.optString(key, def);
+        }
     }
 
     long settingLong(String key, long def) {
@@ -211,19 +473,111 @@ final class AdDb extends SQLiteOpenHelper {
     }
 
     void setSetting(String key, String value) {
-        run("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", key, value);
+        synchronized (lock) {
+            open();
+            AdHttp.put(data.optJSONObject("settings"), key, value);
+            changed();
+        }
     }
 
     byte[] secret() {
-        byte[] s = secretCache;
-        if (s == null) {
-            s = Base64.decode(setting("hmac_secret", ""), Base64.NO_WRAP);
-            secretCache = s;
-        }
-        return s;
+        return Base64.decode(setting("hmac_secret", ""), Base64.NO_WRAP);
     }
 
-    // ---- roll-ups ----
+    void stat(long day, long campaign, long creative, long placement, long site,
+              long served, long imps, long invImps, long clicks, long invClicks, long spend, long pub) {
+        updateStat(STATS, day, "", campaign, creative, placement, site, served, imps, invImps, clicks, invClicks, spend, pub);
+    }
+
+    void statGeo(long day, String country, long campaign, long creative, long placement, long site,
+                 long served, long imps, long invImps, long clicks, long invClicks, long spend, long pub) {
+        updateStat(GEO, day, country, campaign, creative, placement, site, served, imps, invImps, clicks, invClicks, spend, pub);
+    }
+
+    private void updateStat(String table, long day, String country, long campaign, long creative, long placement, long site,
+                            long served, long imps, long invImps, long clicks, long invClicks, long spend, long pub) {
+        synchronized (lock) {
+            JSONObject row = ensureStat(table, day, country, campaign, creative, placement, site);
+            add(row, "served", served);
+            add(row, "imps", imps);
+            add(row, "invalid_imps", invImps);
+            add(row, "clicks", clicks);
+            add(row, "invalid_clicks", invClicks);
+            add(row, "spend_micros", spend);
+            add(row, "pub_micros", pub);
+            changed();
+        }
+    }
+
+    private JSONObject ensureStat(String table, long day, String country, long campaign, long creative, long placement, long site) {
+        open();
+        JSONObject row = raw(table, r -> r.optLong("day") == day && r.optLong("creative_id") == creative
+                && r.optLong("placement_id") == placement && (country.isEmpty() || country.equals(r.optString("country"))));
+        if (row == null) {
+            row = new JSONObject();
+            AdHttp.put(row, "day", day);
+            if (!country.isEmpty()) AdHttp.put(row, "country", country);
+            AdHttp.put(row, "campaign_id", campaign);
+            AdHttp.put(row, "creative_id", creative);
+            AdHttp.put(row, "placement_id", placement);
+            AdHttp.put(row, "site_id", site);
+            AdHttp.put(row, "served", 0L);
+            AdHttp.put(row, "imps", 0L);
+            AdHttp.put(row, "invalid_imps", 0L);
+            AdHttp.put(row, "clicks", 0L);
+            AdHttp.put(row, "invalid_clicks", 0L);
+            AdHttp.put(row, "conversions", 0L);
+            AdHttp.put(row, "conversion_value_micros", 0L);
+            AdHttp.put(row, "spend_micros", 0L);
+            AdHttp.put(row, "pub_micros", 0L);
+            data.optJSONArray(table).put(row);
+        }
+        return row;
+    }
+
+    void adjustConversion(long day, String country, long campaign, long creative, long placement, long site, long count, long value) {
+        synchronized (lock) {
+            JSONObject row = ensureStat(STATS, day, "", campaign, creative, placement, site);
+            add(row, "conversions", count);
+            add(row, "conversion_value_micros", value);
+            if (!country.isEmpty()) {
+                JSONObject geo = ensureStat(GEO, day, country, campaign, creative, placement, site);
+                add(geo, "conversions", count);
+                add(geo, "conversion_value_micros", value);
+            }
+            changed();
+        }
+    }
+
+    private static void add(JSONObject row, String key, long n) {
+        if (n != 0) AdHttp.put(row, key, row.optLong(key) + n);
+    }
+
+    void fraudLog(String reason) {
+        synchronized (lock) {
+            open();
+            long day = today();
+            JSONObject row = raw(FRAUD_LOG, r -> r.optLong("day") == day && reason.equals(r.optString("reason")));
+            if (row == null) {
+                row = new JSONObject();
+                AdHttp.put(row, "day", day);
+                AdHttp.put(row, "reason", reason);
+                AdHttp.put(row, "n", 0L);
+                data.optJSONArray(FRAUD_LOG).put(row);
+            }
+            AdHttp.put(row, "n", row.optLong("n") + 1);
+            changed();
+        }
+    }
+
+    void audit(long userId, String action, String detail) {
+        JSONObject row = new JSONObject();
+        AdHttp.put(row, "ts", System.currentTimeMillis());
+        AdHttp.put(row, "user_id", userId);
+        AdHttp.put(row, "action", action);
+        AdHttp.put(row, "detail", detail == null ? "" : detail);
+        insert(AUDIT, row);
+    }
 
     static long today() {
         return System.currentTimeMillis() / 86_400_000L;
@@ -231,26 +585,5 @@ final class AdDb extends SQLiteOpenHelper {
 
     static long startOfDayMs() {
         return today() * 86_400_000L;
-    }
-
-    void stat(SQLiteDatabase w, long day, long campaign, long creative, long placement, long site,
-              long served, long imps, long invImps, long clicks, long invClicks, long spend, long pub) {
-        w.execSQL("INSERT OR IGNORE INTO stats_daily(day,campaign_id,creative_id,placement_id,site_id) VALUES(?,?,?,?,?)",
-                new Object[]{day, campaign, creative, placement, site});
-        w.execSQL("UPDATE stats_daily SET served=served+?, imps=imps+?, invalid_imps=invalid_imps+?, clicks=clicks+?,"
-                        + " invalid_clicks=invalid_clicks+?, spend_micros=spend_micros+?, pub_micros=pub_micros+?"
-                        + " WHERE day=? AND creative_id=? AND placement_id=?",
-                new Object[]{served, imps, invImps, clicks, invClicks, spend, pub, day, creative, placement});
-    }
-
-    void fraudLog(String reason) {
-        SQLiteDatabase w = getWritableDatabase();
-        long day = today();
-        w.execSQL("INSERT OR IGNORE INTO fraud_log(day,reason,n) VALUES(?,?,0)", new Object[]{day, reason});
-        w.execSQL("UPDATE fraud_log SET n=n+1 WHERE day=? AND reason=?", new Object[]{day, reason});
-    }
-
-    void audit(long userId, String action, String detail) {
-        run("INSERT INTO audit(ts,user_id,action,detail) VALUES(?,?,?,?)", System.currentTimeMillis(), userId, action, detail);
     }
 }

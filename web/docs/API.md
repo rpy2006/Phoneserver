@@ -540,6 +540,8 @@ Base URL: `http://<phone-ip>:8090`. Management endpoints use `Authorization: Bea
 | `POST` | `/imp?t=<token>` | Viewable impression beacon, always `204` |
 | `GET` | `/c?t=<token>` | Counts click then `302` to `click_url` |
 | `GET` | `/media/<creativeId>` | Approved creative image |
+| `GET` | `/conv?t=<token>&e=&v=&tx=` | Browser pixel conversion |
+| `GET` | `/postback?t=<token>&e=&v=&tx=&sig=` | HMAC-signed server-to-server conversion |
 | `OPTIONS` | public paths | CORS preflight |
 
 ### 6.2 Auth and accounts
@@ -563,11 +565,14 @@ Base URL: `http://<phone-ip>:8090`. Management endpoints use `Authorization: Bea
 | Sites / placements | `GET|POST /api/sites`, `PATCH|DELETE /api/sites/:id`, `GET|POST /api/placements`, `PATCH|DELETE /api/placements/:id`, `GET /api/placements/:id/tag` |
 | Campaigns | `GET|POST /api/campaigns`, `GET|PATCH /api/campaigns/:id`, `POST /api/campaigns/:id/{submit,approve,reject,pause,resume}` |
 | Creatives | `GET|POST /api/creatives`, `PATCH|DELETE /api/creatives/:id`, `POST /api/creatives/:id/{image,approve,reject}` |
-| Reports | `GET /api/reports/{summary,breakdown,export}`, `GET /api/billing` |
-| Admin | `GET /api/admin/{overview,audit,fraud,settings}`, `PUT /api/admin/settings` |
+| Conversions | `GET /api/conversions`, `GET /api/conversions/postback-key`, `POST /api/conversions/:id/{approve,reject}` |
+| Experiments | `GET|POST /api/experiments`, `GET|PATCH /api/experiments/:id`, `POST /api/experiments/:id/{start,pause,finish,winner}` |
+| Payouts | `GET|POST /api/payouts`, `GET /api/payouts/:id/export` |
+| Reports | `GET /api/reports/{summary,breakdown,export,geo,geo/export}`, `GET /api/billing` |
+| Admin | `GET /api/admin/{overview,audit,fraud,settings,geo,summary}`, `PUT /api/admin/settings`, `POST /api/admin/geo`, `POST /api/admin/summary/send` |
 
-Dates use `YYYY-MM-DD` UTC. Reports accept `from`, `to`, `campaign_id`, `site_id`; `/breakdown` and `/export` also accept `by` (`campaign`, `site`, `placement`, `creative`, `day`). The default range is 29 days back from `to`; the maximum is 366 days.
+Dates use `YYYY-MM-DD` UTC. Reports accept `from`, `to`, `campaign_id`, `site_id`; `/breakdown` and `/export` also accept `by` (`campaign`, `site`, `placement`, `creative`, `day`, `country`). The default range is 29 days back from `to`; the maximum is 366 days. Conversion postbacks sign `t|e|v|tx` with the per-advertiser key from `/api/conversions/postback-key`.
 
 ### 6.4 Relationship to `/api/v1`
 
-Nothing is shared: different port, database, files, auth and rate limiter. `/api/v1` tokens and the access password do not work on port 8090, and ad sessions do not work on port 8080. Ad-network data is not included in `/api/v1` project backups.
+Nothing is shared: different port, encrypted JSON data store, files, auth and rate limiter. `/api/v1` tokens and the access password do not work on port 8090, and ad sessions do not work on port 8080. Ad-network data (`adnet/adnet.json`, geo CSV and creative files) is not included in `/api/v1` project backups.

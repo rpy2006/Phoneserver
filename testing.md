@@ -19,6 +19,9 @@ Use `--offline` when the dependency cache is already populated.
 - `data/tasks/` — scheduled task JSON round-trip and interval validation.
 - `data/sharing/` — token shape/hashing, PBKDF2 verification, link state,
   store lifecycle, download consumption and access-log queries.
+- `ads/` — encrypted ad JSON persistence and rollback, delete filters, geo
+  CSV/CIDR lookup, conversion attribution/dedupe and experiment/payout
+  ownership.
 - `network/http/` — request parsing, encoding and HTTP security regression
   tests.
 - `network/tls/` — self-signed certificate generation, fingerprinting and
@@ -34,5 +37,6 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Last full run after Phase 3: `137 tests, 0 failures, 49 skipped` (88 passed).
-The 14 sharing tests run as pure-JVM/unit tests and pass on this host.
+Last full run after Phase 4: `144 tests, 0 failures, 49 skipped` (95 passed).
+The 14 sharing tests and the 7 ad-network storage tests run as
+pure-JVM/unit tests and pass on this host.

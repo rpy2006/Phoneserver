@@ -2,8 +2,8 @@
 
 The Ad Network Manager is an **optional**, self-hosted advertising server that
 runs inside PhoneServer. It is a separate HTTP server on its **own port**
-(`8090`), with its own SQLite database, its own files and its own account
-system. It never touches the port-8080 file server, its data or its password.
+(`8090`), with its own encrypted JSON data store, its own files and its own
+account system. It never touches the port-8080 file server, its data or its password.
 
 It is off until the owner enables it, and it works without any cloud service,
 ad exchange, third-party SDK or external database. A site embeds one small
@@ -17,6 +17,8 @@ impressions/clicks and keeps the billing ledger.
 - [5. Campaigns, creatives and targeting](#5-campaigns-creatives-and-targeting)
 - [6. Embedding the SDK](#6-embedding-the-sdk)
 - [7. Counting, fraud and billing](#7-counting-fraud-and-billing)
+  - [Conversion tracking](#conversion-tracking)
+  - [Experiments, geography, payouts and email](#experiments-geography-payouts-and-email)
 - [8. Dashboard](#8-dashboard)
 - [9. HTTP API](#9-http-api)
 - [10. Data, retention and backups](#10-data-retention-and-backups)
@@ -34,11 +36,11 @@ impressions/clicks and keeps the billing ledger.
 | Enablement | Opt-in switch in **Ad Network** settings; not started by default |
 | Startup | Started by `ServerService` via `AdNetworkManager.startIfEnabled()` |
 | Server | `AdHttpServer` — HTTP/1.1, one request per connection, 4–24 worker threads |
-| Database | `adnet.db` from `AdDb` (app-private databases directory) |
+| Data store | encrypted `adnet/adnet.json` from `AdDb` (app-private files directory) |
 | Preferences | `adnet_prefs` — enabled flag and the one-time setup code |
 | Creative images | `filesDir/adnet/creatives/` (`AdDelivery.creativesDir`) |
 | Dashboard | `GET /` on port 8090 (noindex, strict CSP) |
-| Public endpoints | `/sdk.js`, `/serve`, `/imp`, `/c`, `/media/<id>`, `/health` |
+| Public endpoints | `/sdk.js`, `/serve`, `/imp`, `/c`, `/media/<id>`, `/conv`, `/postback`, `/health` |
 | Accounts | Internal admin / advertiser / publisher accounts (email + password) |
 | Currency model | Integer **micros** (1 unit = 1,000,000 micros); currency label defaults to `USD` |
 
@@ -93,9 +95,9 @@ first-run screen.
 
 | Role | Can do |
 |---|---|
-| **admin** | Everything: users, credits/payouts, approve/reject sites and campaigns, view all reports, fraud review, platform settings |
-| **publisher** | Register sites and placements, fetch embed tags, view own site/placement reports and earnings |
-| **advertiser** | Create campaigns and creatives, upload images, submit for review, view own campaign reports and spend |
+| **admin** | Everything: users, credits/payouts, approve/reject sites and campaigns, view all reports, manage experiments/geo/summary mail, fraud review, platform settings |
+| **publisher** | Register sites and placements, fetch embed tags, view own site/placement/geo reports, payout statements and earnings |
+| **advertiser** | Create campaigns, creatives and experiments, upload images, submit for review, view own campaign/conversion/geo reports and spend |
 
 Typical approval flow:
 
@@ -182,6 +184,8 @@ content.
 | `daily_budget` | Optional; 0 = no daily cap; cannot exceed total |
 | `start` / `end` | ISO/date strings parsed by the dashboard; end is required and must be after start |
 | `targeting` | JSON object (see below) |
+| `conversion_event` | Optional event name filter (max 40, `A-Z 0-9 . _ -`) |
+| `conversion_value` | Optional default conversion value in currency units |
 | `advertiser_id` | Admin only; must reference an advertiser account |
 
 Budget and balance are checked at delivery. A campaign stops serving when its
@@ -225,9 +229,9 @@ filename or `Content-Type`.
 
 Targeting is evaluated against the page URL (without query/fragment, lower-
 cased and truncated), the device parsed from the user agent, the browser
-language prefix, the local hour/weekday and the placement's site. Geo targeting
-is intentionally absent: the app has no IP-location database, so it does not
-pretend to geotarget.
+language prefix, the local hour/weekday and the placement's site. Country is
+resolved offline for **reporting** only; there is no country targeting key, so
+the app does not pretend to offer geo targeting.
 
 Selection is a weighted random rotation among eligible creatives using effective
 CPM (for CPC, the smoothed expected value is `bid × (clicks + 2) / (imps + 200)
@@ -310,6 +314,42 @@ Admins can review flagged sites. `AdFraud.reviewSites` flags (never auto-bans) a
 site whose 48-hour click-through rate exceeds 15% (with ≥100 impressions) or
 whose invalid-traffic share exceeds 40% (with ≥50 events).
 
+### Conversion tracking and attribution
+
+A click token can be used as the attribution key for a conversion:
+
+- `GET /conv?t=<click-token>&e=<event>&v=<value>&tx=<transaction>` records a
+  browser pixel conversion.
+- `GET /postback?t=…&e=…&v=…&tx=…&sig=…` records a server-to-server conversion.
+  `sig` is lowercase hex HMAC-SHA256 over `t|e|v|tx`, using the advertiser's
+  per-account key (shown in the dashboard).
+- The click must exist, be valid and be inside
+  `conversion_attribution_days` (default 30). The same `tx` inside
+  `conversion_dedupe_hours` (default 24) is ignored.
+- `v` is optional; without it the campaign default conversion value applies.
+  Ledger entries are stored in micros.
+- Admins can approve or reject a conversion; approval updates daily stats and
+  country aggregates, rejection leaves them unchanged. Invalid conversions are
+  kept for audit but never billed.
+- Conversion tracking can be disabled in **Settings → conversion tracking**.
+
+### Experiments, geography, payouts and email
+
+- **Experiments** split one campaign between 2–5 creatives with weights while
+  running. Metrics (CTR, clicks or conversions) are calculated per variant; an
+  admin or advertiser can start, pause, finish and pick a winner (manually or
+  automatically by the configured metric).
+- **Geography** uses an offline IPv4 CSV database uploaded by an admin
+  (`start,end,CC` or `CIDR,CC`, up to 12 MB). Reports show country, impressions,
+  clicks, conversions, spend and publisher earnings; exports are CSV. Private
+  addresses are not stored and unknown publics appear as `ZZ`. No raw IP is kept.
+- **Payout statements** summarise a publisher's valid earnings for a date range
+  and export as CSV. Only the owning publisher and admins can download them.
+- **Daily email summary** is optional. Admins configure SMTP (STARTTLS, implicit
+  TLS or none), recipients and a UTC hour; the sweeper sends at most one summary
+  per day and records success/failure history. The SMTP password is stored in
+  the encrypted data store and never returned by the API.
+
 ### Privacy-related delivery behaviour
 
 - `DNT: 1` or `Sec-GPC: 1` suppresses the visitor id: no frequency capping or
@@ -344,11 +384,18 @@ Main areas:
 - **Campaigns / Creatives** — create, edit, submit, approve/reject, upload
   images, pause/resume.
 - **Reports** — summary and breakdown (`campaign`, `site`, `placement`,
-  `creative`, `day`, `country` where applicable) with CSV export.
+  `creative`, `day`, `country`) with CSV export.
+- **Conversions** — attribution ledger, pixel/postback snippets, postback key
+  and admin approval/rejection.
+- **Geography** — country report and CSV export.
+- **Experiments** — create A/B/C variants, start/pause/finish and choose a
+  winner.
+- **Payouts** — publisher statements and CSV statements for admins/publishers.
 - **Users** — admin-only; create/disable users, credit advertisers, record
   publisher payouts and delete users.
 - **Billing** — ledger lines plus daily spend/earnings.
-- **Admin** — platform settings, fraud review, overview.
+- **Admin** — platform settings, geo database upload, daily summary history,
+  fraud review, overview.
 
 The dashboard uses a session bearer token held by the browser. The API is
 same-origin only (`connect-src 'self'`), so the token is not exposed to other
@@ -361,7 +408,7 @@ Admins can delete an advertiser or publisher from **Users**. This is permanent:
 - the account cannot delete itself;
 - the **last administrator** cannot be deleted;
 - the user's `stats_daily` and `events` rows are purged first (for owned
-  campaigns/sites);
+  campaigns/sites), and payout statements are removed;
 - the user row is deleted, cascading to sites, placements, campaigns,
   creatives, billing rows and sessions;
 - the deleted creative image files are removed (after IDs are looked up);
@@ -389,6 +436,8 @@ JSON and are same-origin in the dashboard. Authentication is
 | `POST` | `/imp?t=<token>` | Viewable impression beacon; 204 |
 | `GET` | `/c?t=<token>` | Count click, then 302 to the creative URL |
 | `GET` | `/media/<creativeId>` | Approved creative image |
+| `GET` | `/conv?t=<token>&e=&v=&tx=` | Browser pixel conversion |
+| `GET` | `/postback?t=<token>&e=&v=&tx=&sig=` | Signed server-to-server conversion |
 | `OPTIONS` | public paths | CORS preflight |
 
 ### Auth and account
@@ -484,12 +533,37 @@ curl -s "$BASE/api/placements/1/tag" -H "Authorization: Bearer $TOKEN"
 | `GET` | `/api/reports/summary` | `from`, `to`, `campaign_id`, `site_id` |
 | `GET` | `/api/reports/breakdown` | above + `by` (`campaign`, `site`, `placement`, `creative`, `day`) |
 | `GET` | `/api/reports/export` | same as breakdown; returns CSV download |
+| `GET` | `/api/reports/geo` | country breakdown (`from`, `to`) |
+| `GET` | `/api/reports/geo/export` | country CSV download |
 | `GET` | `/api/billing` | advertisers: own ledger/spend; publishers: own earnings; admin: all |
 
 Dates are `YYYY-MM-DD` in UTC. The default range is the last 30 days; ranges
 are capped at 366 days. Breakdown is capped at 500 rows ordered by impressions.
 Advertisers never see publisher earnings; publishers never see advertiser spend
 or campaign identities.
+
+### Conversions, experiments, payouts and geography
+
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| `GET` | `/api/conversions` | any (scoped) | Conversion ledger (`from`, `to`, `status`, `campaign_id`) |
+| `GET` | `/api/conversions/postback-key` | advertiser | Per-account postback signing key |
+| `POST` | `/api/conversions/:id/approve` | admin | Mark a conversion valid and update stats |
+| `POST` | `/api/conversions/:id/reject` | admin | Mark a conversion invalid (never billed) |
+| `GET|POST` | `/api/experiments` | advertiser/admin | List or create an experiment |
+| `GET|PATCH` | `/api/experiments/:id` | advertiser/admin | Read or update name/metric/end |
+| `POST` | `/api/experiments/:id/start` | advertiser/admin | Start a draft/paused experiment |
+| `POST` | `/api/experiments/:id/pause` | advertiser/admin | Pause a running experiment |
+| `POST` | `/api/experiments/:id/finish` | advertiser/admin | Complete an experiment |
+| `POST` | `/api/experiments/:id/winner` | advertiser/admin | Pick `{creative_id}` or auto by metric |
+| `GET|POST` | `/api/payouts` | admin; publisher read | List or create payout statements |
+| `GET` | `/api/payouts/:id/export` | owner/admin | Download statement CSV |
+| `GET` | `/api/reports/geo` | any (scoped) | Country breakdown |
+| `GET` | `/api/reports/geo/export` | any (scoped) | Country CSV |
+| `GET` | `/api/admin/geo` | admin | Geo database status |
+| `POST` | `/api/admin/geo` | admin | Upload geo CSV (12 MiB cap, `X-Geo-Version`) |
+| `GET` | `/api/admin/summary` | admin | Summary mail status and history |
+| `POST` | `/api/admin/summary/send` | admin | Send the summary now |
 
 ### Admin
 
@@ -503,7 +577,11 @@ or campaign identities.
 
 Settings keys: `rev_share_pct`, `currency`, `public_base_url`, `allow_signup`,
 `trust_proxy`, `fraud_min_click_ms`, `fraud_repeat_clicks_hour`,
-`fraud_ip_clicks_min`, `fraud_max_imps_visitor_day`, `retention_days`.
+`fraud_ip_clicks_min`, `fraud_max_imps_visitor_day`, `retention_days`,
+`conversion_tracking`, `conversion_attribution_days`,
+`conversion_dedupe_hours`, `email_enabled`, `email_recipients`,
+`email_hour_utc`, `smtp_host`, `smtp_port`, `smtp_security`, `smtp_username`,
+`smtp_password`, `smtp_from`. The password is write-only.
 
 `trust_proxy` is off by default. When enabled, the client IP is taken from the
 **last** `X-Forwarded-For` entry, which is the value appended by the nearest
@@ -513,22 +591,29 @@ proxy; never enable it when clients can set that header directly.
 
 ## 10. Data, retention and backups
 
-`adnet.db` lives in the app's private databases directory and contains:
+The ad network uses one encrypted, atomically written JSON document at
+`filesDir/adnet/adnet.json` (legacy `adnet.db` is imported once, then renamed
+`adnet.db.migrated`). It contains collections for:
 
-| Table | Purpose |
+| Collection | Purpose |
 |---|---|
 | `users` | Accounts, PBKDF2 password hash, role, status, prepaid balance (micros) |
 | `sessions` | SHA-256 hashes of bearer tokens with expiry |
 | `sites` | Domains, owner, moderation status, fraud flag/reason |
 | `placements` | Format/size, public placement key, status |
-| `campaigns` | Budget/pricing, spend, schedule, targeting JSON, review status |
+| `campaigns` | Budget/pricing, spend, schedule, targeting, review status |
 | `creatives` | Text/URL, image metadata, review status |
-| `events` | Every impression/click, validity, reason, cost and publisher share |
+| `experiments` | Campaign, variants/weights, metric, lifecycle, winner |
+| `events` | Every impression/click/conversion, validity, reason, cost and share |
+| `conversions` | Attribution ledger, transaction id, value, review status |
 | `stats_daily` | Aggregated daily metrics per campaign/creative/placement/site |
+| `geo_daily` | Country aggregates for impressions, clicks, conversions and money |
 | `fraud_log` | Daily counts per invalid-traffic reason |
 | `billing` | Top-ups, adjustments, payouts and resulting balances |
+| `payout_reports` | Publisher statements and status |
+| `daily_summaries` | Daily email attempt, recipients, result and error |
 | `audit` | Admin actions such as setup, create/delete user, approvals |
-| `settings` | Platform configuration and the HMAC secret |
+| `settings` | Platform configuration, HMAC and postback secrets |
 
 A background sweeper runs once a minute while the ad server is running:
 
@@ -536,13 +621,16 @@ A background sweeper runs once a minute while the ad server is running:
 - reviews sites for fraud every 10 minutes;
 - every 60 minutes, deletes events older than `retention_days` (default 30),
   deletes fraud-log rows older than 90 days, ends campaigns whose `end_at` has
-  passed, and removes creative image files with no database row (older than one
-  hour, so in-flight uploads are safe).
+  passed, finishes expired experiments, sends the daily summary when due,
+  removes orphaned payout/conversion data where applicable, and removes creative
+  image files with no database row (older than one hour, so in-flight uploads
+  are safe).
 
 Backups are **not** included in the `/api/v1` project-backup system. To back
-up the ad network, copy `adnet.db` (plus its `-wal`/`-shm` sidecars while the
-server is stopped) and `filesDir/adnet/creatives/` from an app-private backup
-or rooted file manager. The `web/UPDATE_MANIFEST.txt` archive is source code,
+up the ad network, copy `filesDir/adnet/adnet.json`, `filesDir/adnet/geo.csv`
+(if present), `filesDir/adnet/creatives/` and the `adnet_prefs` preference file
+from an app-private backup or rooted file manager while the ad server is
+stopped. The `web/UPDATE_MANIFEST.txt` archive is source code,
 not runtime data.
 
 ---
@@ -561,15 +649,19 @@ not runtime data.
   status, `Origin`/`Referer` domain match, bot filtering, signed single-use
   tokens, token expiry and event rate limits.
 - **Input validation.** Email/domain/URL validation, length limits, numeric
-  bounds, strict image sniffing and dimension checks, SQL with bound parameters
-  (the only string interpolation is from a fixed allow-list of report
-  groupings).
+  bounds, strict image sniffing and dimension checks, fixed report grouping
+  expressions and collection names, atomic JSON writes and transactional
+  rollback on failure.
 - **Framing and headers.** Header values are stripped of CR/LF, the dashboard
   sends a restrictive CSP plus `X-Frame-Options: DENY`, all responses send
   `X-Content-Type-Options: nosniff`, and API responses are `no-store`.
-- **Privacy.** No cookies, no raw-IP visitor storage, daily-rotating visitor
-  hash, DNT/GPC honoured for visitor tracking, no third-party requests and no
-  cloud component.
+- **Privacy.** No cookies, no raw-IP visitor storage, country derived offline
+  and stored without the address, daily-rotating visitor hash, DNT/GPC honoured
+  for visitor tracking, no third-party requests and no cloud component. SMTP
+  credentials and postback secrets are held in the encrypted data store.
+- **Conversions.** Pixels require a valid click token; postbacks are HMAC-signed
+  with a per-advertiser key, transaction ids are deduplicated, and only admins
+  can move a conversion between invalid and valid states.
 - **Known limitations.** HTTP is plaintext on the LAN; there is no TLS in the
   app, no email verification/password reset, no CAPTCHA, and no guarantee that
   a determined attacker cannot generate invalid traffic. Treat it as a
@@ -586,9 +678,11 @@ not runtime data.
 | Request header line / count | 8 KiB / 64 |
 | Buffered `/api/*` body | 128 KiB |
 | Creative image upload | 2 MiB (server hard cap 3 MiB) |
+| Geo database upload | 12 MiB |
 | Sites per owner | 50 |
 | Placements per site | 100 |
 | Creatives per campaign | 30 |
+| Variants per experiment | 2–5 |
 | Report range | 366 days |
 | Breakdown rows | 500 |
 | Serve rate | 90/min/IP |
@@ -609,6 +703,10 @@ Common causes:
 | Ads serve but no impressions | Viewability rule (≥50% for 1s), or DNT/GPC suppressing visitor tracking only |
 | Login fails | Password policy, account disabled, rate-limited after repeated attempts |
 | Reports missing today | Counters aggregate by UTC day; today's partial row appears after the first event |
+| Conversions rejected | Missing/expired click, wrong token, duplicate `tx`, attribution window, or tracking disabled |
+| Postback `403` | Signature must be HMAC-SHA256 of `t|e|v|tx` with this advertiser's dashboard key |
+| Geo report all `ZZ` | Upload a geo CSV in **Settings → Offline geography database** |
+| Summary email not sent | Check `email_enabled`, recipients, SMTP settings and the history error |
 | Dashboard broken | JavaScript disabled, or a modified asset violating the CSP (no inline code/styles) |
 
 ---
@@ -621,6 +719,12 @@ Common causes:
 | `AdHttpServer.java` | HTTP/1.1 parsing/routing, limits, CSP and headers |
 | `AdApi.java` | Management API, validation, account/site/campaign/creative logic |
 | `AdDelivery.java` | `/sdk.js`, `/serve`, `/imp`, `/c`, `/media`, selection and billing |
+| `AdConversion.java` | `/conv`, signed `/postback`, click attribution, dedupe and review |
+| `AdExperimentEngine.java` | Experiment lifecycle, variant metrics and winner selection |
+| `AdGeo.java` | Offline IPv4 CSV/CIDR import and country lookup |
+| `AdGeoReport.java` | Country breakdown and CSV export |
+| `AdPayouts.java` | Publisher statements and CSV export |
+| `AdSummaryMailer.java` | SMTP client, scheduled/manual summary and history |
 | `AdSecurity.java` | PBKDF2 passwords, sessions, HMAC tokens, visitor hash, validation |
 | `AdDb.java` | Schema, settings defaults, query helpers |
 | `AdReports.java` | Summary/breakdown/CSV/billing queries and role scoping |

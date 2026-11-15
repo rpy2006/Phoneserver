@@ -29,7 +29,9 @@ final class AdHttpServer {
     private static final int MAX_HEADERS = 64;
     private static final int MAX_BODY = 128 * 1024;
     private static final int MAX_UPLOAD = 3 * 1024 * 1024;
+    private static final int MAX_GEO_UPLOAD = 12 * 1024 * 1024 + 1024;
     private static final Pattern UPLOAD_PATH = Pattern.compile("^/api/creatives/[0-9]+/image$");
+    private static final Pattern GEO_UPLOAD_PATH = Pattern.compile("^/api/admin/geo$");
 
     private static final String DASHBOARD_CSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self';"
             + " connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -195,7 +197,8 @@ final class AdHttpServer {
             } catch (NumberFormatException e) {
                 return null;
             }
-            int max = UPLOAD_PATH.matcher(r.path).matches() ? MAX_UPLOAD : MAX_BODY;
+            int max = GEO_UPLOAD_PATH.matcher(r.path).matches() && "POST".equals(r.method) ? MAX_GEO_UPLOAD
+                    : UPLOAD_PATH.matcher(r.path).matches() ? MAX_UPLOAD : MAX_BODY;
             if (len < 0) return null;
             if (len > max) {
                 writeQuick(s, 413);
@@ -238,7 +241,8 @@ final class AdHttpServer {
 
     private AdHttp.Res route(AdHttp.Req r) throws IOException {
         String p = r.path;
-        boolean publicEndpoint = p.equals("/sdk.js") || p.equals("/serve") || p.equals("/imp") || p.equals("/c") || p.startsWith("/media/");
+        boolean publicEndpoint = p.equals("/sdk.js") || p.equals("/serve") || p.equals("/imp") || p.equals("/c")
+                || p.equals("/conv") || p.equals("/postback") || p.startsWith("/media/");
         if (r.method.equals("OPTIONS")) {
             if (!publicEndpoint) return AdHttp.empty(404);
             return AdHttp.empty(204).header("Access-Control-Allow-Origin", "*").header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -250,6 +254,9 @@ final class AdHttpServer {
                 case "/serve": return r.method.equals("GET") ? delivery.serve(r) : AdHttp.empty(405);
                 case "/imp": return delivery.imp(r);
                 case "/c": return r.method.equals("GET") ? delivery.click(r) : AdHttp.empty(405);
+                case "/conv": return r.method.equals("GET") ? AdConversion.pixel(r, db) : AdHttp.empty(405);
+                case "/postback": return r.method.equals("GET") || r.method.equals("POST")
+                        ? AdConversion.postback(r, db).header("Access-Control-Allow-Origin", "*") : AdHttp.empty(405);
                 default: return r.method.equals("GET") ? delivery.media(r) : AdHttp.empty(405);
             }
         }
@@ -290,6 +297,7 @@ final class AdHttpServer {
             case 413: return "Payload Too Large";
             case 429: return "Too Many Requests";
             case 500: return "Internal Server Error";
+            case 502: return "Bad Gateway";
             default: return "Status";
         }
     }
@@ -304,7 +312,9 @@ final class AdHttpServer {
         StringBuilder sb = new StringBuilder("HTTP/1.1 ").append(res.status).append(' ').append(reason(res.status)).append("\r\n");
         setDefault(res, "X-Content-Type-Options", "nosniff");
         if (req.path.startsWith("/api/")) setDefault(res, "Cache-Control", "no-store");
-        if (!req.path.equals("/serve") && !req.path.equals("/imp") && !req.path.equals("/sdk.js") && !req.path.startsWith("/media/") && !req.path.equals("/c")) {
+        if (!req.path.equals("/serve") && !req.path.equals("/imp") && !req.path.equals("/sdk.js")
+                && !req.path.startsWith("/media/") && !req.path.equals("/c")
+                && !req.path.equals("/conv") && !req.path.equals("/postback")) {
             setDefault(res, "X-Frame-Options", "DENY");
             setDefault(res, "Referrer-Policy", "no-referrer");
         }

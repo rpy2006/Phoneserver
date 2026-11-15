@@ -1,7 +1,8 @@
 package com.yadaventerprise.phoneserver.ads;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -20,21 +21,19 @@ final class AdFraud {
         return ua == null || ua.length() < 12 || BOT.matcher(ua).find();
     }
 
-    /** Returns the reason an impression is invalid, or null if it looks genuine. */
     static String checkImpression(AdDb db, String ua, String ip, String visitor, long campaignId, boolean domainOk) {
         if (isBot(ua)) return "bot_ua";
         if (!domainOk) return "domain_mismatch";
         if (!AdRateLimiter.allow("imp:" + ip, 120, 60_000)) return "imp_flood";
         if (!visitor.isEmpty()) {
             long cap = db.settingLong("fraud_max_imps_visitor_day", 50);
-            long n = db.scalar("SELECT COUNT(*) FROM events WHERE visitor=? AND campaign_id=? AND type='imp' AND valid=1 AND ts>=?",
-                    0, visitor, campaignId, AdDb.startOfDayMs());
+            long n = db.count(AdDb.EVENTS, e -> visitor.equals(e.optString("visitor")) && e.optLong("campaign_id") == campaignId
+                    && "imp".equals(e.optString("type")) && e.optLong("valid") == 1 && e.optLong("ts") >= AdDb.startOfDayMs());
             if (n >= cap) return "visitor_cap";
         }
         return null;
     }
 
-    /** Returns the reason a click is invalid, or null if it looks genuine. impTs is when the impression was recorded. */
     static String checkClick(AdDb db, String ua, String ip, String visitor, long campaignId, boolean domainOk, long impTs) {
         if (isBot(ua)) return "bot_ua";
         if (!domainOk) return "domain_mismatch";
@@ -42,21 +41,30 @@ final class AdFraud {
         long now = System.currentTimeMillis();
         if (now - impTs < db.settingLong("fraud_min_click_ms", 500)) return "too_fast";
         if (!visitor.isEmpty()) {
-            long n = db.scalar("SELECT COUNT(*) FROM events WHERE visitor=? AND campaign_id=? AND type='click' AND valid=1 AND ts>=?",
-                    0, visitor, campaignId, now - 3_600_000L);
+            long n = db.count(AdDb.EVENTS, e -> visitor.equals(e.optString("visitor")) && e.optLong("campaign_id") == campaignId
+                    && "click".equals(e.optString("type")) && e.optLong("valid") == 1 && e.optLong("ts") >= now - 3_600_000L);
             if (n >= db.settingLong("fraud_repeat_clicks_hour", 3)) return "repeat_click";
         }
         return null;
     }
 
-    /** Flags (never auto-bans) sites whose recent traffic looks abnormal, for an admin to review. */
     static void reviewSites(AdDb db) {
-        JSONArray rows = db.query("SELECT site_id, SUM(imps) imps, SUM(clicks) clicks, SUM(invalid_imps) inv_i,"
-                + " SUM(invalid_clicks) inv_c FROM stats_daily WHERE day>=? GROUP BY site_id", AdDb.today() - 1);
-        for (int i = 0; i < rows.length(); i++) {
-            JSONObject r = rows.optJSONObject(i);
-            long imps = r.optLong("imps"), clicks = r.optLong("clicks");
-            long invalid = r.optLong("inv_i") + r.optLong("inv_c");
+        long from = AdDb.today() - 1;
+        Map<Long, long[]> bySite = new HashMap<>();
+        for (JSONObject s : db.list(AdDb.STATS, x -> x.optLong("day") >= from)) {
+            long[] v = bySite.get(s.optLong("site_id"));
+            if (v == null) {
+                v = new long[4];
+                bySite.put(s.optLong("site_id"), v);
+            }
+            v[0] += s.optLong("imps");
+            v[1] += s.optLong("clicks");
+            v[2] += s.optLong("invalid_imps");
+            v[3] += s.optLong("invalid_clicks");
+        }
+        for (Map.Entry<Long, long[]> e : bySite.entrySet()) {
+            long[] v = e.getValue();
+            long imps = v[0], clicks = v[1], invalid = v[2] + v[3];
             long total = imps + clicks + invalid;
             String reason = null;
             if (imps >= 100 && clicks * 100 / imps > 15) {
@@ -65,8 +73,13 @@ final class AdFraud {
                 reason = "High share of invalid traffic (" + (invalid * 100 / total) + "%) in the last 48 hours";
             }
             if (reason != null) {
-                db.run("UPDATE sites SET flagged=1, flag_reason=? WHERE id=? AND flagged=0 AND status<>'removed'",
-                        reason, r.optLong("site_id"));
+                String why = reason;
+                db.update(AdDb.SITES, e.getKey(), row -> {
+                    if (row.optLong("flagged") == 0 && !"removed".equals(row.optString("status"))) {
+                        AdHttp.put(row, "flagged", 1);
+                        AdHttp.put(row, "flag_reason", why);
+                    }
+                });
             }
         }
     }

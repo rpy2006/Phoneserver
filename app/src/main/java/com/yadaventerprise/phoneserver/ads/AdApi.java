@@ -15,9 +15,11 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -38,7 +40,7 @@ final class AdApi {
     AdHttp.Res handle(AdHttp.Req r) throws IOException {
         switch (r.method + " " + r.path) {
             case "GET /api/setup/status":
-                return AdHttp.ok(obj("needs_setup", db.scalar("SELECT COUNT(*) FROM users", 0) == 0));
+                return AdHttp.ok(obj("needs_setup", db.count(AdDb.USERS) == 0));
             case "POST /api/setup": return setup(r);
             case "POST /api/auth/login": return login(r);
             case "POST /api/auth/signup": return signup(r);
@@ -66,7 +68,7 @@ final class AdApi {
             case "GET /api/meta": return meta(u);
             case "GET /api/auth/me": return AdHttp.ok(userJson(u));
             case "POST /api/auth/logout":
-                db.run("DELETE FROM sessions WHERE token_hash=?", AdSecurity.sha256Hex(r.token));
+                db.deleteWhere(AdDb.SESSIONS, s -> AdSecurity.sha256Hex(r.token).equals(s.optString("token_hash")));
                 return AdHttp.ok(obj("ok", true));
             case "POST /api/auth/password": return changePassword(r, u);
 
@@ -110,12 +112,36 @@ final class AdApi {
             case "GET /api/reports/summary": return reports.summary(r, u);
             case "GET /api/reports/breakdown": return reports.breakdown(r, u);
             case "GET /api/reports/export": return reports.export(r, u);
+            case "GET /api/reports/geo": return AdGeoReport.breakdown(r, u, db);
+            case "GET /api/reports/geo/export": return AdGeoReport.export(r, u, db);
             case "GET /api/billing": return reports.billing(r, u);
+
+            case "GET /api/conversions": return AdConversion.list(r, u, db);
+            case "GET /api/conversions/postback-key": return AdConversion.key(u, db);
+            case "POST /api/conversions/:id/approve": needAdmin(u); return AdConversion.review(db, u, ids.get(0), true);
+            case "POST /api/conversions/:id/reject": needAdmin(u); return AdConversion.review(db, u, ids.get(0), false);
+
+            case "GET /api/experiments": return AdExperimentEngine.list(r, u, db);
+            case "POST /api/experiments": return AdExperimentEngine.create(r, u, db);
+            case "PATCH /api/experiments/:id": return AdExperimentEngine.patch(r, u, db, ids.get(0));
+            case "POST /api/experiments/:id/start": return AdExperimentEngine.status(u, db, ids.get(0), "running");
+            case "POST /api/experiments/:id/pause": return AdExperimentEngine.status(u, db, ids.get(0), "paused");
+            case "POST /api/experiments/:id/finish": return AdExperimentEngine.status(u, db, ids.get(0), "completed");
+            case "POST /api/experiments/:id/winner": return AdExperimentEngine.chooseWinner(r, u, db, ids.get(0));
+
+            case "GET /api/payouts": return AdPayouts.list(r, u, db);
+            case "POST /api/payouts": return AdPayouts.create(r, u, db);
+            case "GET /api/payouts/:id/export": return AdPayouts.export(r, u, db, ids.get(0));
+            case "GET /api/payouts/export": return AdPayouts.exportRange(r, u, db);
 
             case "GET /api/admin/overview": needAdmin(u); return overview();
             case "GET /api/admin/fraud": needAdmin(u); return fraud();
             case "GET /api/admin/settings": needAdmin(u); return AdHttp.ok(settingsJson());
             case "PUT /api/admin/settings": needAdmin(u); return putSettings(r, u);
+            case "GET /api/admin/geo": needAdmin(u); return AdHttp.ok(AdGeo.status(db));
+            case "POST /api/admin/geo": needAdmin(u); return importGeo(r, u);
+            case "POST /api/admin/summary/send": needAdmin(u); return AdSummaryMailer.sendNow(r, u, db);
+            case "GET /api/admin/summary": needAdmin(u); return AdHttp.ok(AdSummaryMailer.history(db));
             default: throw notFound("Unknown endpoint");
         }
     }
@@ -131,11 +157,9 @@ final class AdApi {
         return Long.parseLong(v);
     }
 
-    // ================================================================ auth + users
-
     private AdHttp.Res setup(AdHttp.Req r) {
         if (!AdRateLimiter.allow("setup:" + r.ip, 10, 3600_000)) return AdHttp.json(429, obj("error", "Too many attempts"));
-        if (db.scalar("SELECT COUNT(*) FROM users", 0) > 0) return AdHttp.json(409, obj("error", "Already set up"));
+        if (db.count(AdDb.USERS) > 0) return AdHttp.json(409, obj("error", "Already set up"));
         JSONObject b = AdHttp.body(r);
         String code = AdHttp.str(b, "setup_code", 1, 32).toUpperCase(Locale.ROOT);
         if (!AdSecurity.constantEquals(code, AdNetworkManager.setupCode(ctx))) throw forbidden("Wrong setup code (shown on the phone, in Ad Network settings)");
@@ -152,7 +176,7 @@ final class AdApi {
         if (!AdRateLimiter.allow("login:" + r.ip + ":" + email, 8, 15 * 60_000) || !AdRateLimiter.allow("login-ip:" + r.ip, 40, 15 * 60_000)) {
             return AdHttp.json(429, obj("error", "Too many sign-in attempts. Try again in a few minutes."));
         }
-        JSONObject row = db.one("SELECT id, pass_hash, status FROM users WHERE email=?", email);
+        JSONObject row = db.find(AdDb.USERS, u -> email.equals(u.optString("email")));
         if (row == null) {
             AdSecurity.fakeVerify(pw);
             return AdHttp.json(401, obj("error", "Wrong email or password"));
@@ -164,7 +188,7 @@ final class AdApi {
     }
 
     private AdHttp.Res loginResponse(long userId) {
-        JSONObject row = db.one("SELECT id,email,name,company,role,balance_micros FROM users WHERE id=?", userId);
+        JSONObject row = db.copy(AdDb.USERS, userId);
         return AdHttp.ok(obj("token", AdSecurity.createSession(db, userId), "user", userJson(new AdSecurity.User(row))));
     }
 
@@ -185,9 +209,17 @@ final class AdApi {
         String company = b.has("company") ? AdHttp.str(b, "company", 0, 80) : "";
         String pw = b.optString("password", "");
         AdSecurity.checkPasswordPolicy(pw);
-        if (db.scalar("SELECT COUNT(*) FROM users WHERE email=?", 0, email) > 0) throw new AdHttp.HttpError(409, "That email is already registered");
-        return db.insert("INSERT INTO users(email,name,company,role,pass_hash,created_at) VALUES(?,?,?,?,?,?)",
-                email, name, company, role, AdSecurity.hashPassword(pw), System.currentTimeMillis());
+        if (db.count(AdDb.USERS, u -> email.equals(u.optString("email"))) > 0) throw new AdHttp.HttpError(409, "That email is already registered");
+        JSONObject row = new JSONObject();
+        AdHttp.put(row, "email", email);
+        AdHttp.put(row, "name", name);
+        AdHttp.put(row, "company", company);
+        AdHttp.put(row, "role", role);
+        AdHttp.put(row, "pass_hash", AdSecurity.hashPassword(pw));
+        AdHttp.put(row, "status", "active");
+        AdHttp.put(row, "balance_micros", 0L);
+        AdHttp.put(row, "created_at", System.currentTimeMillis());
+        return db.insert(AdDb.USERS, row);
     }
 
     private static JSONObject userJson(AdSecurity.User u) {
@@ -196,30 +228,42 @@ final class AdApi {
 
     private AdHttp.Res changePassword(AdHttp.Req r, AdSecurity.User u) {
         JSONObject b = AdHttp.body(r);
-        JSONObject row = db.one("SELECT pass_hash FROM users WHERE id=?", u.id);
+        JSONObject row = db.copy(AdDb.USERS, u.id);
         if (row == null || !AdSecurity.verifyPassword(b.optString("old_password", ""), row.optString("pass_hash"))) throw forbidden("Current password is wrong");
         String np = b.optString("new_password", "");
         AdSecurity.checkPasswordPolicy(np);
-        db.run("UPDATE users SET pass_hash=? WHERE id=?", AdSecurity.hashPassword(np), u.id);
-        db.run("DELETE FROM sessions WHERE user_id=? AND token_hash<>?", u.id, AdSecurity.sha256Hex(r.token));
+        db.update(AdDb.USERS, u.id, x -> AdHttp.put(x, "pass_hash", AdSecurity.hashPassword(np)));
+        String keep = AdSecurity.sha256Hex(r.token);
+        db.deleteWhere(AdDb.SESSIONS, s -> s.optLong("user_id") == u.id && !keep.equals(s.optString("token_hash")));
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res meta(AdSecurity.User u) {
         return AdHttp.ok(obj("user", userJson(u), "currency", db.setting("currency", "USD"),
                 "rev_share_pct", db.settingLong("rev_share_pct", 70), "allow_signup", "1".equals(db.setting("allow_signup", "0")),
-                "public_base_url", db.setting("public_base_url", "")));
+                "public_base_url", db.setting("public_base_url", ""),
+                "conversion_tracking", "1".equals(db.setting("conversion_tracking", "0")),
+                "geo_db_version", db.setting("geo_db_version", "none"),
+                "email_enabled", "1".equals(db.setting("email_enabled", "0"))));
     }
 
     private AdHttp.Res listUsers(AdHttp.Req r) {
         String role = r.param("role");
-        String sql = "SELECT id,email,name,company,role,status,balance_micros,created_at,"
-                + " (SELECT COALESCE(SUM(s.pub_micros),0) FROM stats_daily s JOIN sites st ON st.id=s.site_id WHERE st.owner_id=users.id) earned_micros,"
-                + " (SELECT COALESCE(-SUM(amount_micros),0) FROM billing b WHERE b.user_id=users.id AND b.type='payout') paid_micros"
-                + " FROM users";
-        JSONArray rows = role != null && role.matches("admin|publisher|advertiser")
-                ? db.query(sql + " WHERE role=? ORDER BY id", role) : db.query(sql + " ORDER BY id");
-        return AdHttp.ok(rows);
+        Map<Long, Long> earned = new HashMap<>(), paid = new HashMap<>();
+        for (JSONObject s : db.list(AdDb.STATS, x -> true)) {
+            JSONObject site = db.copy(AdDb.SITES, s.optLong("site_id"));
+            if (site != null) earned.merge(site.optLong("owner_id"), s.optLong("pub_micros"), Long::sum);
+        }
+        for (JSONObject b : db.list(AdDb.BILLING, x -> "payout".equals(x.optString("type")))) {
+            paid.merge(b.optLong("user_id"), -b.optLong("amount_micros"), Long::sum);
+        }
+        JSONArray out = new JSONArray();
+        for (JSONObject u : db.list(AdDb.USERS, x -> role == null || role.equals(x.optString("role")))) {
+            AdHttp.put(u, "earned_micros", earned.getOrDefault(u.optLong("id"), 0L));
+            AdHttp.put(u, "paid_micros", paid.getOrDefault(u.optLong("id"), 0L));
+            out.put(u);
+        }
+        return AdHttp.ok(out);
     }
 
     private AdHttp.Res createUser(AdHttp.Req r, AdSecurity.User admin) {
@@ -233,51 +277,65 @@ final class AdApi {
 
     private AdHttp.Res patchUser(AdHttp.Req r, AdSecurity.User admin, long id) {
         JSONObject b = AdHttp.body(r);
-        if (db.scalar("SELECT COUNT(*) FROM users WHERE id=?", 0, id) == 0) throw notFound("User not found");
+        if (db.copy(AdDb.USERS, id) == null) throw notFound("User not found");
         if (b.has("status")) {
             String st = b.optString("status");
             if (!st.equals("active") && !st.equals("disabled")) throw bad("status must be active or disabled");
             if (id == admin.id && st.equals("disabled")) throw bad("You cannot disable your own account");
-            db.run("UPDATE users SET status=? WHERE id=?", st, id);
-            if (st.equals("disabled")) db.run("DELETE FROM sessions WHERE user_id=?", id);
+            db.update(AdDb.USERS, id, x -> AdHttp.put(x, "status", st));
+            if (st.equals("disabled")) db.deleteWhere(AdDb.SESSIONS, s -> s.optLong("user_id") == id);
         }
-        if (b.has("name")) db.run("UPDATE users SET name=? WHERE id=?", AdHttp.str(b, "name", 1, 80), id);
-        if (b.has("company")) db.run("UPDATE users SET company=? WHERE id=?", AdHttp.str(b, "company", 0, 80), id);
+        if (b.has("name")) db.update(AdDb.USERS, id, x -> AdHttp.put(x, "name", AdHttp.str(b, "name", 1, 80)));
+        if (b.has("company")) db.update(AdDb.USERS, id, x -> AdHttp.put(x, "company", AdHttp.str(b, "company", 0, 80)));
         if (b.has("password")) {
             String pw = b.optString("password", "");
             AdSecurity.checkPasswordPolicy(pw);
-            db.run("UPDATE users SET pass_hash=? WHERE id=?", AdSecurity.hashPassword(pw), id);
-            db.run("DELETE FROM sessions WHERE user_id=?", id);
+            db.update(AdDb.USERS, id, x -> AdHttp.put(x, "pass_hash", AdSecurity.hashPassword(pw)));
+            db.deleteWhere(AdDb.SESSIONS, s -> s.optLong("user_id") == id);
         }
         db.audit(admin.id, "user.update", "#" + id);
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res deleteUser(AdSecurity.User admin, long id) {
-        JSONObject target = db.one("SELECT id,email,role FROM users WHERE id=?", id);
+        JSONObject target = db.copy(AdDb.USERS, id);
         if (target == null) throw notFound("User not found");
         if (id == admin.id) throw bad("You cannot delete your own account");
-        if ("admin".equals(target.optString("role")) && db.scalar("SELECT COUNT(*) FROM users WHERE role='admin'", 0) <= 1) {
+        if ("admin".equals(target.optString("role")) && db.count(AdDb.USERS, u -> "admin".equals(u.optString("role"))) <= 1) {
             throw bad("The last administrator cannot be deleted");
         }
-        JSONArray images = db.query("SELECT k.image_file f FROM creatives k JOIN campaigns c ON c.id=k.campaign_id"
-                + " WHERE c.advertiser_id=? AND k.image_file<>''", id);
-        db.run("DELETE FROM stats_daily WHERE campaign_id IN (SELECT id FROM campaigns WHERE advertiser_id=?)"
-                + " OR site_id IN (SELECT id FROM sites WHERE owner_id=?)", id, id);
-        db.run("DELETE FROM events WHERE campaign_id IN (SELECT id FROM campaigns WHERE advertiser_id=?)"
-                + " OR site_id IN (SELECT id FROM sites WHERE owner_id=?)", id, id);
-        db.run("DELETE FROM users WHERE id=?", id);
-        for (int i = 0; i < images.length(); i++) {
-            String f = images.optJSONObject(i).optString("f");
+        List<Long> campaignIds = new ArrayList<>(), siteIds = new ArrayList<>();
+        List<String> images = new ArrayList<>();
+        for (JSONObject c : db.list(AdDb.CAMPAIGNS, x -> x.optLong("advertiser_id") == id)) campaignIds.add(c.optLong("id"));
+        for (JSONObject s : db.list(AdDb.SITES, x -> x.optLong("owner_id") == id)) siteIds.add(s.optLong("id"));
+        for (JSONObject cr : db.list(AdDb.CREATIVES, x -> campaignIds.contains(x.optLong("campaign_id")))) {
+            if (!cr.optString("image_file").isEmpty()) images.add(cr.optString("image_file"));
+        }
+        db.transaction(() -> {
+            db.deleteWhere(AdDb.STATS, x -> campaignIds.contains(x.optLong("campaign_id")) || siteIds.contains(x.optLong("site_id")));
+            db.deleteWhere(AdDb.GEO, x -> campaignIds.contains(x.optLong("campaign_id")) || siteIds.contains(x.optLong("site_id")));
+            db.deleteWhere(AdDb.EVENTS, x -> campaignIds.contains(x.optLong("campaign_id")) || siteIds.contains(x.optLong("site_id")));
+            db.deleteWhere(AdDb.CONVERSIONS, x -> campaignIds.contains(x.optLong("campaign_id")) || siteIds.contains(x.optLong("site_id")));
+            db.deleteWhere(AdDb.EXPERIMENTS, x -> campaignIds.contains(x.optLong("campaign_id")));
+            db.deleteWhere(AdDb.CREATIVES, x -> campaignIds.contains(x.optLong("campaign_id")));
+            db.deleteWhere(AdDb.CAMPAIGNS, x -> campaignIds.contains(x.optLong("id")));
+            for (long site : siteIds) db.deleteWhere(AdDb.PLACEMENTS, x -> x.optLong("site_id") == site);
+            db.deleteWhere(AdDb.SITES, x -> siteIds.contains(x.optLong("id")));
+            db.deleteWhere(AdDb.SESSIONS, x -> x.optLong("user_id") == id);
+            db.deleteWhere(AdDb.BILLING, x -> x.optLong("user_id") == id);
+            db.deleteWhere(AdDb.PAYOUT_REPORTS, x -> x.optLong("user_id") == id);
+            db.delete(AdDb.USERS, id);
+            db.audit(admin.id, "user.delete", target.optString("email") + " (#" + id + ")");
+        });
+        for (String f : images) {
             if (f.matches("^[a-f0-9]{24}\\.(png|jpg|gif|webp)$")) new File(AdDelivery.creativesDir(ctx), f).delete();
         }
-        db.audit(admin.id, "user.delete", target.optString("email") + " (#" + id + ")");
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res credit(AdHttp.Req r, AdSecurity.User admin, long id) {
         JSONObject b = AdHttp.body(r);
-        JSONObject user = db.one("SELECT role, balance_micros FROM users WHERE id=?", id);
+        JSONObject user = db.copy(AdDb.USERS, id);
         if (user == null) throw notFound("User not found");
         if (!"advertiser".equals(user.optString("role"))) throw bad("Only advertiser accounts hold a prepaid balance");
         String kind = b.optString("kind", "topup");
@@ -288,42 +346,68 @@ final class AdApi {
         long signed = debit ? -amount : amount;
         long after = user.optLong("balance_micros") + signed;
         if (after < 0) throw new AdHttp.HttpError(409, "Balance cannot go below zero");
-        db.run("UPDATE users SET balance_micros=? WHERE id=?", after, id);
-        db.run("INSERT INTO billing(ts,user_id,type,amount_micros,balance_after_micros,note,created_by) VALUES(?,?,?,?,?,?,?)",
-                System.currentTimeMillis(), id, kind, signed, after, AdHttp.str(b, "note", 0, 200), admin.id);
-        db.audit(admin.id, "billing." + kind, "user #" + id + " " + signed);
+        db.transaction(() -> {
+            db.update(AdDb.USERS, id, x -> AdHttp.put(x, "balance_micros", after));
+            JSONObject row = obj("ts", System.currentTimeMillis(), "user_id", id, "type", kind, "amount_micros", signed,
+                    "balance_after_micros", after, "note", AdHttp.str(b, "note", 0, 200), "created_by", admin.id);
+            db.insert(AdDb.BILLING, row);
+            db.audit(admin.id, "billing." + kind, "user #" + id + " " + signed);
+        });
         return AdHttp.ok(obj("balance_micros", after));
     }
 
     private AdHttp.Res payout(AdHttp.Req r, AdSecurity.User admin, long id) {
         JSONObject b = AdHttp.body(r);
-        JSONObject user = db.one("SELECT role FROM users WHERE id=?", id);
+        JSONObject user = db.copy(AdDb.USERS, id);
         if (user == null) throw notFound("User not found");
         if (!"publisher".equals(user.optString("role"))) throw bad("Payouts are only recorded for publishers");
         long amount = AdSecurity.micros(b, "amount", true);
         if (amount == 0) throw bad("amount must be greater than zero");
-        long earned = db.scalar("SELECT COALESCE(SUM(s.pub_micros),0) FROM stats_daily s JOIN sites st ON st.id=s.site_id WHERE st.owner_id=?", 0, id);
-        long paid = db.scalar("SELECT COALESCE(-SUM(amount_micros),0) FROM billing WHERE user_id=? AND type='payout'", 0, id);
+        long earned = 0, paid = 0;
+        for (JSONObject s : db.list(AdDb.STATS, x -> true)) {
+            JSONObject site = db.copy(AdDb.SITES, s.optLong("site_id"));
+            if (site != null && site.optLong("owner_id") == id) earned += s.optLong("pub_micros");
+        }
+        for (JSONObject x : db.list(AdDb.BILLING, y -> y.optLong("user_id") == id && "payout".equals(y.optString("type")))) {
+            paid -= x.optLong("amount_micros");
+        }
         if (amount > earned - paid) throw new AdHttp.HttpError(409, "Payout exceeds the publisher's unpaid earnings");
-        db.run("INSERT INTO billing(ts,user_id,type,amount_micros,balance_after_micros,note,created_by) VALUES(?,?,?,?,?,?,?)",
-                System.currentTimeMillis(), id, "payout", -amount, earned - paid - amount, AdHttp.str(b, "note", 0, 200), admin.id);
-        db.audit(admin.id, "billing.payout", "user #" + id + " " + amount);
-        return AdHttp.ok(obj("unpaid_micros", earned - paid - amount));
+        long unpaid = earned - paid - amount;
+        db.transaction(() -> {
+            JSONObject row = obj("ts", System.currentTimeMillis(), "user_id", id, "type", "payout", "amount_micros", -amount,
+                    "balance_after_micros", unpaid, "note", AdHttp.str(b, "note", 0, 200), "created_by", admin.id);
+            db.insert(AdDb.BILLING, row);
+            db.audit(admin.id, "billing.payout", "user #" + id + " " + amount);
+        });
+        return AdHttp.ok(obj("unpaid_micros", unpaid));
     }
 
-    // ================================================================ sites + placements
-
     private JSONObject siteFor(AdSecurity.User u, long id) {
-        JSONObject s = db.one("SELECT * FROM sites WHERE id=? AND status<>'removed'", id);
-        if (s == null || (!u.isAdmin() && s.optLong("owner_id") != u.id)) throw notFound("Site not found");
+        JSONObject s = db.copy(AdDb.SITES, id);
+        if (s == null || "removed".equals(s.optString("status")) || (!u.isAdmin() && s.optLong("owner_id") != u.id)) {
+            throw notFound("Site not found");
+        }
         return s;
     }
 
     private AdHttp.Res listSites(AdSecurity.User u) {
-        String sql = "SELECT s.id, s.owner_id, o.email owner_email, s.name, s.domain, s.status, s.flagged, s.flag_reason, s.created_at,"
-                + " (SELECT COUNT(*) FROM placements p WHERE p.site_id=s.id AND p.status<>'removed') placements"
-                + " FROM sites s JOIN users o ON o.id=s.owner_id WHERE s.status<>'removed'";
-        return AdHttp.ok(u.isAdmin() ? db.query(sql + " ORDER BY s.id DESC") : db.query(sql + " AND s.owner_id=? ORDER BY s.id DESC", u.id));
+        Map<Long, String> emails = new HashMap<>();
+        for (JSONObject x : db.list(AdDb.USERS, y -> true)) emails.put(x.optLong("id"), x.optString("email"));
+        Map<Long, Integer> counts = new HashMap<>();
+        for (JSONObject p : db.list(AdDb.PLACEMENTS, x -> !"removed".equals(x.optString("status")))) {
+            counts.merge(p.optLong("site_id"), 1, Integer::sum);
+        }
+        JSONArray out = new JSONArray();
+        for (JSONObject s : db.list(AdDb.SITES, x -> !"removed".equals(x.optString("status"))
+                && (u.isAdmin() || x.optLong("owner_id") == u.id))) {
+            AdHttp.put(s, "owner_email", emails.getOrDefault(s.optLong("owner_id"), ""));
+            AdHttp.put(s, "placements", counts.getOrDefault(s.optLong("id"), 0));
+            out.put(s);
+        }
+        List<JSONObject> sorted = AdDb.sorted(out, (a, b) -> Long.compare(b.optLong("id"), a.optLong("id")));
+        JSONArray ordered = new JSONArray();
+        for (JSONObject s : sorted) ordered.put(s);
+        return AdHttp.ok(ordered);
     }
 
     private AdHttp.Res createSite(AdHttp.Req r, AdSecurity.User u) {
@@ -332,72 +416,99 @@ final class AdApi {
         long owner = u.id;
         if (u.isAdmin() && b.has("owner_id")) {
             owner = AdHttp.num(b, "owner_id", 1, Long.MAX_VALUE, u.id);
-            if (db.scalar("SELECT COUNT(*) FROM users WHERE id=? AND role='publisher'", 0, owner) == 0) throw bad("owner_id must be a publisher");
+            JSONObject candidate = db.copy(AdDb.USERS, owner);
+            if (candidate == null || !"publisher".equals(candidate.optString("role"))) throw bad("owner_id must be a publisher");
         }
         String name = AdHttp.str(b, "name", 1, 80);
         String domain = AdSecurity.normalizeDomain(b.optString("domain", ""));
         if (domain == null) throw bad("Enter a domain like example.com (no path or port)");
-        if (db.scalar("SELECT COUNT(*) FROM sites WHERE domain=? AND status<>'removed'", 0, domain) > 0) throw new AdHttp.HttpError(409, "That domain is already registered");
-        if (db.scalar("SELECT COUNT(*) FROM sites WHERE owner_id=? AND status<>'removed'", 0, owner) >= 50) throw bad("Site limit reached (50)");
-        long id = db.insert("INSERT INTO sites(owner_id,name,domain,status,created_at) VALUES(?,?,?,?,?)",
-                owner, name, domain, u.isAdmin() ? "approved" : "pending", System.currentTimeMillis());
+        String dom = domain;
+        if (db.count(AdDb.SITES, s -> dom.equals(s.optString("domain")) && !"removed".equals(s.optString("status"))) > 0) {
+            throw new AdHttp.HttpError(409, "That domain is already registered");
+        }
+        final long ownerId = owner;
+        long owned = db.count(AdDb.SITES, s -> s.optLong("owner_id") == ownerId && !"removed".equals(s.optString("status")));
+        if (owned >= 50) throw bad("Site limit reached (50)");
+        JSONObject row = obj("owner_id", owner, "name", name, "domain", domain,
+                "status", u.isAdmin() ? "approved" : "pending", "flagged", 0, "flag_reason", "",
+                "created_at", System.currentTimeMillis());
+        long id = db.insert(AdDb.SITES, row);
         return AdHttp.ok(obj("id", id));
     }
 
     private AdHttp.Res patchSite(AdHttp.Req r, AdSecurity.User u, long id) {
         JSONObject s = siteFor(u, id);
         JSONObject b = AdHttp.body(r);
-        if (b.has("name")) db.run("UPDATE sites SET name=? WHERE id=?", AdHttp.str(b, "name", 1, 80), id);
+        if (b.has("name")) db.update(AdDb.SITES, id, x -> AdHttp.put(x, "name", AdHttp.str(b, "name", 1, 80)));
         if (b.has("domain")) {
             String d = AdSecurity.normalizeDomain(b.optString("domain", ""));
             if (d == null) throw bad("Enter a domain like example.com");
             if (!d.equals(s.optString("domain"))) {
-                if (db.scalar("SELECT COUNT(*) FROM sites WHERE domain=? AND status<>'removed'", 0, d) > 0) throw new AdHttp.HttpError(409, "That domain is already registered");
-                db.run("UPDATE sites SET domain=?, status=? WHERE id=?", d, u.isAdmin() ? s.optString("status") : "pending", id);
+                if (db.count(AdDb.SITES, x -> d.equals(x.optString("domain")) && !"removed".equals(x.optString("status"))) > 0) {
+                    throw new AdHttp.HttpError(409, "That domain is already registered");
+                }
+                db.update(AdDb.SITES, id, x -> {
+                    AdHttp.put(x, "domain", d);
+                    AdHttp.put(x, "status", u.isAdmin() ? s.optString("status") : "pending");
+                });
             }
         }
         if (b.has("status")) {
             needAdmin(u);
             String st = b.optString("status");
             if (!st.matches("pending|approved|rejected")) throw bad("status must be pending, approved or rejected");
-            db.run("UPDATE sites SET status=? WHERE id=?", st, id);
+            db.update(AdDb.SITES, id, x -> AdHttp.put(x, "status", st));
             db.audit(u.id, "site." + st, "#" + id);
         }
         if (b.has("flagged")) {
             needAdmin(u);
-            db.run("UPDATE sites SET flagged=?, flag_reason=CASE WHEN ?=0 THEN '' ELSE flag_reason END WHERE id=?", b.optBoolean("flagged") ? 1 : 0, b.optBoolean("flagged") ? 1 : 0, id);
+            boolean flagged = b.optBoolean("flagged");
+            db.update(AdDb.SITES, id, x -> {
+                AdHttp.put(x, "flagged", flagged ? 1 : 0);
+                if (!flagged) AdHttp.put(x, "flag_reason", "");
+            });
         }
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res deleteSite(AdSecurity.User u, long id) {
         siteFor(u, id);
-        db.run("UPDATE placements SET status='removed' WHERE site_id=?", id);
-        db.run("UPDATE sites SET status='removed' WHERE id=?", id);
-        db.audit(u.id, "site.remove", "#" + id);
+        db.transaction(() -> {
+            db.updateWhere(AdDb.PLACEMENTS, x -> x.optLong("site_id") == id, x -> AdHttp.put(x, "status", "removed"));
+            db.update(AdDb.SITES, id, x -> AdHttp.put(x, "status", "removed"));
+            db.audit(u.id, "site.remove", "#" + id);
+        });
         return AdHttp.ok(obj("ok", true));
     }
 
     private JSONObject placementFor(AdSecurity.User u, long id) {
-        JSONObject p = db.one("SELECT p.*, s.owner_id, s.domain FROM placements p JOIN sites s ON s.id=p.site_id WHERE p.id=? AND p.status<>'removed' AND s.status<>'removed'", id);
-        if (p == null || (!u.isAdmin() && p.optLong("owner_id") != u.id)) throw notFound("Placement not found");
+        JSONObject p = db.copy(AdDb.PLACEMENTS, id);
+        if (p == null || "removed".equals(p.optString("status"))) throw notFound("Placement not found");
+        JSONObject s = db.copy(AdDb.SITES, p.optLong("site_id"));
+        if (s == null || "removed".equals(s.optString("status")) || (!u.isAdmin() && s.optLong("owner_id") != u.id)) {
+            throw notFound("Placement not found");
+        }
+        AdHttp.put(p, "domain", s.optString("domain"));
+        AdHttp.put(p, "owner_id", s.optLong("owner_id"));
         return p;
     }
 
     private AdHttp.Res listPlacements(AdHttp.Req r, AdSecurity.User u) {
         long site = idParam(r, "site_id");
-        List<Object> args = new ArrayList<>();
-        StringBuilder sql = new StringBuilder("SELECT p.id, p.site_id, p.name, p.format, p.width, p.height, p.key, p.status, s.domain"
-                + " FROM placements p JOIN sites s ON s.id=p.site_id WHERE p.status<>'removed' AND s.status<>'removed'");
-        if (!u.isAdmin()) {
-            sql.append(" AND s.owner_id=?");
-            args.add(u.id);
+        Map<Long, JSONObject> sites = new HashMap<>();
+        for (JSONObject s : db.list(AdDb.SITES, x -> !"removed".equals(x.optString("status")))) sites.put(s.optLong("id"), s);
+        JSONArray out = new JSONArray();
+        for (JSONObject p : db.list(AdDb.PLACEMENTS, x -> !"removed".equals(x.optString("status"))
+                && (site == 0 || x.optLong("site_id") == site))) {
+            JSONObject s = sites.get(p.optLong("site_id"));
+            if (s == null || (!u.isAdmin() && s.optLong("owner_id") != u.id)) continue;
+            AdHttp.put(p, "domain", s.optString("domain"));
+            out.put(p);
         }
-        if (site > 0) {
-            sql.append(" AND p.site_id=?");
-            args.add(site);
-        }
-        return AdHttp.ok(db.query(sql.append(" ORDER BY p.id DESC").toString(), args.toArray()));
+        List<JSONObject> sorted = AdDb.sorted(out, (a, b) -> Long.compare(b.optLong("id"), a.optLong("id")));
+        JSONArray ordered = new JSONArray();
+        for (JSONObject p : sorted) ordered.put(p);
+        return AdHttp.ok(ordered);
     }
 
     private AdHttp.Res createPlacement(AdHttp.Req r, AdSecurity.User u) {
@@ -413,28 +524,31 @@ final class AdApi {
             h = AdHttp.num(b, "height", 1, 2000, 0);
             if (w == 0 || h == 0) throw bad("Banner placements need a width and height");
         }
-        if (db.scalar("SELECT COUNT(*) FROM placements WHERE site_id=? AND status<>'removed'", 0, siteId) >= 100) throw bad("Placement limit reached (100 per site)");
+        if (db.count(AdDb.PLACEMENTS, p -> p.optLong("site_id") == siteId && !"removed".equals(p.optString("status"))) >= 100) {
+            throw bad("Placement limit reached (100 per site)");
+        }
         String key = "pl_" + AdSecurity.randomHex(8);
-        long id = db.insert("INSERT INTO placements(site_id,name,format,width,height,key,created_at) VALUES(?,?,?,?,?,?,?)",
-                siteId, name, format, w, h, key, System.currentTimeMillis());
+        JSONObject row = obj("site_id", siteId, "name", name, "format", format, "width", w, "height", h,
+                "key", key, "status", "active", "created_at", System.currentTimeMillis());
+        long id = db.insert(AdDb.PLACEMENTS, row);
         return AdHttp.ok(obj("id", id, "key", key));
     }
 
     private AdHttp.Res patchPlacement(AdHttp.Req r, AdSecurity.User u, long id) {
         placementFor(u, id);
         JSONObject b = AdHttp.body(r);
-        if (b.has("name")) db.run("UPDATE placements SET name=? WHERE id=?", AdHttp.str(b, "name", 1, 80), id);
+        if (b.has("name")) db.update(AdDb.PLACEMENTS, id, x -> AdHttp.put(x, "name", AdHttp.str(b, "name", 1, 80)));
         if (b.has("status")) {
             String st = b.optString("status");
             if (!st.equals("active") && !st.equals("paused")) throw bad("status must be active or paused");
-            db.run("UPDATE placements SET status=? WHERE id=?", st, id);
+            db.update(AdDb.PLACEMENTS, id, x -> AdHttp.put(x, "status", st));
         }
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res deletePlacement(AdSecurity.User u, long id) {
         placementFor(u, id);
-        db.run("UPDATE placements SET status='removed' WHERE id=?", id);
+        db.update(AdDb.PLACEMENTS, id, x -> AdHttp.put(x, "status", "removed"));
         return AdHttp.ok(obj("ok", true));
     }
 
@@ -447,21 +561,11 @@ final class AdApi {
         return AdHttp.ok(obj("tag", tag, "base_url", base, "https_warning", !base.startsWith("https://")));
     }
 
-    // ================================================================ campaigns
-
     private JSONObject campaignRow(AdSecurity.User u, long id) {
-        JSONObject c = db.one("SELECT * FROM campaigns WHERE id=?", id);
+        JSONObject c = db.copy(AdDb.CAMPAIGNS, id);
         if (c == null || (!u.isAdmin() && c.optLong("advertiser_id") != u.id)) throw notFound("Campaign not found");
         return c;
     }
-
-    private static final String CAMPAIGN_SQL = "SELECT c.id, c.advertiser_id, u.email advertiser_email, u.company advertiser_company, c.name, c.status,"
-            + " c.pricing, c.bid_micros, c.daily_budget_micros, c.total_budget_micros, c.spent_micros, c.start_at, c.end_at, c.targeting,"
-            + " c.reject_reason, c.created_at,"
-            + " (SELECT COALESCE(SUM(imps),0) FROM stats_daily s WHERE s.campaign_id=c.id) imps,"
-            + " (SELECT COALESCE(SUM(clicks),0) FROM stats_daily s WHERE s.campaign_id=c.id) clicks,"
-            + " (SELECT COUNT(*) FROM creatives k WHERE k.campaign_id=c.id) creatives"
-            + " FROM campaigns c JOIN users u ON u.id=c.advertiser_id";
 
     private static JSONObject withTargeting(JSONObject c) {
         try {
@@ -469,26 +573,65 @@ final class AdApi {
         } catch (JSONException e) {
             AdHttp.put(c, "targeting", new JSONObject());
         }
-        // Dates are formatted here, in the same time zone that parsed them, so the form shows exactly what was saved.
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
         AdHttp.put(c, "start_date", c.isNull("start_at") ? "" : f.format(new Date(c.optLong("start_at"))));
         AdHttp.put(c, "end_date", c.isNull("end_at") ? "" : f.format(new Date(c.optLong("end_at") - 1)));
         return c;
     }
 
-    private AdHttp.Res listCampaigns(AdSecurity.User u) {
-        JSONArray rows = u.isAdmin() ? db.query(CAMPAIGN_SQL + " ORDER BY c.id DESC")
-                : db.query(CAMPAIGN_SQL + " WHERE c.advertiser_id=? ORDER BY c.id DESC", u.id);
-        for (int i = 0; i < rows.length(); i++) withTargeting(rows.optJSONObject(i));
-        return AdHttp.ok(rows);
-    }
-
     private JSONObject campaignJson(AdSecurity.User u, long id) {
         campaignRow(u, id);
-        return withTargeting(db.one(CAMPAIGN_SQL + " WHERE c.id=?", id));
+        JSONObject c = db.copy(AdDb.CAMPAIGNS, id);
+        JSONObject adv = db.copy(AdDb.USERS, c.optLong("advertiser_id"));
+        AdHttp.put(c, "advertiser_email", adv == null ? "" : adv.optString("email"));
+        AdHttp.put(c, "advertiser_company", adv == null ? "" : adv.optString("company"));
+        long imps = 0, clicks = 0, conv = 0;
+        for (JSONObject s : db.list(AdDb.STATS, x -> x.optLong("campaign_id") == id)) {
+            imps += s.optLong("imps");
+            clicks += s.optLong("clicks");
+            conv += s.optLong("conversions");
+        }
+        AdHttp.put(c, "imps", imps);
+        AdHttp.put(c, "clicks", clicks);
+        AdHttp.put(c, "conversions", conv);
+        AdHttp.put(c, "creatives", db.count(AdDb.CREATIVES, x -> x.optLong("campaign_id") == id));
+        return withTargeting(c);
     }
 
-    /** Local-midnight timestamp for "yyyy-MM-dd"; an end date is inclusive, so it becomes the start of the next day. */
+    private AdHttp.Res listCampaigns(AdSecurity.User u) {
+        Map<Long, JSONObject> advertisers = new HashMap<>();
+        for (JSONObject x : db.list(AdDb.USERS, y -> true)) advertisers.put(x.optLong("id"), x);
+        Map<Long, long[]> totals = new HashMap<>();
+        for (JSONObject s : db.list(AdDb.STATS, x -> true)) {
+            long[] t = totals.get(s.optLong("campaign_id"));
+            if (t == null) {
+                t = new long[3];
+                totals.put(s.optLong("campaign_id"), t);
+            }
+            t[0] += s.optLong("imps");
+            t[1] += s.optLong("clicks");
+            t[2] += s.optLong("conversions");
+        }
+        Map<Long, Integer> creatives = new HashMap<>();
+        for (JSONObject c : db.list(AdDb.CREATIVES, x -> true)) creatives.merge(c.optLong("campaign_id"), 1, Integer::sum);
+        JSONArray out = new JSONArray();
+        for (JSONObject c : db.list(AdDb.CAMPAIGNS, x -> u.isAdmin() || x.optLong("advertiser_id") == u.id)) {
+            JSONObject adv = advertisers.get(c.optLong("advertiser_id"));
+            AdHttp.put(c, "advertiser_email", adv == null ? "" : adv.optString("email"));
+            AdHttp.put(c, "advertiser_company", adv == null ? "" : adv.optString("company"));
+            long[] t = totals.get(c.optLong("id"));
+            AdHttp.put(c, "imps", t == null ? 0 : t[0]);
+            AdHttp.put(c, "clicks", t == null ? 0 : t[1]);
+            AdHttp.put(c, "conversions", t == null ? 0 : t[2]);
+            AdHttp.put(c, "creatives", creatives.getOrDefault(c.optLong("id"), 0));
+            out.put(withTargeting(c));
+        }
+        List<JSONObject> sorted = AdDb.sorted(out, (a, b) -> Long.compare(b.optLong("id"), a.optLong("id")));
+        JSONArray ordered = new JSONArray();
+        for (JSONObject c : sorted) ordered.put(c);
+        return AdHttp.ok(ordered);
+    }
+
     private static Object parseDate(JSONObject b, String key, boolean end) {
         if (!b.has(key) || b.isNull(key) || b.optString(key).isEmpty()) return null;
         try {
@@ -530,7 +673,7 @@ final class AdApi {
                     res.put(v);
                     break;
                 }
-                default: { // "id:min:max"
+                default: {
                     String[] mm = kind.split(":");
                     long v = in.optLong(i, Long.MIN_VALUE);
                     if (v < Long.parseLong(mm[1]) || v > Long.parseLong(mm[2])) throw bad(key + " has a value out of range");
@@ -541,7 +684,6 @@ final class AdApi {
         AdHttp.put(out, key, res);
     }
 
-    /** Keeps only known targeting keys with validated values. Geo targeting is intentionally absent: the server has no IP-location data. */
     private static String normalizeTargeting(JSONObject t) {
         JSONObject out = new JSONObject();
         if (t == null) return "{}";
@@ -563,7 +705,8 @@ final class AdApi {
         long adv = u.id;
         if (u.isAdmin()) {
             adv = AdHttp.num(b, "advertiser_id", 1, Long.MAX_VALUE, 0);
-            if (db.scalar("SELECT COUNT(*) FROM users WHERE id=? AND role='advertiser'", 0, adv) == 0) throw bad("advertiser_id must be an advertiser account");
+            JSONObject candidate = db.copy(AdDb.USERS, adv);
+            if (candidate == null || !"advertiser".equals(candidate.optString("role"))) throw bad("advertiser_id must be an advertiser account");
         } else if (!"advertiser".equals(u.role)) {
             throw forbidden("Only advertisers can create campaigns");
         }
@@ -580,8 +723,14 @@ final class AdApi {
         if (start != null && end != null && (Long) end <= (Long) start) throw bad("End date must be after the start date");
         String targeting = normalizeTargeting(b.optJSONObject("targeting"));
         long now = System.currentTimeMillis();
-        long id = db.insert("INSERT INTO campaigns(advertiser_id,name,pricing,bid_micros,daily_budget_micros,total_budget_micros,start_at,end_at,targeting,created_at,updated_at)"
-                + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", adv, name, pricing, bid, daily, total, start, end, targeting, now, now);
+        JSONObject row = obj("advertiser_id", adv, "name", name, "status", "draft", "pricing", pricing,
+                "bid_micros", bid, "daily_budget_micros", daily, "total_budget_micros", total, "spent_micros", 0L,
+                "start_at", start == null ? JSONObject.NULL : start, "end_at", end == null ? JSONObject.NULL : end,
+                "targeting", targeting, "reject_reason", "",
+                "conversion_event", AdSecurity.clean(b.optString("conversion_event", "")),
+                "conversion_value_micros", AdSecurity.micros(b, "conversion_value", false),
+                "created_at", now, "updated_at", now);
+        long id = db.insert(AdDb.CAMPAIGNS, row);
         return AdHttp.ok(obj("id", id));
     }
 
@@ -590,56 +739,80 @@ final class AdApi {
         String st = c.optString("status");
         if (!st.matches("draft|rejected|paused")) throw new AdHttp.HttpError(409, "Pause the campaign before editing it");
         JSONObject b = AdHttp.body(r);
-        List<String> sets = new ArrayList<>();
-        List<Object> args = new ArrayList<>();
-        if (b.has("name")) { sets.add("name=?"); args.add(AdHttp.str(b, "name", 1, 100)); }
+        JSONObject patch = new JSONObject();
+        if (b.has("name")) AdHttp.put(patch, "name", AdHttp.str(b, "name", 1, 100));
         long bid = c.optLong("bid_micros"), total = c.optLong("total_budget_micros"), daily = c.optLong("daily_budget_micros");
         if (b.has("pricing")) {
             String p = b.optString("pricing");
             if (!p.equals("CPM") && !p.equals("CPC")) throw bad("pricing must be CPM or CPC");
-            sets.add("pricing=?"); args.add(p);
+            AdHttp.put(patch, "pricing", p);
         }
-        if (b.has("bid")) { bid = AdSecurity.micros(b, "bid", true); if (bid < 1000) throw bad("Minimum bid is 0.001"); sets.add("bid_micros=?"); args.add(bid); }
-        if (b.has("total_budget")) { total = AdSecurity.micros(b, "total_budget", true); sets.add("total_budget_micros=?"); args.add(total); }
-        if (b.has("daily_budget")) { daily = AdSecurity.micros(b, "daily_budget", false); sets.add("daily_budget_micros=?"); args.add(daily); }
+        if (b.has("bid")) {
+            bid = AdSecurity.micros(b, "bid", true);
+            if (bid < 1000) throw bad("Minimum bid is 0.001");
+            AdHttp.put(patch, "bid_micros", bid);
+        }
+        if (b.has("total_budget")) {
+            total = AdSecurity.micros(b, "total_budget", true);
+            AdHttp.put(patch, "total_budget_micros", total);
+        }
+        if (b.has("daily_budget")) {
+            daily = AdSecurity.micros(b, "daily_budget", false);
+            AdHttp.put(patch, "daily_budget_micros", daily);
+        }
         if (total <= 0 || daily > total) throw bad("Budgets are invalid: total must be positive and at least the daily budget");
         if (total < c.optLong("spent_micros")) throw bad("total_budget cannot be below what is already spent");
         Object start = c.isNull("start_at") ? null : c.optLong("start_at"), end = c.isNull("end_at") ? null : c.optLong("end_at");
-        if (b.has("start")) { start = parseDate(b, "start", false); sets.add("start_at=?"); args.add(start); }
-        if (b.has("end")) { end = parseDate(b, "end", true); sets.add("end_at=?"); args.add(end); }
+        if (b.has("start")) {
+            start = parseDate(b, "start", false);
+            AdHttp.put(patch, "start_at", start == null ? JSONObject.NULL : start);
+        }
+        if (b.has("end")) {
+            end = parseDate(b, "end", true);
+            AdHttp.put(patch, "end_at", end == null ? JSONObject.NULL : end);
+        }
         if (start != null && end != null && (Long) end <= (Long) start) throw bad("End date must be after the start date");
-        if (b.has("targeting")) { sets.add("targeting=?"); args.add(normalizeTargeting(b.optJSONObject("targeting"))); }
-        if (sets.isEmpty()) return AdHttp.ok(obj("ok", true));
-        sets.add("updated_at=?");
-        args.add(System.currentTimeMillis());
-        args.add(id);
-        db.run("UPDATE campaigns SET " + join(sets) + " WHERE id=?", args.toArray());
+        if (b.has("targeting")) AdHttp.put(patch, "targeting", normalizeTargeting(b.optJSONObject("targeting")));
+        if (b.has("conversion_event")) AdHttp.put(patch, "conversion_event", AdSecurity.clean(b.optString("conversion_event", "")));
+        if (b.has("conversion_value")) AdHttp.put(patch, "conversion_value_micros", AdSecurity.micros(b, "conversion_value", false));
+        if (patch.length() == 0) return AdHttp.ok(obj("ok", true));
+        AdHttp.put(patch, "updated_at", System.currentTimeMillis());
+        db.update(AdDb.CAMPAIGNS, id, patch);
         return AdHttp.ok(obj("ok", true));
-    }
-
-    private static String join(List<String> parts) {
-        StringBuilder sb = new StringBuilder();
-        for (String p : parts) sb.append(sb.length() == 0 ? "" : ", ").append(p);
-        return sb.toString();
     }
 
     private AdHttp.Res submitCampaign(AdSecurity.User u, long id) {
         JSONObject c = campaignRow(u, id);
         if (!c.optString("status").matches("draft|rejected")) throw new AdHttp.HttpError(409, "Only draft or rejected campaigns can be submitted");
-        if (db.scalar("SELECT COUNT(*) FROM creatives WHERE campaign_id=?", 0, id) == 0) throw bad("Add at least one creative before submitting");
-        db.run("UPDATE campaigns SET status='pending', reject_reason='', updated_at=? WHERE id=?", System.currentTimeMillis(), id);
+        if (db.count(AdDb.CREATIVES, x -> x.optLong("campaign_id") == id) == 0) throw bad("Add at least one creative before submitting");
+        db.update(AdDb.CAMPAIGNS, id, x -> {
+            AdHttp.put(x, "status", "pending");
+            AdHttp.put(x, "reject_reason", "");
+            AdHttp.put(x, "updated_at", System.currentTimeMillis());
+        });
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res approveCampaign(AdHttp.Req r, AdSecurity.User admin, long id) {
         JSONObject c = campaignRow(admin, id);
         if (!"pending".equals(c.optString("status"))) throw new AdHttp.HttpError(409, "Only pending campaigns can be approved");
-        db.run("UPDATE campaigns SET status='approved', reject_reason='', updated_at=? WHERE id=?", System.currentTimeMillis(), id);
         boolean withCreatives = r.body.length == 0 || AdHttp.body(r).optBoolean("approve_creatives", true);
-        if (withCreatives) {
-            db.run("UPDATE creatives SET status='approved', reject_reason='' WHERE campaign_id=? AND status='pending' AND (type<>'banner' OR image_file<>'')", id);
-        }
-        db.audit(admin.id, "campaign.approve", "#" + id);
+        db.transaction(() -> {
+            db.update(AdDb.CAMPAIGNS, id, x -> {
+                AdHttp.put(x, "status", "approved");
+                AdHttp.put(x, "reject_reason", "");
+                AdHttp.put(x, "updated_at", System.currentTimeMillis());
+            });
+            if (withCreatives) {
+                db.updateWhere(AdDb.CREATIVES, x -> x.optLong("campaign_id") == id && "pending".equals(x.optString("status"))
+                                && (!"banner".equals(x.optString("type")) || !x.optString("image_file").isEmpty()),
+                        x -> {
+                            AdHttp.put(x, "status", "approved");
+                            AdHttp.put(x, "reject_reason", "");
+                        });
+            }
+            db.audit(admin.id, "campaign.approve", "#" + id);
+        });
         return AdHttp.ok(obj("ok", true));
     }
 
@@ -647,7 +820,11 @@ final class AdApi {
         JSONObject c = campaignRow(admin, id);
         if (!"pending".equals(c.optString("status"))) throw new AdHttp.HttpError(409, "Only pending campaigns can be rejected");
         String reason = AdHttp.str(AdHttp.body(r), "reason", 1, 300);
-        db.run("UPDATE campaigns SET status='rejected', reject_reason=?, updated_at=? WHERE id=?", reason, System.currentTimeMillis(), id);
+        db.update(AdDb.CAMPAIGNS, id, x -> {
+            AdHttp.put(x, "status", "rejected");
+            AdHttp.put(x, "reject_reason", reason);
+            AdHttp.put(x, "updated_at", System.currentTimeMillis());
+        });
         db.audit(admin.id, "campaign.reject", "#" + id);
         return AdHttp.ok(obj("ok", true));
     }
@@ -655,32 +832,43 @@ final class AdApi {
     private AdHttp.Res setCampaignStatus(AdSecurity.User u, long id, String from, String to) {
         JSONObject c = campaignRow(u, id);
         if (!from.equals(c.optString("status"))) throw new AdHttp.HttpError(409, "Campaign must be " + from + " to become " + to);
-        db.run("UPDATE campaigns SET status=?, updated_at=? WHERE id=?", to, System.currentTimeMillis(), id);
+        db.update(AdDb.CAMPAIGNS, id, x -> {
+            AdHttp.put(x, "status", to);
+            AdHttp.put(x, "updated_at", System.currentTimeMillis());
+        });
         return AdHttp.ok(obj("ok", true));
     }
 
-    // ================================================================ creatives
-
     private JSONObject creativeFor(AdSecurity.User u, long id) {
-        JSONObject cr = db.one("SELECT k.*, c.advertiser_id, c.status campaign_status FROM creatives k JOIN campaigns c ON c.id=k.campaign_id WHERE k.id=?", id);
-        if (cr == null || (!u.isAdmin() && cr.optLong("advertiser_id") != u.id)) throw notFound("Creative not found");
+        JSONObject cr = db.copy(AdDb.CREATIVES, id);
+        if (cr == null) throw notFound("Creative not found");
+        JSONObject c = db.copy(AdDb.CAMPAIGNS, cr.optLong("campaign_id"));
+        if (c == null || (!u.isAdmin() && c.optLong("advertiser_id") != u.id)) throw notFound("Creative not found");
+        AdHttp.put(cr, "advertiser_id", c.optLong("advertiser_id"));
+        AdHttp.put(cr, "campaign_status", c.optString("status"));
         return cr;
     }
 
     private AdHttp.Res listCreatives(AdHttp.Req r, AdSecurity.User u) {
         long campaign = idParam(r, "campaign_id");
-        List<Object> args = new ArrayList<>();
-        StringBuilder sql = new StringBuilder("SELECT k.id, k.campaign_id, c.name campaign_name, k.type, k.title, k.body, k.cta, k.click_url,"
-                + " k.width, k.height, k.status, k.reject_reason, (k.image_file<>'') has_image, k.created_at"
-                + " FROM creatives k JOIN campaigns c ON c.id=k.campaign_id WHERE 1=1");
-        if (!u.isAdmin()) { sql.append(" AND c.advertiser_id=?"); args.add(u.id); }
-        if (campaign > 0) { sql.append(" AND k.campaign_id=?"); args.add(campaign); }
         String status = r.param("status");
-        if (status != null && status.matches("pending|approved|rejected")) { sql.append(" AND k.status=?"); args.add(status); }
-        return AdHttp.ok(db.query(sql.append(" ORDER BY k.id DESC LIMIT 500").toString(), args.toArray()));
+        Map<Long, JSONObject> campaigns = new HashMap<>();
+        for (JSONObject c : db.list(AdDb.CAMPAIGNS, x -> true)) campaigns.put(c.optLong("id"), c);
+        JSONArray out = new JSONArray();
+        for (JSONObject cr : db.list(AdDb.CREATIVES, x -> campaign == 0 || x.optLong("campaign_id") == campaign)) {
+            if (status != null && status.matches("pending|approved|rejected") && !status.equals(cr.optString("status"))) continue;
+            JSONObject c = campaigns.get(cr.optLong("campaign_id"));
+            if (c == null || (!u.isAdmin() && c.optLong("advertiser_id") != u.id)) continue;
+            AdHttp.put(cr, "campaign_name", c.optString("name"));
+            AdHttp.put(cr, "has_image", cr.optString("image_file").isEmpty() ? 0 : 1);
+            out.put(cr);
+        }
+        List<JSONObject> sorted = AdDb.sorted(out, (a, b) -> Long.compare(b.optLong("id"), a.optLong("id")));
+        JSONArray ordered = new JSONArray();
+        for (int i = 0; i < sorted.size() && i < 500; i++) ordered.put(sorted.get(i));
+        return AdHttp.ok(ordered);
     }
 
-    /** Validates text fields for a creative of the given type; returns {title, body, cta, click_url}. */
     private static String[] creativeText(JSONObject b, String type) {
         int titleMax = type.equals("native") ? 60 : 70, bodyMax = type.equals("native") ? 140 : 120;
         String title = AdHttp.str(b, "title", type.equals("banner") ? 0 : 1, titleMax);
@@ -695,7 +883,7 @@ final class AdApi {
         JSONObject b = AdHttp.body(r);
         long campaign = AdHttp.num(b, "campaign_id", 1, Long.MAX_VALUE, 0);
         campaignRow(u, campaign);
-        if (db.scalar("SELECT COUNT(*) FROM creatives WHERE campaign_id=?", 0, campaign) >= 30) throw bad("Creative limit reached (30 per campaign)");
+        if (db.count(AdDb.CREATIVES, x -> x.optLong("campaign_id") == campaign) >= 30) throw bad("Creative limit reached (30 per campaign)");
         String type = b.optString("type", "");
         if (!type.matches("banner|native|text")) throw bad("type must be banner, native or text");
         String[] t = creativeText(b, type);
@@ -705,8 +893,10 @@ final class AdApi {
             h = AdHttp.num(b, "height", 1, 2000, 0);
             if (w == 0 || h == 0) throw bad("Banner creatives need a width and height");
         }
-        long id = db.insert("INSERT INTO creatives(campaign_id,type,title,body,cta,click_url,width,height,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                campaign, type, t[0], t[1], t[2], t[3], w, h, System.currentTimeMillis());
+        JSONObject row = obj("campaign_id", campaign, "type", type, "title", t[0], "body", t[1], "cta", t[2],
+                "click_url", t[3], "image_file", "", "image_mime", "", "width", w, "height", h,
+                "status", "pending", "reject_reason", "", "created_at", System.currentTimeMillis());
+        long id = db.insert(AdDb.CREATIVES, row);
         return AdHttp.ok(obj("id", id));
     }
 
@@ -717,15 +907,21 @@ final class AdApi {
             if (!merged.has(k)) AdHttp.put(merged, k, cr.optString(k));
         }
         String[] t = creativeText(merged, cr.optString("type"));
-        // Any edit sends the creative back to review so approved ads cannot be swapped for something else.
-        db.run("UPDATE creatives SET title=?, body=?, cta=?, click_url=?, status='pending', reject_reason='' WHERE id=?", t[0], t[1], t[2], t[3], id);
+        db.update(AdDb.CREATIVES, id, x -> {
+            AdHttp.put(x, "title", t[0]);
+            AdHttp.put(x, "body", t[1]);
+            AdHttp.put(x, "cta", t[2]);
+            AdHttp.put(x, "click_url", t[3]);
+            AdHttp.put(x, "status", "pending");
+            AdHttp.put(x, "reject_reason", "");
+        });
         return AdHttp.ok(obj("ok", true));
     }
 
     private AdHttp.Res deleteCreative(AdSecurity.User u, long id) {
         JSONObject cr = creativeFor(u, id);
         String f = cr.optString("image_file");
-        db.run("DELETE FROM creatives WHERE id=?", id);
+        db.delete(AdDb.CREATIVES, id);
         if (!f.isEmpty()) new File(AdDelivery.creativesDir(ctx), f).delete();
         return AdHttp.ok(obj("ok", true));
     }
@@ -746,7 +942,7 @@ final class AdApi {
         String ext = sniff(b);
         if (ext == null) throw bad("Only PNG, JPEG, GIF or WebP images are accepted (SVG is not allowed)");
         BitmapFactory.Options o = new BitmapFactory.Options();
-        o.inJustDecodeBounds = true; // reads the header only: no pixel memory is allocated
+        o.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(b, 0, b.length, o);
         if (o.outWidth <= 0 || o.outHeight <= 0) throw bad("That file is not a readable image");
         if (o.outWidth > 4000 || o.outHeight > 4000) throw bad("Image dimensions are too large (max 4000 px)");
@@ -764,10 +960,21 @@ final class AdApi {
             out.write(b);
             out.getFD().sync();
         }
-        if (!tmp.renameTo(dst)) { tmp.delete(); throw new IOException("could not store image"); }
+        if (!tmp.renameTo(dst)) {
+            tmp.delete();
+            throw new IOException("could not store image");
+        }
         String old = cr.optString("image_file");
         String mime = ext.equals("jpg") ? "image/jpeg" : "image/" + ext;
-        db.run("UPDATE creatives SET image_file=?, image_mime=?, width=?, height=?, status='pending', reject_reason='' WHERE id=?", name, mime, w, h, id);
+        final long width = w, height = h;
+        db.update(AdDb.CREATIVES, id, x -> {
+            AdHttp.put(x, "image_file", name);
+            AdHttp.put(x, "image_mime", mime);
+            AdHttp.put(x, "width", width);
+            AdHttp.put(x, "height", height);
+            AdHttp.put(x, "status", "pending");
+            AdHttp.put(x, "reject_reason", "");
+        });
         if (!old.isEmpty()) new File(dir, old).delete();
         return AdHttp.ok(obj("ok", true, "width", o.outWidth, "height", o.outHeight));
     }
@@ -785,48 +992,111 @@ final class AdApi {
         JSONObject cr = creativeFor(admin, id);
         if (approve) {
             if ("banner".equals(cr.optString("type")) && cr.optString("image_file").isEmpty()) throw bad("Banner has no image yet");
-            db.run("UPDATE creatives SET status='approved', reject_reason='' WHERE id=?", id);
+            db.update(AdDb.CREATIVES, id, x -> {
+                AdHttp.put(x, "status", "approved");
+                AdHttp.put(x, "reject_reason", "");
+            });
         } else {
-            db.run("UPDATE creatives SET status='rejected', reject_reason=? WHERE id=?", AdHttp.str(AdHttp.body(r), "reason", 1, 300), id);
+            String reason = AdHttp.str(AdHttp.body(r), "reason", 1, 300);
+            db.update(AdDb.CREATIVES, id, x -> {
+                AdHttp.put(x, "status", "rejected");
+                AdHttp.put(x, "reject_reason", reason);
+            });
         }
         db.audit(admin.id, approve ? "creative.approve" : "creative.reject", "#" + id);
         return AdHttp.ok(obj("ok", true));
     }
 
-    // ================================================================ admin
-
     private AdHttp.Res overview() {
         long day = AdDb.today();
-        JSONObject today = db.one("SELECT COALESCE(SUM(served),0) served, COALESCE(SUM(imps),0) imps, COALESCE(SUM(clicks),0) clicks,"
-                + " COALESCE(SUM(invalid_imps+invalid_clicks),0) invalid, COALESCE(SUM(spend_micros),0) spend, COALESCE(SUM(pub_micros),0) earnings"
-                + " FROM stats_daily WHERE day=?", day);
-        JSONObject all = db.one("SELECT COALESCE(SUM(imps),0) imps, COALESCE(SUM(clicks),0) clicks, COALESCE(SUM(spend_micros),0) spend,"
-                + " COALESCE(SUM(pub_micros),0) earnings FROM stats_daily");
+        JSONObject today = totals(x -> x.optLong("day") == day);
+        JSONObject all = totals(x -> true);
         return AdHttp.ok(obj("today", today, "all_time", all,
-                "pending_campaigns", db.scalar("SELECT COUNT(*) FROM campaigns WHERE status='pending'", 0),
-                "pending_creatives", db.scalar("SELECT COUNT(*) FROM creatives WHERE status='pending' AND campaign_id IN (SELECT id FROM campaigns WHERE status<>'draft')", 0),
-                "pending_sites", db.scalar("SELECT COUNT(*) FROM sites WHERE status='pending'", 0),
-                "flagged_sites", db.scalar("SELECT COUNT(*) FROM sites WHERE flagged=1 AND status<>'removed'", 0),
-                "advertisers", db.scalar("SELECT COUNT(*) FROM users WHERE role='advertiser'", 0),
-                "publishers", db.scalar("SELECT COUNT(*) FROM users WHERE role='publisher'", 0)));
+                "pending_campaigns", db.count(AdDb.CAMPAIGNS, x -> "pending".equals(x.optString("status"))),
+                "pending_creatives", db.count(AdDb.CREATIVES, x -> "pending".equals(x.optString("status"))
+                        && !"draft".equals(campaignStatus(x.optLong("campaign_id")))),
+                "pending_sites", db.count(AdDb.SITES, x -> "pending".equals(x.optString("status"))),
+                "flagged_sites", db.count(AdDb.SITES, x -> x.optLong("flagged") == 1 && !"removed".equals(x.optString("status"))),
+                "advertisers", db.count(AdDb.USERS, x -> "advertiser".equals(x.optString("role"))),
+                "publishers", db.count(AdDb.USERS, x -> "publisher".equals(x.optString("role")))));
+    }
+
+    private String campaignStatus(long id) {
+        JSONObject c = db.copy(AdDb.CAMPAIGNS, id);
+        return c == null ? "" : c.optString("status");
+    }
+
+    private JSONObject totals(java.util.function.Predicate<JSONObject> filter) {
+        long served = 0, imps = 0, clicks = 0, invalid = 0, spend = 0, earnings = 0, conversions = 0;
+        for (JSONObject s : db.list(AdDb.STATS, filter)) {
+            served += s.optLong("served");
+            imps += s.optLong("imps");
+            clicks += s.optLong("clicks");
+            invalid += s.optLong("invalid_imps") + s.optLong("invalid_clicks");
+            spend += s.optLong("spend_micros");
+            earnings += s.optLong("pub_micros");
+            conversions += s.optLong("conversions");
+        }
+        return obj("served", served, "imps", imps, "clicks", clicks, "invalid", invalid,
+                "spend", spend, "earnings", earnings, "conversions", conversions);
     }
 
     private AdHttp.Res fraud() {
-        JSONArray flagged = db.query("SELECT s.id, s.name, s.domain, s.flag_reason, u.email owner_email FROM sites s JOIN users u ON u.id=s.owner_id"
-                + " WHERE s.flagged=1 AND s.status<>'removed' ORDER BY s.id DESC");
-        JSONArray reasons = db.query("SELECT reason, SUM(n) n FROM fraud_log WHERE day>=? GROUP BY reason ORDER BY n DESC", AdDb.today() - 6);
-        JSONArray bySite = db.query("SELECT st.id, st.domain, SUM(s.invalid_imps) invalid_imps, SUM(s.invalid_clicks) invalid_clicks,"
-                + " SUM(s.imps) imps, SUM(s.clicks) clicks FROM stats_daily s JOIN sites st ON st.id=s.site_id WHERE s.day>=?"
-                + " GROUP BY st.id HAVING SUM(s.invalid_imps)+SUM(s.invalid_clicks)>0 ORDER BY SUM(s.invalid_imps)+SUM(s.invalid_clicks) DESC LIMIT 25", AdDb.today() - 6);
-        return AdHttp.ok(obj("flagged_sites", flagged, "reasons_7d", reasons, "invalid_by_site_7d", bySite));
+        Map<Long, JSONObject> users = new HashMap<>();
+        for (JSONObject x : db.list(AdDb.USERS, y -> true)) users.put(x.optLong("id"), x);
+        JSONArray flagged = new JSONArray();
+        for (JSONObject s : db.list(AdDb.SITES, x -> x.optLong("flagged") == 1 && !"removed".equals(x.optString("status")))) {
+            JSONObject owner = users.get(s.optLong("owner_id"));
+            flagged.put(obj("id", s.optLong("id"), "name", s.optString("name"), "domain", s.optString("domain"),
+                    "flag_reason", s.optString("flag_reason"), "owner_email", owner == null ? "" : owner.optString("email")));
+        }
+        Map<String, Long> reasons = new HashMap<>();
+        for (JSONObject f : db.list(AdDb.FRAUD_LOG, x -> x.optLong("day") >= AdDb.today() - 6)) {
+            reasons.merge(f.optString("reason"), f.optLong("n"), Long::sum);
+        }
+        JSONArray rs = new JSONArray();
+        reasons.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue(), a.getValue())).forEach(e ->
+                rs.put(obj("reason", e.getKey(), "n", e.getValue())));
+        Map<Long, long[]> bySite = new HashMap<>();
+        for (JSONObject s : db.list(AdDb.STATS, x -> x.optLong("day") >= AdDb.today() - 6)) {
+            long[] v = bySite.get(s.optLong("site_id"));
+            if (v == null) {
+                v = new long[4];
+                bySite.put(s.optLong("site_id"), v);
+            }
+            v[0] += s.optLong("invalid_imps");
+            v[1] += s.optLong("invalid_clicks");
+            v[2] += s.optLong("imps");
+            v[3] += s.optLong("clicks");
+        }
+        List<Map.Entry<Long, long[]>> list = new ArrayList<>(bySite.entrySet());
+        list.sort((a, b) -> Long.compare(b.getValue()[0] + b.getValue()[1], a.getValue()[0] + a.getValue()[1]));
+        JSONArray bs = new JSONArray();
+        for (int i = 0; i < list.size() && i < 25; i++) {
+            Map.Entry<Long, long[]> e = list.get(i);
+            long[] v = e.getValue();
+            if (v[0] + v[1] == 0) continue;
+            JSONObject site = db.copy(AdDb.SITES, e.getKey());
+            bs.put(obj("id", e.getKey(), "domain", site == null ? "" : site.optString("domain"),
+                    "invalid_imps", v[0], "invalid_clicks", v[1], "imps", v[2], "clicks", v[3]));
+        }
+        return AdHttp.ok(obj("flagged_sites", flagged, "reasons_7d", rs, "invalid_by_site_7d", bs));
     }
 
     private static final String[] SETTING_KEYS = {"rev_share_pct", "currency", "public_base_url", "allow_signup", "trust_proxy",
-            "fraud_min_click_ms", "fraud_repeat_clicks_hour", "fraud_ip_clicks_min", "fraud_max_imps_visitor_day", "retention_days"};
+            "fraud_min_click_ms", "fraud_repeat_clicks_hour", "fraud_ip_clicks_min", "fraud_max_imps_visitor_day", "retention_days",
+            "conversion_tracking", "conversion_attribution_days", "conversion_dedupe_hours",
+            "email_enabled", "email_recipients", "email_hour_utc",
+            "smtp_host", "smtp_port", "smtp_security", "smtp_username", "smtp_password", "smtp_from"};
 
     private JSONObject settingsJson() {
         JSONObject o = new JSONObject();
-        for (String k : SETTING_KEYS) AdHttp.put(o, k, db.setting(k, ""));
+        for (String k : SETTING_KEYS) {
+            if ("smtp_password".equals(k)) continue;
+            AdHttp.put(o, k, db.setting(k, ""));
+        }
+        AdHttp.put(o, "smtp_password_set", !db.setting("smtp_password", "").isEmpty());
+        AdHttp.put(o, "geo_db_version", db.setting("geo_db_version", "none"));
         return o;
     }
 
@@ -841,21 +1111,73 @@ final class AdApi {
             for (String s : SETTING_KEYS) if (s.equals(k)) known = true;
             if (!known) throw bad("Unknown setting: " + k);
             switch (k) {
-                case "rev_share_pct": if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) > 100) throw bad("rev_share_pct must be 0-100"); break;
-                case "currency": if (!v.matches("[A-Z]{3}")) throw bad("currency must be a 3-letter code like USD"); break;
-                case "public_base_url": if (!v.isEmpty() && (!AdSecurity.isHttpUrl(v) || v.endsWith("/"))) throw bad("public_base_url must be http(s)://host[:port] without a trailing slash"); break;
-                case "allow_signup": case "trust_proxy": if (!v.equals("0") && !v.equals("1")) throw bad(k + " must be 0 or 1"); break;
-                case "fraud_min_click_ms": if (!v.matches("[0-9]{3,5}") || Integer.parseInt(v) < 100 || Integer.parseInt(v) > 10000) throw bad("fraud_min_click_ms must be 100-10000"); break;
+                case "rev_share_pct":
+                    if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) > 100) throw bad("rev_share_pct must be 0-100");
+                    break;
+                case "currency":
+                    if (!v.matches("[A-Z]{3}")) throw bad("currency must be a 3-letter code like USD");
+                    break;
+                case "public_base_url":
+                    if (!v.isEmpty() && (!AdSecurity.isHttpUrl(v) || v.endsWith("/"))) throw bad("public_base_url must be http(s)://host[:port] without a trailing slash");
+                    break;
+                case "allow_signup": case "trust_proxy": case "conversion_tracking": case "email_enabled":
+                    if (!v.equals("0") && !v.equals("1")) throw bad(k + " must be 0 or 1");
+                    break;
+                case "fraud_min_click_ms":
+                    if (!v.matches("[0-9]{3,5}") || Integer.parseInt(v) < 100 || Integer.parseInt(v) > 10000) throw bad("fraud_min_click_ms must be 100-10000");
+                    break;
                 case "fraud_repeat_clicks_hour": case "fraud_ip_clicks_min":
-                    if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) < 1 || Integer.parseInt(v) > 100) throw bad(k + " must be 1-100"); break;
-                case "fraud_max_imps_visitor_day": if (!v.matches("[0-9]{1,4}") || Integer.parseInt(v) < 1) throw bad("fraud_max_imps_visitor_day must be at least 1"); break;
-                case "retention_days": if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) < 7 || Integer.parseInt(v) > 365) throw bad("retention_days must be 7-365"); break;
-                default: break;
+                    if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) < 1 || Integer.parseInt(v) > 100) throw bad(k + " must be 1-100");
+                    break;
+                case "fraud_max_imps_visitor_day":
+                    if (!v.matches("[0-9]{1,4}") || Integer.parseInt(v) < 1) throw bad("fraud_max_imps_visitor_day must be at least 1");
+                    break;
+                case "retention_days":
+                    if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) < 7 || Integer.parseInt(v) > 365) throw bad("retention_days must be 7-365");
+                    break;
+                case "conversion_attribution_days":
+                    if (!v.matches("[0-9]{1,3}") || Integer.parseInt(v) < 1 || Integer.parseInt(v) > 90) throw bad("conversion_attribution_days must be 1-90");
+                    break;
+                case "conversion_dedupe_hours":
+                    if (!v.matches("[0-9]{1,4}") || Integer.parseInt(v) < 1 || Integer.parseInt(v) > 720) throw bad("conversion_dedupe_hours must be 1-720");
+                    break;
+                case "email_hour_utc":
+                    if (!v.matches("[0-9]{1,2}") || Integer.parseInt(v) > 23) throw bad("email_hour_utc must be 0-23");
+                    break;
+                case "email_recipients":
+                    if (v.length() > 500) throw bad("email_recipients is too long");
+                    for (String addr : v.split("[,;\\s]+")) {
+                        if (!addr.isEmpty() && !AdSecurity.isEmail(addr)) throw bad("Invalid recipient: " + addr);
+                    }
+                    break;
+                case "smtp_host": case "smtp_from":
+                    if (v.length() > 200) throw bad(k + " is too long");
+                    break;
+                case "smtp_port":
+                    if (!v.matches("[0-9]{1,5}") || Integer.parseInt(v) < 1 || Integer.parseInt(v) > 65535) throw bad("smtp_port must be 1-65535");
+                    break;
+                case "smtp_security":
+                    if (!v.matches("none|starttls|tls")) throw bad("smtp_security must be none, starttls or tls");
+                    break;
+                case "smtp_username": case "smtp_password":
+                    if (v.length() > 200) throw bad(k + " is too long");
+                    break;
+                default:
+                    break;
             }
+            if ("smtp_password".equals(k) && v.isEmpty()) continue;
             updates.add(new String[]{k, v});
         }
         for (String[] kv : updates) db.setSetting(kv[0], kv[1]);
-        db.audit(admin.id, "settings.update", String.valueOf(updates.size()) + " values");
+        db.audit(admin.id, "settings.update", updates.size() + " values");
         return AdHttp.ok(settingsJson());
+    }
+
+    private AdHttp.Res importGeo(AdHttp.Req r, AdSecurity.User admin) throws IOException {
+        String version = AdSecurity.clean(r.header("x-geo-version"));
+        if (version.isEmpty()) version = "custom-" + System.currentTimeMillis();
+        AdGeo.importCsv(db, version, r.body);
+        db.audit(admin.id, "geo.update", version);
+        return AdHttp.ok(AdGeo.status(db));
     }
 }

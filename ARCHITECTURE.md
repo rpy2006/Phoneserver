@@ -108,7 +108,7 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `network.pairing` (3) | `PairingCode`, `PairingPayload`, `PairingStore` |
 | `network.remote` (1) | `RemoteApiClient` |
 | `service` (8) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver`, `ServerWatchdog`, `ServerWatchdogReceiver`, `ScheduledTaskScheduler`, `ScheduledTaskReceiver` |
-| `ads` (11) | `AdApi`, `AdDb`, `AdDelivery`, `AdFraud`, `AdHttp`, `AdHttpServer`, `AdNetworkActivity`, `AdNetworkManager`, `AdRateLimiter`, `AdReports`, `AdSecurity` |
+| `ads` (17) | `AdApi`, `AdConversion`, `AdDb`, `AdDelivery`, `AdExperimentEngine`, `AdFraud`, `AdGeo`, `AdGeoReport`, `AdHttp`, `AdHttpServer`, `AdNetworkActivity`, `AdNetworkManager`, `AdPayouts`, `AdRateLimiter`, `AdReports`, `AdSecurity`, `AdSummaryMailer` |
 | `data.storage` (10) | `ContentStore`, `ContentStoreBridge`, `StorageLayout`, `FileStore`, `ProjectStore`, `ModelStore`, `BackupManager`, `BackupArchive`, `BackupSchedule`, `BackupScheduleStore` |
 | `data.database` (7) | `DatabaseManager`, `SystemDatabase`, `SystemStore`, `JsonCursor`, `JsonMetaStore`, `JsonStorage`, `Records` |
 | `data.servers` (2) | `ServerProfileStore`, `ApiEndpointStore` |
@@ -194,7 +194,7 @@ authentication or storage with the file server:
 ```
 AdNetworkManager (ads) ──► AdHttpServer ──► AdApi / AdDelivery / AdReports
                                    │
-                                   └──► AdDb (SQLite) + AdSecurity (PBKDF2)
+                                   └──► AdDb (encrypted JSON) + AdSecurity (PBKDF2)
 ```
 
 ## 6. Configuration and sensitive data
@@ -219,7 +219,7 @@ Configuration stays out of Java code:
 | Scheduled tasks | app-private encrypted JSON under `files/tasks/` |
 | Share links/settings | app-private encrypted JSON under `files/shares/`; access log is bounded plain JSONL |
 | Share unlock sessions | in-memory only (`ShareSessionStore`); never persisted |
-| Ad network data | `adnet.db` + app-private files |
+| Ad network data | encrypted `filesDir/adnet/adnet.json`, geo CSV and creative files |
 | Debug signing key | `app/debug.keystore` (debug-only, standard public password) |
 
 No secrets are committed to Java source. See `SECURITY_AUDIT.md` for the
@@ -315,7 +315,7 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 Last verification after the security phase:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 137 tests, 0 failures, 49 skipped.
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 144 tests, 0 failures, 49 skipped.
   49 Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
 - `assembleDebug` — see the build log; the APK packages the manifest,

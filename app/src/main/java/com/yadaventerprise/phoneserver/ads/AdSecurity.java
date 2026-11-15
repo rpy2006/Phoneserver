@@ -99,8 +99,12 @@ final class AdSecurity {
     static String createSession(AdDb db, long userId) {
         String token = randomToken(32);
         long now = System.currentTimeMillis();
-        db.run("INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)",
-                sha256Hex(token), userId, now, now + SESSION_MS);
+        JSONObject row = new JSONObject();
+        AdHttp.put(row, "token_hash", sha256Hex(token));
+        AdHttp.put(row, "user_id", userId);
+        AdHttp.put(row, "created_at", now);
+        AdHttp.put(row, "expires_at", now + SESSION_MS);
+        db.insert(AdDb.SESSIONS, row);
         return token;
     }
 
@@ -110,12 +114,14 @@ final class AdSecurity {
         if (a == null || !a.regionMatches(true, 0, "Bearer ", 0, 7)) return null;
         String tok = a.substring(7).trim();
         if (tok.length() < 20 || tok.length() > 100) return null;
-        JSONObject row = db.one("SELECT u.id,u.email,u.name,u.company,u.role,u.balance_micros FROM sessions s"
-                + " JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'",
-                sha256Hex(tok), System.currentTimeMillis());
-        if (row == null) return null;
+        String hash = sha256Hex(tok);
+        JSONObject session = db.find(AdDb.SESSIONS, s -> hash.equals(s.optString("token_hash"))
+                && s.optLong("expires_at") > System.currentTimeMillis());
+        if (session == null) return null;
+        JSONObject user = db.copy(AdDb.USERS, session.optLong("user_id"));
+        if (user == null || !"active".equals(user.optString("status"))) return null;
         r.token = tok;
-        return new User(row);
+        return new User(user);
     }
 
     // ---------------- signed ad tokens ----------------
