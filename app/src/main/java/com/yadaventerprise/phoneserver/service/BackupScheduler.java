@@ -7,12 +7,14 @@ import android.content.Intent;
 import android.util.Log;
 import com.yadaventerprise.phoneserver.data.database.Records;
 import com.yadaventerprise.phoneserver.data.storage.BackupManager;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.data.storage.BackupSchedule;
 import com.yadaventerprise.phoneserver.data.storage.BackupScheduleStore;
 import com.yadaventerprise.phoneserver.data.storage.ProjectStore;
 import com.yadaventerprise.phoneserver.network.http.DataException;
 import java.util.ArrayList;
 import java.util.List;
+import org.json.JSONObject;
 
 /** Runs automatic project backups with AlarmManager (no WorkManager dependency). */
 public final class BackupScheduler {
@@ -87,6 +89,14 @@ public final class BackupScheduler {
                 BackupManager.create(app, project.id, schedule.includeFiles, SCHEDULED_NOTE);
                 result.successCount++;
                 rotate(app, project.id, schedule.retainPerProject);
+                JSONObject hookData = new JSONObject();
+                try {
+                    hookData.put("projectId", project.id);
+                    hookData.put("projectName", project.name);
+                    hookData.put("includeFiles", schedule.includeFiles);
+                } catch (Exception ignored) {
+                }
+                WebhookDispatcher.emit(app, WebhookDispatcher.EVENT_BACKUP_COMPLETED, hookData);
             } catch (Exception e) {
                 result.failureCount++;
                 String message = project.name + ": " + safeMessage(e);

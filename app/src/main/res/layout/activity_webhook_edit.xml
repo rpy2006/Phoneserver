@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/home_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="18dp"
+            android:paddingBottom="8dp">
+
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_back_arrow" />
+
+            <TextView
+                android:id="@+id/screen_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="New Webhook"
+                android:textColor="@color/home_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="30dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Name"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Automation"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Endpoint URL"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="https://example.com/hook"
+                    android:inputType="textUri"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Signing secret (optional)"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_secret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="HMAC-SHA256 secret"
+                    android:inputType="textVisiblePassword"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/bg_home_card"
+                    android:padding="16dp"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Enabled"
+                        android:textColor="@color/home_text_primary"
+                        android:textSize="14sp" />
+
+                    <Switch
+                        android:id="@+id/switch_enabled"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:track="@drawable/switch_track" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Events"
+                    android:textColor="@color/home_accent"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <CheckBox android:id="@+id/check_all" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="All events" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_file_uploaded" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="File uploaded" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_server_started" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Server started" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_server_stopped" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Server stopped" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_auth_failure" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Authentication failure" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_suspicious" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Suspicious request" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_backup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup completed" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_task_completed" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Scheduled task completed" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_task_failed" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Scheduled task failed" android:textColor="@color/home_text_primary" />
+
+                <TextView
+                    android:id="@+id/status_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/test_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Send test event"
+                    android:textAllCaps="false"
+                    android:background="@drawable/bg_button_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:layout_marginBottom="10dp" />
+
+                <Button
+                    android:id="@+id/save_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Save webhook"
+                    android:textAllCaps="false"
+                    android:background="@drawable/bg_button_primary"
+                    android:textColor="@android:color/white"
+                    android:layout_marginBottom="10dp" />
+
+                <Button
+                    android:id="@+id/delete_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Delete webhook"
+                    android:textAllCaps="false"
+                    android:background="@drawable/bg_button_red"
+                    android:textColor="@android:color/white"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+</FrameLayout>

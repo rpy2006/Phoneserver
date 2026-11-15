@@ -13,8 +13,15 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
         BackupScheduler.scheduleNext(context);
-        if (!ContentStore.getStartOnBoot(context)) return;
+        ScheduledTaskScheduler.scheduleNext(context);
+        if (!ContentStore.getStartOnBoot(context)) {
+            ContentStore.setServerDesiredRunning(context, false);
+            ServerWatchdog.cancel(context);
+            return;
+        }
 
+        ContentStore.setServerDesiredRunning(context, true);
+        ServerWatchdog.scheduleNext(context);
         Intent start = new Intent(context, ServerService.class);
         start.setAction(ServerService.ACTION_START);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

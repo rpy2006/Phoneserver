@@ -27,6 +27,10 @@ import com.yadaventerprise.phoneserver.data.storage.BackupSchedule;
 import com.yadaventerprise.phoneserver.data.storage.BackupScheduleStore;
 import com.yadaventerprise.phoneserver.data.tokens.TokenStore;
 import com.yadaventerprise.phoneserver.ui.api.ApiTokensActivity;
+import com.yadaventerprise.phoneserver.network.tls.HttpsConfig;
+import com.yadaventerprise.phoneserver.network.tls.HttpsConfigStore;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookStore;
+import com.yadaventerprise.phoneserver.data.tasks.ScheduledTaskStore;
 
 import java.util.Date;
 
@@ -80,6 +84,14 @@ public class SecurityCenterActivity extends AppCompatActivity {
                 startActivity(new Intent(this, ApiTokensActivity.class)));
         findViewById(R.id.row_backups).setOnClickListener(v ->
                 startActivity(new Intent(this, BackupScheduleActivity.class)));
+        findViewById(R.id.row_https).setOnClickListener(v ->
+                startActivity(new Intent(this, HttpsSetupActivity.class)));
+        findViewById(R.id.row_webdav).setOnClickListener(v ->
+                startActivity(new Intent(this, WebDavActivity.class)));
+        findViewById(R.id.row_webhooks).setOnClickListener(v ->
+                startActivity(new Intent(this, WebhookActivity.class)));
+        findViewById(R.id.row_tasks).setOnClickListener(v ->
+                startActivity(new Intent(this, TasksActivity.class)));
 
         autoBlockSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -125,6 +137,7 @@ public class SecurityCenterActivity extends AppCompatActivity {
             }
             final int tokens = tokenCount;
             BackupSchedule schedule = BackupScheduleStore.get(getApplicationContext()).get();
+            HttpsConfig https = HttpsConfigStore.get(getApplicationContext()).get();
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 renderReport(report);
@@ -137,6 +150,18 @@ public class SecurityCenterActivity extends AppCompatActivity {
                 tokensSubtitle.setText(tokens == 1
                         ? "1 active token · roles and scopes"
                         : tokens + " active tokens · roles and scopes");
+                TextView httpsSubtitle = findViewById(R.id.https_subtitle);
+                httpsSubtitle.setText(https.enabled
+                        ? "Enabled · port " + https.port + " · " + https.hostname
+                        : "Disabled · HTTP only");
+                TextView webhookSubtitle = findViewById(R.id.webhooks_subtitle);
+                int hookCount = WebhookStore.get(getApplicationContext()).all().size();
+                webhookSubtitle.setText(hookCount == 0 ? "No webhooks configured"
+                        : hookCount + (hookCount == 1 ? " webhook configured" : " webhooks configured"));
+                TextView tasksSubtitle = findViewById(R.id.tasks_subtitle);
+                int taskCount = ScheduledTaskStore.get(getApplicationContext()).all().size();
+                tasksSubtitle.setText(taskCount == 0 ? "No scheduled tasks"
+                        : taskCount + (taskCount == 1 ? " task scheduled" : " tasks scheduled"));
                 if (schedule.enabled) {
                     String next = schedule.nextRunAt > 0
                             ? DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)

@@ -43,10 +43,10 @@ PhoneServer/
         │   ├── assets/adnet/    # dashboard.html/css/js + public sdk.js
         │   ├── java/com/yadaventerprise/phoneserver/
         │   │   ├── ui/          # presentation (incl. ui.security)
-        │   │   ├── network/     # HTTP + remote client
+        │   │   ├── network/     # HTTP, TLS, pairing, WebDAV + remote client
         │   │   ├── ads/         # self-contained ad feature
-        │   │   ├── service/     # Android lifecycle + backup alarms
-        │   │   ├── data/        # persistence (incl. data.security)
+        │   │   ├── service/     # lifecycle, watchdog, backup/task alarms
+        │   │   ├── data/        # persistence (incl. security/webhooks/tasks)
         │   │   ├── security/    # path/SQL/rate/token guards
         │   │   ├── model/       # shared DTOs
         │   │   ├── util/        # helpers
@@ -70,9 +70,11 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | Package | Responsibility | Examples |
 |---|---|---|
 | `ui.*` | Activities, Fragments, RecyclerView adapters and custom views. Renders state and calls into lower layers. | `MainActivity`, `DashboardFragment`, `FilesActivity` |
-| `network.http` | Socket HTTP server, request parsing, multipart uploads and the `/api/v1` facade. | `SimpleHttpServer`, `DataApi`, `MultipartParser` |
+| `network.http` | Socket HTTP/HTTPS server, request parsing, multipart uploads, pairing, WebDAV and the `/api/v1` facade. | `SimpleHttpServer`, `DataApi`, `MultipartParser`, `PairingApi`, `WebDavHandler` |
+| `network.tls` | Self-signed certificate generation/import, encrypted identity storage, SSL contexts and pinned clients. | `TlsCertificateFactory`, `TlsCertificateStore`, `TlsContextFactory`, `TlsClient` |
+| `network.pairing` | One-time pairing code storage and QR payload parsing. | `PairingStore`, `PairingCode`, `PairingPayload` |
 | `network.remote` | Client for talking to another PhoneServer instance. | `RemoteApiClient` |
-| `service` | Foreground service, boot receiver and `AlarmManager` backup scheduling. | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver` |
+| `service` | Foreground service, boot/watchdog receivers and `AlarmManager` backup/task scheduling. | `ServerService`, `BootReceiver`, `ServerWatchdog`, `BackupScheduler`, `ScheduledTaskScheduler` |
 | `ads` | Vertical feature slice for the optional ad network (HTTP, delivery, fraud, reports, DB, screen). | `AdHttpServer`, `AdDelivery`, `AdNetworkActivity` |
 | `data.storage` | Storage layout, shared preferences-backed settings, file/project/model stores, backups. | `ContentStore`, `ProjectStore`, `BackupManager` |
 | `data.database` | SQLite/JSON database access, schema helpers, cursors and records. | `DatabaseManager`, `SystemDatabase`, `Records` |
@@ -80,6 +82,8 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.stats` | Traffic and device statistics collection and snapshots. | `ServerStats`, `DeviceStats` |
 | `data.tokens` | Hashed API token persistence. | `TokenStore` |
 | `data.security` | Access/event logs, IP blocks, intrusion settings, token policies, security scanner/reports. | `AccessLogStore`, `IpBlockStore`, `TokenPolicyStore`, `SecurityScanner` |
+| `data.webhooks` | Webhook configs, signed delivery, retries and bounded delivery history. | `WebhookStore`, `WebhookDispatcher`, `WebhookHistoryStore` |
+| `data.tasks` | Repeating task model/store and backup/webhook execution. | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
 | `security` | Path containment, SQL safety, rate limiting and constant-time comparison. | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` | Plain data objects shared across layers. | `ServerProfile`, `KeyValue`, `RemoteEntry` |
 | `util` | Small cross-cutting helpers. | `ByteUtils`, `MimeTypes`, `TimeFormat`, `NetworkUtils` |
@@ -95,11 +99,13 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `ui.projects` (6) | `ProjectsActivity`, `ProjectsAdapter`, `ProjectDetailActivity`, `ProjectBackupsActivity`, `ProjectBackupsAdapter`, `SqlWorkspaceActivity` |
 | `ui.servers` (6) | `ServersListActivity`, `ServersAdapter`, `AddServerActivity`, `ServerSettingsActivity`, `AccountSettingsActivity`, `AdvancedSettingsActivity` |
 | `ui.api` (6) | `ApiEditorActivity`, `ApiEndpointEditorActivity`, `ApiDocsActivity`, `ApiTokensActivity`, `ApiAdapter`, `ApiTokensAdapter` |
-| `ui.security` (9) | `SecurityCenterActivity`, `AccessLogActivity`, `SecurityEventsActivity`, `BlockedIpsActivity`, `BackupScheduleActivity`, `AccessLogAdapter`, `SecurityEventAdapter`, `BlockedIpAdapter`, `SecurityFindingAdapter` |
+| `ui.security` (15) | `SecurityCenterActivity`, `AccessLogActivity`, `SecurityEventsActivity`, `BlockedIpsActivity`, `BackupScheduleActivity`, `HttpsSetupActivity`, `WebDavActivity`, `WebhookActivity`, `WebhookEditActivity`, `TasksActivity`, `TaskEditActivity`, `AccessLogAdapter`, `SecurityEventAdapter`, `BlockedIpAdapter`, `SecurityFindingAdapter` |
 | `ui.qr` (2) | `QrCodeActivity`, `QrFragment` |
-| `network.http` (4) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser` |
+| `network.http` (6) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser`, `PairingApi`, `WebDavHandler` |
+| `network.tls` (8) | `HttpsConfig`, `HttpsConfigStore`, `NetworkPaths`, `TlsCertificateFactory`, `TlsCertificateStore`, `TlsClient`, `TlsContextFactory`, `TlsIdentity` |
+| `network.pairing` (3) | `PairingCode`, `PairingPayload`, `PairingStore` |
 | `network.remote` (1) | `RemoteApiClient` |
-| `service` (4) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver` |
+| `service` (8) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver`, `ServerWatchdog`, `ServerWatchdogReceiver`, `ScheduledTaskScheduler`, `ScheduledTaskReceiver` |
 | `ads` (11) | `AdApi`, `AdDb`, `AdDelivery`, `AdFraud`, `AdHttp`, `AdHttpServer`, `AdNetworkActivity`, `AdNetworkManager`, `AdRateLimiter`, `AdReports`, `AdSecurity` |
 | `data.storage` (10) | `ContentStore`, `ContentStoreBridge`, `StorageLayout`, `FileStore`, `ProjectStore`, `ModelStore`, `BackupManager`, `BackupArchive`, `BackupSchedule`, `BackupScheduleStore` |
 | `data.database` (7) | `DatabaseManager`, `SystemDatabase`, `SystemStore`, `JsonCursor`, `JsonMetaStore`, `JsonStorage`, `Records` |
@@ -107,6 +113,8 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.stats` (3) | `ServerStats`, `StatsSnapshot`, `DeviceStats` |
 | `data.tokens` (1) | `TokenStore` |
 | `data.security` (16) | `SecurityPaths`, `AccessLogEntry`, `AccessLogStore`, `SecurityEvent`, `SecurityEventStore`, `SecuritySettings`, `SecuritySettingsStore`, `IpBlockStore`, `IntrusionDetector`, `TokenPolicy`, `TokenPolicyStore`, `SecurityConfig`, `SecurityFinding`, `SecurityReport`, `SecurityScanner`, `SecurityReportStore` |
+| `data.webhooks` (5) | `WebhookConfig`, `WebhookDispatcher`, `WebhookHistoryEntry`, `WebhookHistoryStore`, `WebhookStore` |
+| `data.tasks` (3) | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
 | `security` (4) | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` (4) | `ApiEndpointConfig`, `KeyValue`, `RemoteEntry`, `ServerProfile` |
 | `util` (6) | `ByteUtils`, `FileTypeUtils`, `IconSwitcher`, `MimeTypes`, `NetworkUtils`, `TimeFormat` |
@@ -154,9 +162,11 @@ Browser / curl / another phone
 ServerService (foreground service)
         │  owns
         ▼
-SimpleHttpServer (network.http)
+SimpleHttpServer (network.http, optional SSLServerSocket)
         │  IP block check ──► IpBlockStore
         │  suspicious-path check ──► IntrusionDetector
+        │  routes /api/pair ──► PairingApi ──► PairingStore + TokenStore
+        │  routes /dav/*   ──► WebDavHandler ──► data.storage.ContentStore
         │  routes /api/v1 ──► DataApi ──► data.storage / data.database
         │       ├─ global + per-token rate limits
         │       ├─ password (admin) or bearer token (role/permissions/expiry)
@@ -167,6 +177,7 @@ SimpleHttpServer (network.http)
 security guards (PathGuard, RateLimiter, TokenUtil)
         │
         ├── access log / security events (data.security)
+        ├── webhook dispatch (data.webhooks)
         └── auto-block after repeated failures (IpBlockStore)
         │
         ▼
@@ -199,6 +210,9 @@ Configuration stays out of Java code:
 | API tokens | `TokenStore` (SHA-256 hashes only) + `data.security.TokenPolicyStore` (encrypted JSON sidecar) |
 | Security settings / block list / logs / reports | app-private `files/security/*` via `SecurityPaths`; logs are plain JSONL, settings/policies/reports are encrypted JSON |
 | Backup schedule | app-private encrypted JSON via `BackupScheduleStore` |
+| HTTPS config / TLS identity | app-private encrypted JSON under `files/network/` |
+| Webhooks / delivery history | app-private encrypted JSON under `files/webhooks/` |
+| Scheduled tasks | app-private encrypted JSON under `files/tasks/` |
 | Ad network data | `adnet.db` + app-private files |
 | Debug signing key | `app/debug.keystore` (debug-only, standard public password) |
 
@@ -206,7 +220,7 @@ No secrets are committed to Java source. See `SECURITY_AUDIT.md` for the
 residual risks (plaintext access password in app-private preferences,
 `allowBackup`, cleartext HTTP, FileProvider root).
 
-## 6a. Security Center and scheduled backups
+## 6a. Security Center, webhooks and scheduled automation
 
 The Security Center is a read-only view over real persisted state, plus a
 scanner that derives findings from the current configuration. It never invents
@@ -229,6 +243,8 @@ traffic, vulnerabilities or usage numbers.
   id. Admin tokens and the interactive password bypass project scoping.
 - **Scanner** (`SecurityScanner`) — checks real password/CORS/rate/backup/token/
   event state and returns concrete findings with severity weights.
+- **Webhooks** (`WebhookDispatcher`) — signed POSTs with retry/backoff and bounded history for file, server, security, backup and task events.
+- **Scheduled tasks** (`ScheduledTaskRunner`) — repeating project backups or webhook deliveries via `AlarmManager`, with boot rescheduling.
 - **Scheduled backups** (`BackupScheduler`) — `AlarmManager` schedules the next
   run from the persisted `BackupSchedule`; `BackupAlarmReceiver` runs the pass
   with `goAsync()`, backs up every project, then rotates old automatic backups.

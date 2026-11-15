@@ -198,6 +198,58 @@
                         </LinearLayout>
                         <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
                     </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:id="@+id/row_https" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_home_icon_circle">
+                            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_lock" />
+                        </FrameLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HTTPS &amp; Domain" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/https_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TLS, certificates and friendly hostnames" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:id="@+id/row_webdav" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_home_icon_circle">
+                            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_folder" />
+                        </FrameLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="WebDAV" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/webdav_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Mount shared files from a computer" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:id="@+id/row_webhooks" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_home_icon_circle">
+                            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_link" />
+                        </FrameLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Webhooks" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/webhooks_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Deliver events with retries and history" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:id="@+id/row_tasks" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_home_icon_circle">
+                            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_history" />
+                        </FrameLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Scheduled Tasks" android:textColor="@color/home_text_primary" android:textSize="15sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/tasks_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Automation with retries and execution logs" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <TextView

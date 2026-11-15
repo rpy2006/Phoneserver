@@ -1,12 +1,14 @@
 package com.yadaventerprise.phoneserver.data.security;
 
 import android.content.Context;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import java.net.URLDecoder;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.json.JSONObject;
 
 /**
  * Lightweight, in-memory intrusion detection. Counters reset with the process,
@@ -40,6 +42,17 @@ public final class IntrusionDetector {
                         + " (" + count + " failures in " + settings.failedLoginWindowMinutes + " min)");
         event.autoBlocked = autoBlocked;
         SecurityEventStore.get(context).append(event);
+        JSONObject hookData = new JSONObject();
+        try {
+            hookData.put("ip", ip);
+            hookData.put("method", method);
+            hookData.put("path", path);
+            hookData.put("detail", detail);
+            hookData.put("count", count);
+            hookData.put("blocked", autoBlocked);
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_AUTH_FAILURE, hookData);
         authFailures.remove(ip);
         return autoBlocked;
     }
@@ -61,6 +74,16 @@ public final class IntrusionDetector {
                 ip, method, path, detail == null ? "suspicious request path" : detail);
         event.autoBlocked = autoBlocked;
         SecurityEventStore.get(context).append(event);
+        JSONObject hookData = new JSONObject();
+        try {
+            hookData.put("ip", ip);
+            hookData.put("method", method);
+            hookData.put("path", path);
+            hookData.put("detail", detail);
+            hookData.put("blocked", autoBlocked);
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_SUSPICIOUS, hookData);
     }
 
     public static void recordRateLimit(Context context, String ip, String method, String path) {

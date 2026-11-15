@@ -43,6 +43,7 @@ public class ContentStore {
     private static final String KEY_DATA_ROOT = "data_root";
     private static final String KEY_ALLOWED_ORIGINS = "allowed_origins";
     private static final String KEY_RATE_LIMIT = "api_rate_limit_per_minute";
+    private static final String KEY_DESIRED_RUNNING = "desired_running";
 
     /**
      * Folder holding everything served at "/" - index.html plus any CSS, JS,
@@ -135,6 +136,14 @@ public class ContentStore {
 
     public static void setStartOnBoot(Context context, boolean enabled) {
         getConfigPrefs(context).edit().putBoolean(KEY_START_ON_BOOT, enabled).apply();
+    }
+
+    public static boolean getServerDesiredRunning(Context context) {
+        return getConfigPrefs(context).getBoolean(KEY_DESIRED_RUNNING, false);
+    }
+
+    public static void setServerDesiredRunning(Context context, boolean running) {
+        getConfigPrefs(context).edit().putBoolean(KEY_DESIRED_RUNNING, running).apply();
     }
 
     /** Master switch for the file-management API surface (/files, /api/browse, /api/upload, etc.)

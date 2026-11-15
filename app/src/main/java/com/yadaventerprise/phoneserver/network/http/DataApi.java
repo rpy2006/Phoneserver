@@ -9,6 +9,7 @@ import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
 import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
 import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.data.storage.BackupManager;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.data.storage.FileStore;
@@ -898,6 +899,15 @@ public final class DataApi {
                     req.contentLength, description, tags);
         }
         ServerStats.get().logUpload(record.originalName, (int) Math.min(record.sizeBytes, Integer.MAX_VALUE));
+        JSONObject hookData = new JSONObject();
+        try {
+            hookData.put("name", record.originalName);
+            hookData.put("size", record.sizeBytes);
+            hookData.put("projectId", projectId);
+            hookData.put("source", "api");
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_FILE_UPLOADED, hookData);
         sendJson(context, req, out, 201, fileJson(record));
     }
 

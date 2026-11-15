@@ -98,7 +98,7 @@ A local-first storage layer that turns the phone into a small database + object-
 - **API tokens** — scoped bearer tokens stored only as SHA-256 hashes, with viewer/editor/admin roles, explicit permissions, per-token rate limits and expiry
 - **Storage insights** — real per-project database/file/folder counts, byte sizes, free space and a rolling operation log
 
-Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [architecture.md](architecture.md), [storage.md](storage.md), [security.md](security.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
+Everything in this layer is reachable over HTTP under `/api/v1` (see [API.md](API.md)) and through new screens in the app (Projects, Project detail, SQL workspace, Files, Backups, API tokens, API docs). See [ARCHITECTURE.md](ARCHITECTURE.md), [storage.md](storage.md), [SECURITY_AUDIT.md](SECURITY_AUDIT.md) and [testing.md](testing.md) for architecture, storage layout, security and testing notes.
 
 ### 1.8 Optional ad network
 
@@ -127,6 +127,16 @@ numbers.
 
 All logs, settings, block lists and reports stay in app-private storage under
 `files/security/`; no HTTP route exposes them.
+
+### 1.10 HTTPS, secure pairing, WebDAV, webhooks and scheduled tasks
+
+- **HTTPS alongside HTTP** — optional TLS server on port `8443` (configurable), with a generated self-signed certificate or PKCS#12 import. The certificate covers the configured hostname, `localhost`, `phoneserver.local` and the current LAN IP.
+- **Certificate pinning** — pairing QR codes carry the SHA-256 fingerprint; the remote client and QR onboarding pin that certificate instead of relying on a public CA.
+- **Secure pairing** — `POST /api/pair` redeems a one-time, short-lived pairing code for a scoped editor token. Codes are hashed at rest, rate-limited and expire after 10 minutes.
+- **WebDAV** — authenticated `OPTIONS`, `PROPFIND`, `GET/HEAD`, `PUT`, `DELETE`, `MKCOL`, `MOVE` and `COPY` under `/dav/`, rooted at the shared files folder and gated by the remote-access setting.
+- **Webhooks** — signed JSON `POST` deliveries for uploads, server start/stop, auth failures, suspicious requests, backups and scheduled tasks, with three delivery attempts and bounded history.
+- **Scheduled tasks** — repeating project backups or webhook deliveries driven by `AlarmManager`, rescheduled after boot/server start, with run-now and last-result status.
+- **Recovery watchdog** — a five-minute alarm restarts the foreground service only when the user intended it to be running.
 
 ---
 
@@ -498,7 +508,9 @@ It is off until enabled in **Settings → Ad Network**; `startIfEnabled` is call
 
 ## 5. HTTP API Reference
 
-Base URL: `http://<device-ip>:8080` · Port is a compile-time constant `ServerService.PORT = 8080`
+Base URL: `http://<device-ip>:8080` · HTTPS base URL: `https://<device-ip>:8443` when enabled
+
+HTTP remains available on port `8080`; HTTPS runs alongside it on `8443` (configurable). The data/storage API accepts either the access password or a bearer token. File and WebDAV routes accept bearer tokens with `files.read`/`files.write` permissions.
 
 ### 5.1 Public endpoints
 
@@ -624,7 +636,37 @@ curl -X POST -H "Authorization: Bearer pst_..." -H "Content-Type: application/js
      http://<phone-ip>:8080/api/v1/projects/<projectId>/databases/<db>/query
 ```
 
-### 5.4 Ad Network API (`:8090`)
+### 5.4 WebDAV (`/dav/`)
+
+WebDAV is available only when **Allow remote file access** is enabled. It is rooted at the shared files directory, uses the same password/bearer-token checks as the file API, and supports:
+
+| Method | Purpose |
+|---|---|
+| `OPTIONS` | Advertises DAV level 1/2 methods |
+| `PROPFIND` | Depth 0/1 metadata listing |
+| `GET`, `HEAD` | Download files and folder HTML listings |
+| `PUT` | Streamed upload, capped by the global upload limit |
+| `DELETE` | Recursive file/folder delete |
+| `MKCOL` | Create a collection |
+| `MOVE`, `COPY` | Move/copy with `Destination` and `Overwrite` headers |
+
+WebDAV does not implement locking (`LOCK`/`UNLOCK`) or property updates (`PROPPATCH`); those return `405`.
+
+### 5.5 Secure pairing (`/api/pair`)
+
+`POST /api/pair` accepts a pairing code and returns a scoped token:
+
+```json
+{"code":"ABCD-EFGH","deviceName":"Pixel"}
+```
+
+```json
+{"token":"pst_...","tokenId":"...","role":"editor","expiresAt":1760000000000,"serverName":"PhoneServer","baseUrl":"https://192.168.1.20:8443","fingerprint":"AA:BB:..."}
+```
+
+Codes are single-use, hashed at rest, limited to eight attempts, expire after ten minutes, and the endpoint is rate-limited to 12 requests per minute per IP. The returned token is an editor token with a 30-day expiry and a 240 request/minute policy.
+
+### 5.6 Ad Network API (`:8090`)
 
 The optional ad server is a separate origin with its own API. Public delivery is unauthenticated and protected by placement keys, site-domain checks, signed single-use tokens and rate limits; management paths require `Authorization: Bearer <session-token>`.
 
@@ -644,7 +686,7 @@ The optional ad server is a separate origin with its own API. Public delivery is
 
 ## 6. Data & Persistence Model
 
-The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [architecture.md](architecture.md).
+The original features keep every structured collection as a JSON array in a `SharedPreferences` string key. The **data platform added on top** (projects, databases, files, backups, API tokens) is backed by SQLite instead: a `system.db` metadata database plus one SQLite file per project database, with file contents stored on the filesystem. See [storage.md](storage.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The **ad network** has a third, fully separate SQLite database (`adnet.db`) with users, sessions, sites, placements, campaigns, creatives, events, daily stats, billing, audit and settings tables; its preference file is `adnet_prefs`, and creative images live under `filesDir/adnet/creatives/`. It is not part of `system.db` and is not included in `/api/v1` project backups. See [ad-network.md](ad-network.md).
 
@@ -825,7 +867,8 @@ Detection: `general.type == "mmproj"` or `general.architecture == "clip"` → re
 PhoneServer is a **local-network** service. It is not hardened for the public internet, and it does not pretend to be:
 
 - `usesCleartextTraffic="true"` + `network_security_config.xml` with `cleartextTrafficPermitted="true"`
-- All traffic is plain HTTP on port 8080 (and, when enabled, port 8090 for the ad network)
+- HTTP remains enabled on port `8080`; optional HTTPS runs alongside it on `8443` with a self-signed certificate and fingerprint pinning for paired clients
+- The ad network still uses its own plain-HTTP server on port `8090`
 - **Default posture with no password set is unauthenticated LAN-wide read/write access to the device's shared storage**, including recursive delete. The Settings UI says so explicitly: *"No password set - open access on your Wi-Fi"*
 - `MANAGE_EXTERNAL_STORAGE` is requested, which is a very high-privilege grant
 
@@ -850,13 +893,19 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 | Request audit | Bounded access log with status/IP/actor/token/UA/bytes/duration; no HTTP route exposes it |
 | Suspicious paths | Rejects traversal, null bytes, `.env`, `.git`, `/etc/passwd`, wp-admin/phpMyAdmin and common probe payloads before routing |
 | Backup scheduling | `AlarmManager` alarms rescheduled on boot/server start; automatic backups rotate per project |
+| HTTPS | Optional TLS server with generated self-signed cert or PKCS#12 import; private key/cert stored in app-private encrypted JSON |
+| Certificate pinning | SHA-256 fingerprint carried in pairing QR and enforced by `TlsClient` |
+| Pairing | One-time hashed codes, 10-minute TTL, attempt limit, rate limiting and scoped editor tokens |
+| WebDAV auth | Bearer tokens require `files.read`/`files.write`; remote-access setting is checked before routing |
+| Webhook signing | Optional HMAC-SHA256 over the exact JSON body in `X-PhoneServer-Signature` |
+| Scheduled tasks | Inexact `AlarmManager` alarms; no exact-alarm permission required |
 
 ### 9.3 Weaknesses
 
 | Issue | Where | Impact |
 |---|---|---|
 | Plaintext credentials at rest | `access_password` and `auth_username` in `server_config`; per-profile `password` in `server_profiles` | SharedPreferences XML is world-readable to root/backup. No `EncryptedSharedPreferences`, no hashing |
-| Password in a URL query | `RemoteApiClient.download()` appends `?pw=` | Leaks into server logs, browser history, proxy logs, and any `Referer` |
+| ~~Password in a URL query~~ | Fixed: `RemoteApiClient.download()` no longer appends `?pw=` | Kept for historical context |
 | ~~Plaintext compare~~ | Fixed: `isAuthorized` and `DataApi` use `TokenUtil.constantTimeEquals` | Kept for historical context |
 | Username never checked | `getUsername()` is stored and displayed but `isAuthorized` only compares passwords | Basic auth accepts any username; a client sending `wronguser:correctpass` succeeds |
 | Custom endpoints bypass the gate | `serveCustomApi` is reached *after* the auth block and is public by design | A user-defined `/api/*` endpoint is world-readable on the LAN. Documented in the class Javadoc, but a foot-gun |
@@ -864,7 +913,7 @@ PhoneServer is a **local-network** service. It is not hardened for the public in
 | Traversal guard bypass on filenames | `WebsiteFilesActivity.copyIntoWebsiteFolder` and `RemoteBrowseActivity` append an **unsanitised** filename to a path that was validated *before* the append | The clearest path-traversal weakness in the codebase (§12) |
 | `file_paths.xml` exposes `/` | `<root-path name="root" path="/" />` | `FileProvider` can hand out a URI for any file the app can read. Only reachable from in-app, non-exported code |
 
-**Recommendations if this were to run beyond a trusted LAN:** TLS termination, `EncryptedSharedPreferences` or at minimum a salted hash, drop the `?pw=` channel, close the filename-traversal gap, and scope `file_paths.xml` to `Download/PhoneServer` and `cacheDir/view_cache` instead of `/`.
+**Recommendations if this were to run beyond a trusted LAN:** use HTTPS and close the HTTP port at the router/firewall, migrate credentials to `EncryptedSharedPreferences` or a salted hash, close the filename-traversal gap, and scope `file_paths.xml` to `Download/PhoneServer` and `cacheDir/view_cache` instead of `/`.
 
 ### 9.4 Ad network security
 
@@ -1053,6 +1102,8 @@ Ordered roughly by how much they matter.
 | 7 | `<root-path path="/" />` in `file_paths.xml` | `res/xml/file_paths.xml` | `FileProvider` can address any app-readable file. Scope it to the downloads + view-cache dirs |
 | 8 | No rate limiting, no lockout, no per-IP throttle on the password check | `SimpleHttpServer.isAuthorized` | Brute-forceable on a LAN. Low severity for the threat model, high if port-forwarded |
 | 9 | HTTP response headers are not escaped for `\r\n` when user-defined headers are written | `SimpleHttpServer.writeResponse` | A header value containing CRLF would inject a header. Only reachable by the user who authored the endpoint |
+| 9a | `phoneserver.local` is not resolved by mDNS | TLS hostname/SAN + HTTPS setup | Clients must use the LAN IP or a DNS record the user controls; the friendly name is certificate metadata only |
+| 9b | HTTPS runs alongside HTTP | `ServerService` | Enabling HTTPS does not close port `8080`; block it at the firewall when exposing the device beyond a trusted LAN |
 
 ### 12.2 Threading and lifecycle
 

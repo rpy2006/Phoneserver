@@ -7,9 +7,14 @@ import com.yadaventerprise.phoneserver.data.security.AccessLogStore;
 import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
 import com.yadaventerprise.phoneserver.data.security.IpBlockStore;
 import com.yadaventerprise.phoneserver.data.security.SecuritySettingsStore;
+import com.yadaventerprise.phoneserver.data.database.Records;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
+import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
 import com.yadaventerprise.phoneserver.data.servers.ApiEndpointStore;
+import com.yadaventerprise.phoneserver.data.tokens.TokenStore;
 import com.yadaventerprise.phoneserver.data.stats.DeviceStats;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.model.ApiEndpointConfig;
 import com.yadaventerprise.phoneserver.model.KeyValue;
@@ -24,6 +29,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import javax.net.ssl.SSLContext;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -72,14 +78,24 @@ public class SimpleHttpServer {
 
     private final int port;
     private final Context appContext;
+    private final SSLContext sslContext;
     private final Semaphore clientSlots = new Semaphore(MAX_CLIENTS);
     private ServerSocket serverSocket;
     private Thread acceptThread;
     private volatile boolean running = false;
 
     public SimpleHttpServer(Context context, int port) {
+        this(context, port, null);
+    }
+
+    public SimpleHttpServer(Context context, int port, SSLContext sslContext) {
         this.appContext = context.getApplicationContext();
         this.port = port;
+        this.sslContext = sslContext;
+    }
+
+    public boolean isSecure() {
+        return sslContext != null;
     }
 
     public boolean isRunning() {
@@ -93,7 +109,9 @@ public class SimpleHttpServer {
     public synchronized void start() {
         if (running) return;
         try {
-            serverSocket = new ServerSocket(port);
+            serverSocket = sslContext == null
+                    ? new ServerSocket(port)
+                    : sslContext.getServerSocketFactory().createServerSocket(port);
             running = true;
             acceptThread = new Thread(this::acceptLoop, "PhoneServer-Accept");
             acceptThread.start();
@@ -253,7 +271,8 @@ public class SimpleHttpServer {
         // Large binary uploads are streamed straight off the socket by the data
         // API instead of being buffered, so the device never holds a whole
         // multi-hundred-megabyte file in memory just to receive it.
-        if (DataApi.wantsStreamedBody(req.method, req.path, req.headers)) {
+        if (DataApi.wantsStreamedBody(req.method, req.path, req.headers)
+                || WebDavHandler.wantsStreamedBody(req.method, req.path)) {
             req.bodyStream = in;
             return req;
         }
@@ -398,6 +417,33 @@ public class SimpleHttpServer {
         }
     }
 
+    private boolean isAuthorizedForFiles(Request req, boolean write) {
+        String bearer = bearerToken(req);
+        if (bearer != null) {
+            Records.ApiTokenRecord token = TokenStore.verify(appContext, bearer);
+            if (token != null) {
+                TokenPolicy policy = TokenPolicyStore.get(appContext).get(token.id, token);
+                String needed = write ? TokenPolicy.FILES_WRITE : TokenPolicy.FILES_READ;
+                if (!policy.isExpired() && policy.can(needed)) {
+                    noteActor("token", token.id);
+                    return true;
+                }
+            }
+            IntrusionDetector.recordAuthFailure(appContext, req.remoteIp, req.method, req.path,
+                    "invalid API token");
+            return false;
+        }
+        return isAuthorized(req);
+    }
+
+    private String bearerToken(Request req) {
+        String auth = req.headers.get("authorization");
+        if (auth == null) return null;
+        String lower = auth.toLowerCase(Locale.US);
+        if (lower.startsWith("bearer ")) return auth.substring("bearer ".length()).trim();
+        return null;
+    }
+
     private boolean isAuthorized(Request req) {
         String stored = ContentStore.getPassword(appContext);
         if (stored == null || stored.isEmpty()) return true;
@@ -455,10 +501,29 @@ public class SimpleHttpServer {
             return;
         }
 
+        if (PairingApi.isPairingPath(path)) {
+            PairingApi.handle(appContext, req, out);
+            return;
+        }
+
         // The versioned data/storage API has its own authentication, rate
         // limiting and CORS handling, so it is routed before anything else.
         if (DataApi.isApiPath(path)) {
             DataApi.handle(appContext, req, out);
+            return;
+        }
+
+        if (WebDavHandler.isDavPath(path)) {
+            if (!ContentStore.getAllowRemoteAccess(appContext)) {
+                writeResponse(out, 403, "application/json",
+                        "{\"error\":\"remote file access is disabled on this device\"}".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+            if (!isAuthorizedForFiles(req, WebDavHandler.requiresWrite(req.method))) {
+                writeUnauthorized(out);
+                return;
+            }
+            WebDavHandler.handle(appContext, req, out);
             return;
         }
 
@@ -488,7 +553,9 @@ public class SimpleHttpServer {
 
         // everything below this line requires the access password (if one is set)
         if (fileApi || path.equals("/api/stats")) {
-            if (!isAuthorized(req)) {
+            boolean write = req.method != null && (req.method.equals("POST") || req.method.equals("PUT")
+                    || req.method.equals("PATCH") || req.method.equals("DELETE"));
+            if (!isAuthorizedForFiles(req, write)) {
                 writeUnauthorized(out);
                 return;
             }
@@ -737,6 +804,14 @@ public class SimpleHttpServer {
         }
         ContentStore.scanFile(appContext, destFile);
         ServerStats.get().logUpload(filename, parsed.bytes.length);
+        JSONObject hookData = new JSONObject();
+        try {
+            hookData.put("name", filename);
+            hookData.put("size", parsed.bytes.length);
+            hookData.put("source", "website");
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(appContext, WebhookDispatcher.EVENT_FILE_UPLOADED, hookData);
         JSONObject response = new JSONObject();
         try {
             response.put("status", "ok");
@@ -830,6 +905,51 @@ public class SimpleHttpServer {
     }
 
     // ---- response writing ----
+
+    static void sendResponse(OutputStream out, Context context, int code, String contentType,
+                              byte[] body, String... extraHeaders) throws IOException {
+        noteStatus(code);
+        String status = statusText(code);
+        StringBuilder headers = new StringBuilder();
+        headers.append("HTTP/1.1 ").append(code).append(" ").append(status).append("\r\n");
+        headers.append("Content-Type: ").append(contentType).append("\r\n");
+        headers.append("Content-Length: ").append(body == null ? 0 : body.length).append("\r\n");
+        headers.append("Connection: close\r\n");
+        String origins = ContentStore.getAllowedOrigins(context);
+        if (origins != null && !origins.trim().isEmpty()) {
+            headers.append("Access-Control-Allow-Origin: ").append(origins.trim()).append("\r\n");
+        }
+        if (extraHeaders != null) {
+            for (String header : extraHeaders) {
+                if (header != null && !header.trim().isEmpty()) headers.append(header).append("\r\n");
+            }
+        }
+        headers.append("\r\n");
+        out.write(headers.toString().getBytes(StandardCharsets.UTF_8));
+        if (body != null) out.write(body);
+        out.flush();
+    }
+
+    private static String statusText(int code) {
+        if (code == 200) return "OK";
+        if (code == 201) return "Created";
+        if (code == 204) return "No Content";
+        if (code == 207) return "Multi-Status";
+        if (code == 400) return "Bad Request";
+        if (code == 401) return "Unauthorized";
+        if (code == 403) return "Forbidden";
+        if (code == 404) return "Not Found";
+        if (code == 405) return "Method Not Allowed";
+        if (code == 409) return "Conflict";
+        if (code == 412) return "Precondition Failed";
+        if (code == 413) return "Payload Too Large";
+        if (code == 423) return "Locked";
+        if (code == 429) return "Too Many Requests";
+        if (code == 500) return "Internal Server Error";
+        if (code == 501) return "Not Implemented";
+        if (code == 507) return "Insufficient Storage";
+        return "Error";
+    }
 
     private void writeUnauthorized(OutputStream out) throws IOException {
         noteStatus(401);

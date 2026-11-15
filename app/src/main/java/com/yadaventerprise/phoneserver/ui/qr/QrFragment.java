@@ -31,7 +31,13 @@ import com.yadaventerprise.phoneserver.R;
 import com.yadaventerprise.phoneserver.data.servers.ServerProfileStore;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.model.ServerProfile;
+import com.yadaventerprise.phoneserver.network.pairing.PairingPayload;
+import com.yadaventerprise.phoneserver.network.pairing.PairingStore;
 import com.yadaventerprise.phoneserver.network.remote.RemoteApiClient;
+import com.yadaventerprise.phoneserver.network.tls.HttpsConfig;
+import com.yadaventerprise.phoneserver.network.tls.HttpsConfigStore;
+import com.yadaventerprise.phoneserver.network.tls.TlsCertificateStore;
+import com.yadaventerprise.phoneserver.network.tls.TlsIdentity;
 import com.yadaventerprise.phoneserver.service.ServerService;
 import com.yadaventerprise.phoneserver.ui.files.RemoteBrowseActivity;
 import com.yadaventerprise.phoneserver.ui.main.MainActivity;
@@ -58,6 +64,8 @@ public class QrFragment extends Fragment {
 
     private String currentServerUrl = null;
     private Bitmap currentQrBitmap = null;
+    private String currentPairingCode = "";
+    private long currentPairingExpires = 0;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refreshRunnable = new Runnable() {
@@ -179,8 +187,9 @@ public class QrFragment extends Fragment {
         if (getContext() == null) return;
 
         boolean running = ServerService.isServerRunning();
+        HttpsConfig https = HttpsConfigStore.get(getContext()).get();
         String password = ContentStore.getPassword(getContext());
-        qrSecurityValue.setText(password.isEmpty() ? "None" : "Password");
+        qrSecurityValue.setText(https.enabled ? "HTTPS · pinned" : (password.isEmpty() ? "None" : "Password"));
 
         if (!running) {
             currentServerUrl = null;
@@ -201,15 +210,31 @@ public class QrFragment extends Fragment {
             return;
         }
 
-        currentServerUrl = "http://" + ip + ":" + ServerService.PORT;
-        qrAddressSmall.setText(ip + ":" + ServerService.PORT);
-        qrAddressValue.setText(ip + ":" + ServerService.PORT);
+        if (https.enabled) {
+            currentServerUrl = https.qrBaseUrl(ip);
+            qrAddressSmall.setText(currentServerUrl.replace("https://", ""));
+            qrAddressValue.setText(currentServerUrl);
+            qrCaption.setText("Scan to pair securely. The certificate is pinned to this device.");
+            if (currentPairingCode.isEmpty() || currentPairingExpires <= System.currentTimeMillis()) {
+                currentPairingCode = PairingStore.get(getContext()).create("QR pairing", PairingStore.DEFAULT_TTL_MS);
+                currentPairingExpires = System.currentTimeMillis() + PairingStore.DEFAULT_TTL_MS;
+            }
+        } else {
+            currentServerUrl = "http://" + ip + ":" + ServerService.PORT;
+            qrAddressSmall.setText(ip + ":" + ServerService.PORT);
+            qrAddressValue.setText(ip + ":" + ServerService.PORT);
+            qrCaption.setText("Scan this QR code to connect to this server on the same network.");
+            currentPairingCode = "";
+        }
         qrStatusDot.setBackgroundTintList(getContext().getColorStateList(R.color.online_green));
         qrStatusText.setText("Running");
         qrStatusText.setTextColor(getContext().getColor(R.color.home_accent));
-        qrCaption.setText("Scan this QR code to connect to this server on the same network.");
 
-        currentQrBitmap = generateQrBitmap(currentServerUrl, 600);
+        TlsIdentity identity = https.enabled ? TlsCertificateStore.get(getContext()).load() : null;
+        String qrContent = PairingPayload.build(currentServerUrl,
+                identity == null ? "" : identity.fingerprint,
+                currentPairingCode, "PhoneServer");
+        currentQrBitmap = generateQrBitmap(qrContent, 600);
         qrImage.setImageBitmap(currentQrBitmap);
     }
 
@@ -292,12 +317,19 @@ public class QrFragment extends Fragment {
         if (context == null) return;
 
         String scanned = result.getContents().trim();
+        PairingPayload payload = PairingPayload.parse(scanned);
+        if (payload == null || payload.baseUrl == null || payload.baseUrl.isEmpty()) {
+            Toast.makeText(context, "That QR code isn't a PhoneServer address", Toast.LENGTH_LONG).show();
+            return;
+        }
         String ip;
         int port;
+        String scheme;
         try {
-            URI uri = new URI(scanned);
+            URI uri = new URI(payload.baseUrl);
             ip = uri.getHost();
-            port = uri.getPort() > 0 ? uri.getPort() : 8080;
+            port = uri.getPort() > 0 ? uri.getPort() : ("https".equalsIgnoreCase(uri.getScheme()) ? 8443 : 8080);
+            scheme = uri.getScheme() == null ? "http" : uri.getScheme();
             if (ip == null) throw new IllegalArgumentException("no host");
         } catch (Exception e) {
             Toast.makeText(context, "That QR code isn't a PhoneServer address", Toast.LENGTH_LONG).show();
@@ -307,6 +339,9 @@ public class QrFragment extends Fragment {
         Intent intent = new Intent(context, AddServerActivity.class);
         intent.putExtra(AddServerActivity.EXTRA_PREFILL_IP, ip);
         intent.putExtra(AddServerActivity.EXTRA_PREFILL_PORT, port);
+        intent.putExtra(AddServerActivity.EXTRA_PREFILL_SCHEME, scheme);
+        intent.putExtra(AddServerActivity.EXTRA_PREFILL_FINGERPRINT, payload.fingerprint);
+        intent.putExtra(AddServerActivity.EXTRA_PREFILL_PAIRING_CODE, payload.code);
         startActivity(intent);
         selectTab(true);
     }

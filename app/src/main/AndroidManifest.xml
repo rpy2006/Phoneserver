@@ -80,6 +80,12 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.SecurityEventsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.BlockedIpsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.BackupScheduleActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.HttpsSetupActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.WebDavActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.WebhookActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.WebhookEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.TasksActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.security.TaskEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ads.AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.RemoteBrowseActivity" android:exported="false" />
@@ -103,6 +109,11 @@
             android:exported="false"
             android:enabled="true" />
 
+        <receiver
+            android:name="com.yadaventerprise.phoneserver.service.ServerWatchdogReceiver"
+            android:exported="false"
+            android:enabled="true" />
+
         <service
             android:name="com.yadaventerprise.phoneserver.service.ServerService"
             android:exported="false"
@@ -118,5 +129,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <receiver android:name="com.yadaventerprise.phoneserver.service.ScheduledTaskReceiver" android:exported="false" />
     </application>
 </manifest>

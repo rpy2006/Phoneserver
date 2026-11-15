@@ -1,6 +1,6 @@
 # PhoneServer Security Audit
 
-Date: 2026-11-14
+Date: 2026-11-15
 Scope: `com.yadaventerprise.phoneserver` (app module), including the legacy
 `SimpleHttpServer`, the `/api/v1` data API, and the `adnet` advertising surface.
 Method: manual source review, targeted grep sweeps, and regression tests.
@@ -151,6 +151,35 @@ Residual risks R-01–R-06 below still apply. In particular, the legacy
 `isAuthorized` path is open when no password is configured, while `/api/v1`
 continues to require either the password or a token.
 
+## Phase 2 security hardening
+
+| Control | Implementation |
+|---|---|
+| Optional HTTPS | `TlsContextFactory` + `SSLServerSocket` on a separate port; generated self-signed RSA-2048 certificate or PKCS#12 import |
+| Private key protection | `TlsCertificateStore` keeps key/cert in encrypted app-private JSON under `files/network/`; `SecurityPaths.restrict` limits access |
+| Certificate pinning | Pairing QR carries a SHA-256 fingerprint; `TlsClient` accepts only the pinned certificate, even for IP/hostname mismatches |
+| Secure pairing | `PairingStore` hashes one-time codes, limits attempts to 8, expires after 10 minutes, rate-limits `/api/pair` to 12/min, and issues scoped editor tokens (30 days, 240 req/min) |
+| WebDAV authorization | Remote-access toggle checked before routing; bearer tokens require `files.read`/`files.write`; paths resolved through `ContentStore.resolveSafePath` |
+| Webhook signing | Optional HMAC-SHA256 signature over the exact JSON body in `X-PhoneServer-Signature`; secret stored in encrypted webhook config |
+| Webhook retry/history | Three attempts with backoff; bounded history; failures do not block server responses |
+| Scheduled task isolation | Tasks only run project backups or configured webhooks; results are persisted and emitted as security-visible events |
+| Watchdog intent | Restart alarms only fire when `desired_running` is true, so a user stop is not overridden |
+
+### Phase 2 residual risks
+
+- **R-07 HTTP remains open alongside HTTPS.** Enabling TLS does not close port
+  `8080`. Recommendation: block `8080` at the router/firewall when exposing the
+  device beyond a trusted LAN.
+- **R-08 Self-signed certificate trust is fingerprint-based.** Users who skip
+  QR pairing must manually verify the fingerprint; a changed certificate
+  requires re-pairing.
+- **R-09 Webhook destinations are user-controlled.** Webhooks can POST to any
+  HTTP/HTTPS URL, including LAN addresses; this is intentional for local
+  automation but should be treated as an outbound-request capability.
+- **R-10 `phoneserver.local` has no mDNS responder.** The name is present in the
+  certificate SAN and HTTPS settings, but clients need the LAN IP or a DNS
+  record they control.
+
 ## Residual risks (not changed)
 
 - **R-01 Plaintext password storage.** `ContentStore` stores the access
@@ -163,9 +192,11 @@ continues to require either the password or a token.
   with empty `data_extraction_rules.xml`. Recommendation: exclude preference
   files or set `allowBackup="false"`.
 - **R-03 Cleartext HTTP.** `android:usesCleartextTraffic="true"`
-  (`AndroidManifest.xml:25`) is required for the LAN HTTP server; credentials
-  and file contents are unencrypted on the wire. Recommendation: document it
-  and consider TLS for remote profiles.
+  (`AndroidManifest.xml:25`) is still required for the LAN HTTP server and the
+  ad network; credentials and file contents are unencrypted on port `8080`.
+  HTTPS is now available on `8443` for paired/remote clients, but it is
+  optional and does not replace HTTP. Recommendation: use HTTPS and block the
+  HTTP port when exposing the device beyond a trusted LAN.
 - **R-04 FileProvider root.** `file_paths.xml` declares
   `<root-path name="root" path="/" />` (`:3`), exposing the whole filesystem
   to FileProvider grants. Recommendation: narrow to the actual shared
@@ -199,6 +230,12 @@ Added under `app/src/test/java/com/yadaventerprise/phoneserver/` (HTTP tests in
   interval clamping.
 - `SecurityScannerTest` — pure JVM: critical missing password, wildcard CORS,
   disabled rate limit, clean score/grade and finding lookup.
+- `TlsCertificateFactoryTest` — pure JVM: certificate generation, SAN/subject,
+  fingerprint formatting and self-signature verification.
+- `WebhookConfigTest`, `ScheduledTaskTest` — JSON round-trip and event/interval
+  validation.
+- `WebhookDispatcherTest` — Robolectric: signed JSON delivery to a loopback
+  HTTP server, header verification and bounded history recording.
 
 Verification commands:
 
@@ -209,6 +246,6 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `107 tests, 0 failures` (49 Robolectric
+`BUILD SUCCESSFUL`; full unit suite `113 tests, 0 failures` (49 Robolectric
 tests skipped by design on this host). `SimpleHttpServerEncodingTest` passed;
 `SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).

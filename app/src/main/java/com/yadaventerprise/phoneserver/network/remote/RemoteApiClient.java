@@ -5,6 +5,7 @@ import android.net.Uri;
 import com.yadaventerprise.phoneserver.data.stats.StatsSnapshot;
 import com.yadaventerprise.phoneserver.model.RemoteEntry;
 import com.yadaventerprise.phoneserver.model.ServerProfile;
+import com.yadaventerprise.phoneserver.network.tls.TlsClient;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -12,6 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +35,13 @@ public class RemoteApiClient {
         }
     }
 
+    public static class PairingResult {
+        public String token;
+        public String fingerprint;
+        public String baseUrl;
+        public String serverName;
+    }
+
     private static final String USER_AGENT = "PhoneServer-App/1.0 (Android)";
 
     private static String encode(String s) {
@@ -48,9 +57,9 @@ public class RemoteApiClient {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(profile.baseUrl() + "/status");
-            conn = (HttpURLConnection) url.openConnection();
+            conn = openConnection(profile, url);
             conn.setConnectTimeout(2500);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
+            applyAuth(conn, profile);
             conn.setReadTimeout(2500);
             int code = conn.getResponseCode();
             return code == 200;
@@ -191,16 +200,13 @@ public class RemoteApiClient {
             int totalLength = header.length + fileBytes.length + footer.length;
 
             URL url = new URL(profile.baseUrl() + "/api/upload?path=" + encode(targetPath == null ? "" : targetPath));
-            conn = (HttpURLConnection) url.openConnection();
+            conn = openConnection(profile, url);
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(10000);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
+            applyAuth(conn, profile);
             conn.setReadTimeout(30000);
             conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-            if (profile.password != null && !profile.password.isEmpty()) {
-                conn.setRequestProperty("X-Auth-Password", profile.password);
-            }
             // Fixed-length streaming so the request carries a real Content-Length
             // header - our server reads the body by that header and does not
             // understand chunked transfer encoding.
@@ -236,16 +242,11 @@ public class RemoteApiClient {
                 if (encodedPath.length() > 0) encodedPath.append("/");
                 encodedPath.append(encode(seg));
             }
-            String queryAuth = (profile.password != null && !profile.password.isEmpty())
-                    ? "?pw=" + encode(profile.password) : "";
-            URL url = new URL(profile.baseUrl() + "/files/" + encodedPath + queryAuth);
-            conn = (HttpURLConnection) url.openConnection();
+            URL url = new URL(profile.baseUrl() + "/files/" + encodedPath);
+            conn = openConnection(profile, url);
             conn.setConnectTimeout(10000);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
+            applyAuth(conn, profile);
             conn.setReadTimeout(30000);
-            if (profile.password != null && !profile.password.isEmpty()) {
-                conn.setRequestProperty("X-Auth-Password", profile.password);
-            }
 
             int code = conn.getResponseCode();
             if (code != 200) {
@@ -268,19 +269,83 @@ public class RemoteApiClient {
         }
     }
 
+    public static PairingResult redeemPairing(ServerProfile profile, String code, String deviceName)
+            throws ApiException {
+        HttpURLConnection conn = null;
+        try {
+            JSONObject body = new JSONObject();
+            body.put("code", code);
+            body.put("deviceName", deviceName == null ? "Android device" : deviceName);
+            URL url = new URL(profile.baseUrl() + "/api/pair");
+            conn = openConnection(profile, url);
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(15000);
+            conn.setRequestProperty("User-Agent", USER_AGENT);
+            conn.setRequestProperty("Content-Type", "application/json");
+            try (OutputStream out = conn.getOutputStream()) {
+                out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int response = conn.getResponseCode();
+            InputStream stream = response >= 200 && response < 300
+                    ? conn.getInputStream() : conn.getErrorStream();
+            String text = readAll(stream);
+            if (response != 201 && response != 200) {
+                String message = "Pairing failed (" + response + ")";
+                try {
+                    JSONObject error = new JSONObject(text);
+                    if (error.has("error")) message = error.getString("error");
+                } catch (Exception ignored) {
+                }
+                throw new ApiException(message);
+            }
+            JSONObject json = new JSONObject(text);
+            PairingResult result = new PairingResult();
+            result.token = json.optString("token", "");
+            result.fingerprint = json.optString("fingerprint", "");
+            result.baseUrl = json.optString("baseUrl", profile.baseUrl());
+            result.serverName = json.optString("serverName", profile.name);
+            if (result.token.isEmpty()) throw new ApiException("Server did not return a token");
+            return result;
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException("Pairing failed: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private static HttpURLConnection openConnection(ServerProfile profile, URL url) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        if (connection instanceof HttpsURLConnection) {
+            TlsClient.configure((HttpsURLConnection) connection,
+                    profile == null ? null : profile.fingerprint);
+        }
+        return connection;
+    }
+
+    private static void applyAuth(HttpURLConnection connection, ServerProfile profile) {
+        connection.setRequestProperty("User-Agent", USER_AGENT);
+        if (profile == null) return;
+        if (profile.token != null && !profile.token.isEmpty()) {
+            connection.setRequestProperty("Authorization", "Bearer " + profile.token);
+        } else if (profile.password != null && !profile.password.isEmpty()) {
+            connection.setRequestProperty("X-Auth-Password", profile.password);
+        }
+    }
+
     // ---- low-level helpers ----
 
     private static JSONObject getJson(ServerProfile profile, String pathAndQuery) throws ApiException {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(profile.baseUrl() + pathAndQuery);
-            conn = (HttpURLConnection) url.openConnection();
+            conn = openConnection(profile, url);
             conn.setConnectTimeout(8000);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
+            applyAuth(conn, profile);
             conn.setReadTimeout(15000);
-            if (profile.password != null && !profile.password.isEmpty()) {
-                conn.setRequestProperty("X-Auth-Password", profile.password);
-            }
             int code = conn.getResponseCode();
             InputStream stream = code == 200 ? conn.getInputStream() : conn.getErrorStream();
             String text = readAll(stream);
@@ -300,16 +365,13 @@ public class RemoteApiClient {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(profile.baseUrl() + path);
-            conn = (HttpURLConnection) url.openConnection();
+            conn = openConnection(profile, url);
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(8000);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
+            applyAuth(conn, profile);
             conn.setReadTimeout(15000);
             conn.setRequestProperty("Content-Type", "application/json");
-            if (profile.password != null && !profile.password.isEmpty()) {
-                conn.setRequestProperty("X-Auth-Password", profile.password);
-            }
             try (OutputStream out = conn.getOutputStream()) {
                 out.write(body.toString().getBytes(StandardCharsets.UTF_8));
             }

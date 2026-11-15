@@ -30,6 +30,9 @@ public class ServerProfileStore {
                 p.username = o.optString("username", "");
                 p.password = o.optString("password", "");
                 p.description = o.optString("description", "");
+                p.scheme = o.optString("scheme", "http");
+                p.token = o.optString("token", "");
+                p.fingerprint = o.optString("fingerprint", "");
                 result.add(p);
             }
         } catch (Exception ignored) {
@@ -87,6 +90,9 @@ public class ServerProfileStore {
                 o.put("username", p.username == null ? "" : p.username);
                 o.put("password", p.password == null ? "" : p.password);
                 o.put("description", p.description == null ? "" : p.description);
+                o.put("scheme", p.scheme == null ? "http" : p.scheme);
+                o.put("token", p.token == null ? "" : p.token);
+                o.put("fingerprint", p.fingerprint == null ? "" : p.fingerprint);
                 arr.put(o);
             }
             prefs(context).edit().putString(KEY_LIST, arr.toString()).apply();
