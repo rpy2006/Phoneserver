@@ -18,4 +18,11 @@ public class TlsIdentity {
         this.subject = subject;
         this.createdAt = createdAt;
     }
+
+    /** True when the certificate signs itself, i.e. browsers will not trust it by default. */
+    public boolean isSelfSigned() {
+        if (certificate == null) return false;
+        return certificate.getIssuerX500Principal().equals(
+                certificate.getSubjectX500Principal());
+    }
 }

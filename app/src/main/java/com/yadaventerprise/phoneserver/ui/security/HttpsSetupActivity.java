@@ -77,6 +77,17 @@ public class HttpsSetupActivity extends AppCompatActivity {
         fingerprintText.setText("SHA-256  " + identity.fingerprint);
     }
 
+    private boolean validatePublicUrl() {
+        String raw = publicUrlInput.getText().toString().trim();
+        if (raw.isEmpty() || !HttpsConfig.cleanUrl(raw).isEmpty()) {
+            publicUrlInput.setError(null);
+            return true;
+        }
+        publicUrlInput.setError("Use https://host or https://host:port with no path");
+        statusText.setText("Public URL must be an HTTPS origin with no path");
+        return false;
+    }
+
     private HttpsConfig readConfig() {
         HttpsConfig config = new HttpsConfig();
         config.enabled = httpsSwitch.isChecked();
@@ -93,6 +104,7 @@ public class HttpsSetupActivity extends AppCompatActivity {
     }
 
     private void save() {
+        if (!validatePublicUrl()) return;
         HttpsConfig config = readConfig();
         if (config.enabled && TlsCertificateStore.get(this).load() == null) {
             statusText.setText("Generating certificate…");
@@ -132,6 +144,7 @@ public class HttpsSetupActivity extends AppCompatActivity {
     }
 
     private void generateCertificate() {
+        if (!validatePublicUrl()) return;
         HttpsConfig config = readConfig();
         statusText.setText("Generating certificate…");
         new Thread(() -> {
@@ -178,6 +191,7 @@ public class HttpsSetupActivity extends AppCompatActivity {
     }
 
     private void importCertificate(Uri uri, char[] password) {
+        if (!validatePublicUrl()) return;
         statusText.setText("Importing certificate…");
         new Thread(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {

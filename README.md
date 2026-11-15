@@ -147,7 +147,7 @@ A dedicated **File Sharing** section creates browser links for individual files 
 - **Folder sharing** — browse shared subfolders in a clean HTML page, preview safe file types inline, and download individual files.
 - **Management** — active/expired/revoked lists, rename, edit, rotate secret, revoke/restore, delete, QR code, and copy/share actions.
 - **Audit trail** — bounded access log for visits, previews, downloads, password unlocks, management actions and denied attempts; no passwords or link secrets are recorded.
-- **Transport honesty** — HTTPS links are used when HTTPS is enabled; HTTP links display an explicit “not encrypted” warning in the app and on the served page, without a false “secure” label.
+- **Transport honesty** — local share links use HTTPS only when a public origin or CA-signed certificate is configured; with the generated self-signed certificate they use HTTP so browsers do not block them with `ERR_CERT_AUTHORITY_INVALID`. Share links use the LAN IP (or the configured public origin), never the unresolvable `phoneserver.local` name. A configured public URL must be an HTTPS origin (`https://host[:port]`) with no path. HTTP links display an explicit “not encrypted” warning in the app and on the served page, without a false “secure” label.
 - **Abuse limits** — 240 share requests/min/IP and 20 password attempts/min/IP+link; password unlock sessions are in-memory, HTTP-only cookies with a 30-minute lifetime.
 
 ---
@@ -526,7 +526,7 @@ It is off until enabled in **Settings → Ad Network**; `startIfEnabled` is call
 
 Base URL: `http://<device-ip>:8080` · HTTPS base URL: `https://<device-ip>:8443` when enabled
 
-HTTP remains available on port `8080`; HTTPS runs alongside it on `8443` (configurable). The data/storage API accepts either the access password or a bearer token. File and WebDAV routes accept bearer tokens with `files.read`/`files.write` permissions.
+HTTP remains available on port `8080`; HTTPS runs alongside it on `8443` (configurable). The data/storage API accepts either the access password or a bearer token. File and WebDAV routes accept bearer tokens with `files.read`/`files.write` permissions. When setting a public/tunnel URL for HTTPS, use only `https://host[:port]`; paths are rejected because share links are mounted at `/s/<token>`.
 
 ### 5.1 Public endpoints
 
@@ -1028,7 +1028,7 @@ sh gradlew :app:testDebugUnitTest
 sh gradlew :app:assembleDebug
 ```
 
-The recorded result after Phase 3 is **127 tests, 78 passed, 49 skipped, 0 failed**. The 49 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive/sharing) run everywhere. The Phase 3 suite adds 14 sharing tests covering token shape/hashing, PBKDF2 password verification, link expiry/limits, store creation/update/rotation/revocation/download consumption, session invalidation and access-log filtering. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
+The recorded result after Phase 3 is **137 tests, 88 passed, 49 skipped, 0 failed**. The 49 Robolectric tests are skipped on Linux/aarch64 because Robolectric's native SQLite runtime has no binary for that host; they run on x86_64 Linux/Windows and x86_64/arm64 macOS. The pure-JVM suites (path/SQL/MIME/token/rate-limit/storage-layout/backup-archive/sharing/HTTPS-config) run everywhere. The Phase 3 suite adds 14 sharing tests covering token shape/hashing, PBKDF2 password verification, link expiry/limits, store creation/update/rotation/revocation/download consumption, session invalidation and access-log filtering. See [testing.md](testing.md) and [platform-compatibility.md](platform-compatibility.md).
 
 There are **no automated tests for the ad network or the dashboard assets** yet, and no CI configuration. Verify those manually: enable the ad network, complete `/api/setup`, create a site/placement/campaign/creative, embed the tag on a hostname-matching page, and watch `/serve`, `/imp`, `/c` and the reports move.
 
@@ -1146,7 +1146,7 @@ Ordered roughly by how much they matter.
 | 7 | `<root-path path="/" />` in `file_paths.xml` | `res/xml/file_paths.xml` | `FileProvider` can address any app-readable file. Scope it to the downloads + view-cache dirs |
 | 8 | No rate limiting, no lockout, no per-IP throttle on the password check | `SimpleHttpServer.isAuthorized` | Brute-forceable on a LAN. Low severity for the threat model, high if port-forwarded |
 | 9 | HTTP response headers are not escaped for `\r\n` when user-defined headers are written | `SimpleHttpServer.writeResponse` | A header value containing CRLF would inject a header. Only reachable by the user who authored the endpoint |
-| 9a | `phoneserver.local` is not resolved by mDNS | TLS hostname/SAN + HTTPS setup | Clients must use the LAN IP or a DNS record the user controls; the friendly name is certificate metadata only |
+| 9a | `phoneserver.local` is not resolved by mDNS | TLS hostname/SAN + HTTPS setup | Share links always use the LAN IP or configured public origin; the friendly name is certificate metadata only. Clients opening other URLs must use the LAN IP or a DNS record the user controls |
 | 9b | HTTPS runs alongside HTTP | `ServerService` | Enabling HTTPS does not close port `8080`; block it at the firewall when exposing the device beyond a trusted LAN |
 
 ### 12.2 Threading and lifecycle
@@ -1179,7 +1179,7 @@ Ordered roughly by how much they matter.
 
 | # | Issue | Detail |
 |---|---|---|
-| 26 | **No CI.** Unit tests now exist under `app/src/test` (127 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
+| 26 | **No CI.** Unit tests now exist under `app/src/test` (137 tests), but nothing runs them automatically | Add a GitHub Actions workflow |
 | 27 | `minifyEnabled false` in release — the APK ships unshrunk and un-obfuscated | Add keep rules for the JNI bridge before enabling R8 |
 | 28 | 47 MB prebuilt `.so`, arm64-v8a only. No source, no reproducibility, no x86_64 emulator support | Document the provenance of the binary; add the C++ sources or a submodule if this is to be maintained |
 | 29 | The `.so` is **modified but uncommitted** (`git status` shows `M app/src/main/jniLibs/arm64-v8a/libllama_bridge.so`) along with `gradle.properties` | Review and commit deliberately |

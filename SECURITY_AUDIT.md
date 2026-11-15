@@ -198,10 +198,13 @@ continues to require either the password or a token.
 
 ### Phase 3 residual risks
 
-- **R-11 Share links can still use plain HTTP.** Enabling HTTPS changes new links
-  to `https://`, but existing HTTP links remain unencrypted and the HTTP server
-  stays open. The app and served pages warn explicitly. Recommendation: share
-  only over HTTPS outside a trusted LAN and block port `8080` at the firewall.
+- **R-11 Share links can still use plain HTTP.** A generated self-signed
+  certificate cannot be trusted by browsers, so local share links deliberately
+  use HTTP instead of producing `ERR_CERT_AUTHORITY_INVALID`. HTTPS share links
+  are used only with a configured public origin or a CA-signed certificate.
+  The app and served pages warn explicitly. Recommendation: use a public HTTPS
+  origin or a CA-signed certificate outside a trusted LAN and block port `8080`
+  at the firewall.
 - **R-12 Inline previews are still retrievable.** A view-only share prevents the
   browser's Download action and does not consume the download counter, but any
   inline-previewable bytes can be saved by the client. Do not share confidential
@@ -279,6 +282,6 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `127 tests, 0 failures` (49 Robolectric
-tests skipped by design on this host; 78 passed, including all 14 sharing tests). `SimpleHttpServerEncodingTest` passed;
+`BUILD SUCCESSFUL`; full unit suite `137 tests, 0 failures` (49 Robolectric
+tests skipped by design on this host; 88 passed, including all 14 sharing tests). `SimpleHttpServerEncodingTest` passed;
 `SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).

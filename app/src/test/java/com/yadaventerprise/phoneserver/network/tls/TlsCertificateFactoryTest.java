@@ -23,5 +23,6 @@ public class TlsCertificateFactoryTest {
         assertTrue(TlsCertificateFactory.matchesFingerprint(identity.certificate,
                 identity.fingerprint.replace(":", "").toLowerCase()));
         identity.certificate.verify(identity.certificate.getPublicKey());
+        assertTrue(identity.isSelfSigned());
     }
 }

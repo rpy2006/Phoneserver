@@ -3,10 +3,14 @@
 Base URLs:
 
 - HTTP: `http://<device-ip>:8080`
-- HTTPS: `https://<device-ip>:8443` when enabled (port configurable)
+- HTTPS: `https://<device-ip>:8443` with a public origin or CA-signed certificate (port configurable); local links stay on HTTP when only the generated self-signed certificate is available
 
 HTTPS runs alongside HTTP. The server does not automatically redirect HTTP to
-HTTPS, and the optional ad network has its own server on `:8090`.
+HTTPS, and the optional ad network has its own server on `:8090`. A configured
+public/tunnel URL must be an HTTPS origin (`https://host[:port]`) with no path;
+share links are served at `/s/<token>`. Browsers reject the generated
+self-signed certificate, so local share links use HTTP unless a public origin or
+CA-signed certificate is configured.
 
 ## Authentication
 

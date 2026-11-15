@@ -1,5 +1,7 @@
 package com.yadaventerprise.phoneserver.network.tls;
 
+import java.net.URI;
+import java.util.Locale;
 import org.json.JSONObject;
 
 public class HttpsConfig {
@@ -42,10 +44,24 @@ public class HttpsConfig {
     }
 
     public String qrBaseUrl(String ip) {
-        if (publicUrl != null && !publicUrl.isEmpty()) return publicUrl;
+        String configured = cleanUrl(publicUrl);
+        if (!configured.isEmpty()) return configured;
         if (includeLocalIps && ip != null && !ip.isEmpty()) {
             return "https://" + ip + ":" + port;
         }
+        return localBaseUrl(ip);
+    }
+
+    /**
+     * Base URL for share links. Unlike {@link #qrBaseUrl(String)}, this never
+     * falls back to the friendly hostname when a LAN address exists: this app
+     * does not advertise phoneserver.local over mDNS, so such links fail with
+     * DNS_PROBE_FINISHED_NXDOMAIN on the recipient's device.
+     */
+    public String shareBaseUrl(String ip) {
+        String configured = cleanUrl(publicUrl);
+        if (!configured.isEmpty()) return configured;
+        if (ip != null && !ip.isEmpty()) return "https://" + ip + ":" + port;
         return localBaseUrl(ip);
     }
 
@@ -67,11 +83,35 @@ public class HttpsConfig {
         return host;
     }
 
+    /**
+     * Accepts only an HTTPS origin (https://host[:port]). Paths, queries and
+     * fragments are rejected because the server mounts share links at the root:
+     * a public URL such as https://example.com/base would generate
+     * https://example.com/base/s/<token>, which is a 404 unless a proxy happens
+     * to rewrite it. Keeping the value to an origin makes generated links
+     * predictable and avoids silently broken share links.
+     */
     public static String cleanUrl(String value) {
         if (value == null) return "";
         String url = value.trim();
         if (url.isEmpty()) return "";
-        if (!url.startsWith("https://")) return "";
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        try {
+            URI uri = new URI(url);
+            if (!"https".equalsIgnoreCase(uri.getScheme())) return "";
+            String host = uri.getHost();
+            if (host == null || host.isEmpty()) return "";
+            if (uri.getUserInfo() != null || uri.getRawQuery() != null
+                    || uri.getRawFragment() != null) return "";
+            String path = uri.getPath();
+            if (path != null && !path.isEmpty() && !"/".equals(path)) return "";
+            int port = uri.getPort();
+            if (port < -1 || port > 65535) return "";
+            StringBuilder result = new StringBuilder("https://")
+                    .append(host.toLowerCase(Locale.US));
+            if (port > 0) result.append(':').append(port);
+            return result.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

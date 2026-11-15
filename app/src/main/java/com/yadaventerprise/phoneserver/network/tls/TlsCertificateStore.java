@@ -83,10 +83,11 @@ public final class TlsCertificateStore {
         List<String> hosts = new ArrayList<>();
         if (config != null) hosts.add(config.hostname);
         List<String> ips = new ArrayList<>();
-        if (config == null || config.includeLocalIps) {
-            String ip = NetworkUtils.getLocalIpAddress();
-            if (ip != null && !ip.isEmpty()) ips.add(ip);
-        }
+        // The LAN IP is needed for HTTPS share links even when the pairing QR uses
+        // the friendly hostname; without it the certificate is rejected when the
+        // phone is opened by address.
+        String ip = NetworkUtils.getLocalIpAddress();
+        if (ip != null && !ip.isEmpty()) ips.add(ip);
         TlsIdentity identity = TlsCertificateFactory.generate(
                 config == null ? "PhoneServer" : config.hostname, hosts, ips);
         save(identity);

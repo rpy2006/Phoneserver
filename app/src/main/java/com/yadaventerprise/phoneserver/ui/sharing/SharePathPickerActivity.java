@@ -34,10 +34,13 @@ public class SharePathPickerActivity extends AppCompatActivity {
     private TextView hint;
     private TextView currentPath;
     private TextView empty;
+    private View storageNotice;
+    private View grantAccessButton;
     private View upButton;
     private View useFolderButton;
     private String type = ShareLink.TYPE_FILE;
     private String relative = "";
+    private String loadedRoot = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +53,8 @@ public class SharePathPickerActivity extends AppCompatActivity {
         hint = findViewById(R.id.picker_hint);
         currentPath = findViewById(R.id.current_path);
         empty = findViewById(R.id.path_empty);
+        storageNotice = findViewById(R.id.storage_notice);
+        grantAccessButton = findViewById(R.id.grant_access_button);
         upButton = findViewById(R.id.up_button);
         useFolderButton = findViewById(R.id.use_folder_button);
         RecyclerView recycler = findViewById(R.id.path_recycler);
@@ -67,16 +72,46 @@ public class SharePathPickerActivity extends AppCompatActivity {
         findViewById(R.id.back_button).setOnClickListener(v -> finish());
         upButton.setOnClickListener(v -> navigateUp());
         useFolderButton.setOnClickListener(v -> chooseCurrentFolder());
+        grantAccessButton.setOnClickListener(v ->
+                ContentStore.requestFullStorageAccess(this));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
         load(relative);
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 200) load(relative);
+    }
+
     private void load(String newRelative) {
-        String normalized = PathGuard.normalizeRelative(newRelative);
-        if (normalized == null) return;
         File root = ContentStore.getPublicFilesDir(this);
+        String rootPath = root.getAbsolutePath();
+        if (!loadedRoot.isEmpty() && !loadedRoot.equals(rootPath)) {
+            newRelative = "";
+        }
+        loadedRoot = rootPath;
+
+        String normalized = PathGuard.normalizeRelative(newRelative);
+        if (normalized == null) normalized = "";
         File dir = PathGuard.safeResolve(root, normalized);
         if (dir == null || !dir.isDirectory()) {
-            Toast.makeText(this, "That folder is not available", Toast.LENGTH_SHORT).show();
+            if (!normalized.isEmpty()) {
+                load("");
+                return;
+            }
+            entries.clear();
+            relative = "";
+            adapter.notifyDataSetChanged();
+            currentPath.setText("/");
+            empty.setText("This folder is not available.");
+            empty.setVisibility(View.VISIBLE);
+            updateStorageNotice();
             return;
         }
         relative = normalized;
@@ -108,9 +143,20 @@ public class SharePathPickerActivity extends AppCompatActivity {
             }
         });
         adapter.notifyDataSetChanged();
-        empty.setText(ShareLink.TYPE_FOLDER.equals(type)
-                ? "No folders here." : "No files or folders here.");
+        if (entries.isEmpty()) {
+            empty.setText(ContentStore.hasFullStorageAccess(this)
+                    ? (ShareLink.TYPE_FOLDER.equals(type)
+                    ? "No folders here." : "No files or folders here.")
+                    : "No files in the app folder. Grant all-files access to browse Pictures, "
+                    + "Download, DCIM and other device folders.");
+        }
         empty.setVisibility(entries.isEmpty() ? View.VISIBLE : View.GONE);
+        updateStorageNotice();
+    }
+
+    private void updateStorageNotice() {
+        storageNotice.setVisibility(ContentStore.hasFullStorageAccess(this)
+                ? View.GONE : View.VISIBLE);
     }
 
     private void navigateUp() {

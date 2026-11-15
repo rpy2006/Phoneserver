@@ -34,5 +34,5 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Last full run after Phase 3: `127 tests, 0 failures, 49 skipped` (78 passed).
+Last full run after Phase 3: `137 tests, 0 failures, 49 skipped` (88 passed).
 The 14 sharing tests run as pure-JVM/unit tests and pass on this host.
