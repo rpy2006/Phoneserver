@@ -13,7 +13,9 @@ public class TokenPolicyTest {
         TokenPolicy policy = TokenPolicy.preset(TokenPolicy.ROLE_VIEWER);
         assertTrue(policy.can(TokenPolicy.PROJECTS_READ));
         assertTrue(policy.can(TokenPolicy.FILES_READ));
+        assertTrue(policy.can(TokenPolicy.MAIL_READ));
         assertFalse(policy.can(TokenPolicy.FILES_WRITE));
+        assertFalse(policy.can(TokenPolicy.MAIL_WRITE));
         assertFalse(policy.canWrite());
     }
 
@@ -22,6 +24,8 @@ public class TokenPolicyTest {
         TokenPolicy policy = TokenPolicy.preset(TokenPolicy.ROLE_EDITOR);
         assertTrue(policy.can(TokenPolicy.PROJECTS_WRITE));
         assertTrue(policy.can(TokenPolicy.BACKUPS_WRITE));
+        assertTrue(policy.can(TokenPolicy.MAIL_READ));
+        assertTrue(policy.can(TokenPolicy.MAIL_WRITE));
         assertFalse(policy.can(TokenPolicy.TOKENS_MANAGE));
         assertTrue(policy.canWrite());
     }
@@ -32,6 +36,8 @@ public class TokenPolicyTest {
         assertTrue(policy.isAdmin());
         assertTrue(policy.can(TokenPolicy.TOKENS_MANAGE));
         assertTrue(policy.can(TokenPolicy.SYSTEM_READ));
+        assertTrue(policy.can(TokenPolicy.MAIL_READ));
+        assertTrue(policy.can(TokenPolicy.MAIL_WRITE));
         assertTrue(policy.canWrite());
     }
 

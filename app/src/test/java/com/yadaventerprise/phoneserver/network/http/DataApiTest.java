@@ -202,6 +202,15 @@ public class DataApiTest {
     }
 
     @Test
+    public void apiIndexIncludesMailEndpoints() {
+        ContentStore.setPassword(context, "secret");
+        Response response = get(DataApi.BASE, header("x-auth-password", "secret"));
+        assertEquals(200, response.status);
+        assertTrue(response.text.contains("/mail/accounts"));
+        assertTrue(response.text.contains("/mail/messages/{id}/attachments/{index}"));
+    }
+
+    @Test
     public void unknownEndpointIs404AndBadMethodIs405() throws Exception {
         ProjectStore.create(context, "Alpha", "", 0, 0);
         ContentStore.setPassword(context, "secret");

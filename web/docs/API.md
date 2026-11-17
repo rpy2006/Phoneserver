@@ -576,3 +576,69 @@ Dates use `YYYY-MM-DD` UTC. Reports accept `from`, `to`, `campaign_id`, `site_id
 ### 6.4 Relationship to `/api/v1`
 
 Nothing is shared: different port, encrypted JSON data store, files, auth and rate limiter. `/api/v1` tokens and the access password do not work on port 8090, and ad sessions do not work on port 8080. Ad-network data (`adnet/adnet.json`, geo CSV and creative files) is not included in `/api/v1` project backups.
+
+---
+
+## 7. Mail API (`/api/v1/mail`)
+
+The mail API connects PhoneServer to an external SMTP/IMAP provider. PhoneServer is not a public mail server. Account passwords are encrypted with the Android Keystore and are never returned in API responses. For app setup steps and provider settings, see [email-setup.md](email-setup.md).
+
+### 7.1 Permissions
+
+`mail.read` allows listing accounts, messages, and attachments. `mail.write` allows creating/updating/deleting accounts, testing connections, syncing, sending, saving drafts, changing read state, and deleting local message copies.
+
+### 7.2 Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/mail/accounts` | List accounts without passwords |
+| `POST` | `/mail/accounts` | Create an account |
+| `GET` | `/mail/accounts/{id}` | Get one account without the password |
+| `PATCH` | `/mail/accounts/{id}` | Update an account; omit `password` to keep the saved value |
+| `DELETE` | `/mail/accounts/{id}` | Delete account, cached messages, stored password, and attachment files |
+| `POST` | `/mail/accounts/{id}/test` | Verify SMTP and IMAP authentication |
+| `POST` | `/mail/accounts/{id}/sync` | Download up to `limit` recent INBOX messages (default 50, max 200) |
+| `GET` | `/mail/accounts/{id}/messages?folder=INBOX` | List cached messages; `q` searches the local cache |
+| `POST` | `/mail/accounts/{id}/send` | Send a message over SMTP and cache a local Sent copy |
+| `POST` | `/mail/accounts/{id}/drafts` | Save a local draft |
+| `GET` | `/mail/messages/{id}` | Full cached message with sanitized HTML |
+| `POST` | `/mail/messages/{id}/read` | Set local and IMAP read state |
+| `DELETE` | `/mail/messages/{id}` | Delete the local cached copy |
+| `GET` | `/mail/messages/{id}/attachments/{index}` | Download a prepared attachment |
+
+### 7.3 Account body
+
+```json
+{
+  "name": "VPS mail",
+  "email": "me@example.com",
+  "username": "me@example.com",
+  "password": "APP_PASSWORD",
+  "smtpHost": "smtp.example.com",
+  "smtpPort": 587,
+  "smtpSecurity": "starttls",
+  "imapHost": "imap.example.com",
+  "imapPort": 993,
+  "imapSecurity": "tls",
+  "fromName": "PhoneServer",
+  "sentFolder": "Sent",
+  "draftsFolder": "Drafts"
+}
+```
+
+`smtpSecurity` and `imapSecurity` must be `tls` or `starttls`. TLS certificate validation is never disabled. Connections are verified with real SMTP/IMAP logins when an account is created or updated; the test endpoint can recheck an existing account.
+
+### 7.4 Send body
+
+```json
+{
+  "to": "you@example.net",
+  "cc": "",
+  "bcc": "",
+  "subject": "Hello",
+  "text": "Message body",
+  "attachments": [{"name":"notes.txt","contentType":"text/plain","data":"BASE64"}]
+}
+```
+
+See [mail.md](mail.md) for the full client/security notes.

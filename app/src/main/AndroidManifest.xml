@@ -87,7 +87,12 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.TasksActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.TaskEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.docs.DeveloperDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ads.AdNetworkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.mail.MailActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.mail.MailAccountsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.mail.ComposeActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.mail.MessageDetailActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareListActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.sharing.ShareEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />

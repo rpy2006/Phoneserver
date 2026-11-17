@@ -13,8 +13,10 @@ import com.yadaventerprise.phoneserver.R;
 import com.yadaventerprise.phoneserver.ads.AdNetworkActivity;
 import com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity;
 import com.yadaventerprise.phoneserver.ui.api.ApiEditorActivity;
+import com.yadaventerprise.phoneserver.ui.docs.DeveloperDocsActivity;
 import com.yadaventerprise.phoneserver.ui.files.FilesActivity;
 import com.yadaventerprise.phoneserver.ui.files.WebsiteFilesActivity;
+import com.yadaventerprise.phoneserver.ui.mail.MailActivity;
 import com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity;
 import com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity;
 import com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity;
@@ -196,6 +198,12 @@ public class MainActivity extends AppCompatActivity {
         }
         if (drawerNavId == R.id.nav_drawer_ads) {
             return new Intent(this, AdNetworkActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_mail) {
+            return new Intent(this, MailActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_dev_docs) {
+            return new Intent(this, DeveloperDocsActivity.class);
         }
         if (drawerNavId == R.id.nav_drawer_account) {
             return new Intent(this, AccountSettingsActivity.class);

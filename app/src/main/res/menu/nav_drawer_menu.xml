@@ -61,6 +61,14 @@
             android:id="@+id/nav_drawer_ads"
             android:icon="@drawable/ic_ads"
             android:title="Ad Network" />
+        <item
+            android:id="@+id/nav_drawer_mail"
+            android:icon="@drawable/ic_mail"
+            android:title="Mail" />
+        <item
+            android:id="@+id/nav_drawer_dev_docs"
+            android:icon="@drawable/ic_code_docs"
+            android:title="Developer Docs" />
     </group>
 
     <group android:id="@+id/group_drawer_account">

@@ -185,13 +185,17 @@ public final class DataApi {
             handleProjects(context, req, out, auth, parts);
             return;
         }
+        if (head.equals("mail")) {
+            MailApi.handle(context, req, out, auth, parts);
+            return;
+        }
         throw DataException.notFound("endpoint");
     }
 
     // ---- authentication & limits ----
 
     /** A resolved caller: either the interactive password (admin) or an API token. */
-    private static final class Auth {
+    static final class Auth {
         boolean admin;
         boolean canWrite = true;
         /** null => every project (admin or an unscoped token). */
@@ -311,14 +315,14 @@ public final class DataApi {
         }
     }
 
-    private static void requirePermission(Auth auth, String permission) throws DataException {
+    static void requirePermission(Auth auth, String permission) throws DataException {
         if (auth.admin) return;
         if (auth.policy == null || !auth.policy.can(permission)) {
             throw DataException.forbidden("this token lacks the " + permission + " permission");
         }
     }
 
-    private static void requireWrite(Auth auth, String permission) throws DataException {
+    static void requireWrite(Auth auth, String permission) throws DataException {
         requirePermission(auth, permission);
         if (!auth.canWrite) throw DataException.forbidden("this credential is read-only");
     }
@@ -394,6 +398,17 @@ public final class DataApi {
         endpoints.put("POST " + BASE + "/projects/{id}/backups/{backupId}/restore");
         endpoints.put("GET  " + BASE + "/projects/{id}/backups/{backupId}/download");
         endpoints.put("GET/POST/DELETE " + BASE + "/tokens");
+        endpoints.put("GET/POST " + BASE + "/mail/accounts");
+        endpoints.put("GET/PATCH/DELETE " + BASE + "/mail/accounts/{id}");
+        endpoints.put("POST " + BASE + "/mail/accounts/{id}/test");
+        endpoints.put("POST " + BASE + "/mail/accounts/{id}/sync");
+        endpoints.put("GET " + BASE + "/mail/accounts/{id}/messages");
+        endpoints.put("POST " + BASE + "/mail/accounts/{id}/send");
+        endpoints.put("POST " + BASE + "/mail/accounts/{id}/drafts");
+        endpoints.put("GET " + BASE + "/mail/messages/{id}");
+        endpoints.put("POST " + BASE + "/mail/messages/{id}/read");
+        endpoints.put("DELETE " + BASE + "/mail/messages/{id}");
+        endpoints.put("GET " + BASE + "/mail/messages/{id}/attachments/{index}");
         json.put("endpoints", endpoints);
         sendJson(null, req, out, 200, json);
     }
@@ -1156,7 +1171,7 @@ public final class DataApi {
         return boundary.isEmpty() ? null : boundary;
     }
 
-    private static JSONObject readJson(SimpleHttpServer.Request req) throws DataException {
+    static JSONObject readJson(SimpleHttpServer.Request req) throws DataException {
         if (req.body == null || req.body.length == 0) return new JSONObject();
         try {
             return new JSONObject(new String(req.body, StandardCharsets.UTF_8));
@@ -1165,7 +1180,7 @@ public final class DataApi {
         }
     }
 
-    private static void requireBody(JSONObject body) throws DataException {
+    static void requireBody(JSONObject body) throws DataException {
         if (body == null) throw new DataException("a JSON object body is required", 400);
     }
 
@@ -1191,8 +1206,11 @@ public final class DataApi {
         return list;
     }
 
-    private static void requireMethod(String actual, String expected) throws DataException {
-        if (!expected.equals(actual)) throw new DataException("method not allowed", 405);
+    static void requireMethod(String actual, String... expected) throws DataException {
+        for (String value : expected) {
+            if (value.equals(actual)) return;
+        }
+        throw new DataException("method not allowed", 405);
     }
 
     /** Streams the request body to {@code dest}, never buffering the whole file. */
@@ -1238,7 +1256,7 @@ public final class DataApi {
         return json;
     }
 
-    private static JSONObject ok() throws JSONException {
+    static JSONObject ok() throws JSONException {
         JSONObject json = new JSONObject();
         json.put("status", "ok");
         return json;
@@ -1248,7 +1266,7 @@ public final class DataApi {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(new Date());
     }
 
-    private static void sendJson(Context context, SimpleHttpServer.Request req, OutputStream out, int code, Object body)
+    static void sendJson(Context context, SimpleHttpServer.Request req, OutputStream out, int code, Object body)
             throws IOException {
         byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
         writeRaw(out, code, statusText(code), "application/json; charset=utf-8", bytes, context, req, null);
@@ -1332,8 +1350,8 @@ public final class DataApi {
      * Streams a file from disk with Content-Length, HTTP range support and safe
      * download headers. The file is never loaded into memory.
      */
-    private static void serveDownload(Context context, SimpleHttpServer.Request req, OutputStream out,
-                                      File file, String contentType, String downloadName, boolean attachment)
+    static void serveDownload(Context context, SimpleHttpServer.Request req, OutputStream out,
+                              File file, String contentType, String downloadName, boolean attachment)
             throws IOException {
         long length = file.length();
         long start = 0;

@@ -25,11 +25,13 @@ public class TokenPolicy {
     public static final String BACKUPS_WRITE = "backups.write";
     public static final String SYSTEM_READ = "system.read";
     public static final String TOKENS_MANAGE = "tokens.manage";
+    public static final String MAIL_READ = "mail.read";
+    public static final String MAIL_WRITE = "mail.write";
 
     private static final Set<String> ALL_PERMISSIONS = Collections.unmodifiableSet(
             new LinkedHashSet<>(Arrays.asList(PROJECTS_READ, PROJECTS_WRITE, DATABASES_READ,
-                    DATABASES_WRITE, FILES_READ, FILES_WRITE, BACKUPS_READ, BACKUPS_WRITE,
-                    SYSTEM_READ, TOKENS_MANAGE)));
+                    DATABASES_WRITE,                     FILES_READ, FILES_WRITE, BACKUPS_READ, BACKUPS_WRITE,
+                    SYSTEM_READ, TOKENS_MANAGE, MAIL_READ, MAIL_WRITE)));
 
     public String tokenId = "";
     public String role = ROLE_VIEWER;
@@ -58,11 +60,13 @@ public class TokenPolicy {
         result.add(DATABASES_READ);
         result.add(FILES_READ);
         result.add(BACKUPS_READ);
+        result.add(MAIL_READ);
         if (ROLE_EDITOR.equals(role)) {
             result.add(PROJECTS_WRITE);
             result.add(DATABASES_WRITE);
             result.add(FILES_WRITE);
             result.add(BACKUPS_WRITE);
+            result.add(MAIL_WRITE);
         }
         return result;
     }

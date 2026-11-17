@@ -1,0 +1,585 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PhoneServer API",
+    "version": "1.0.0",
+    "description": "Implemented local data, storage, token, and mail APIs served by PhoneServer on port 8080."
+  },
+  "servers": [
+    {
+      "url": "http://{deviceIp}:8080/api/v1",
+      "variables": {
+        "deviceIp": {
+          "default": "DEVICE_IP"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Public liveness probe",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Server is online"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Authenticated endpoint index",
+        "responses": {
+          "200": {
+            "description": "Endpoint patterns"
+          }
+        }
+      }
+    },
+    "/system": {
+      "get": {
+        "summary": "System statistics (admin only)",
+        "responses": {
+          "200": {
+            "description": "Statistics"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/tokens": {
+      "get": {
+        "summary": "List API tokens",
+        "responses": {
+          "200": {
+            "description": "Tokens"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an API token",
+        "responses": {
+          "201": {
+            "description": "Created token; plaintext returned once"
+          }
+        }
+      }
+    },
+    "/tokens/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Update a token policy",
+        "responses": {
+          "200": {
+            "description": "Updated policy"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke a token",
+        "responses": {
+          "200": {
+            "description": "Status"
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "summary": "List projects",
+        "responses": {
+          "200": {
+            "description": "Projects"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a project",
+        "responses": {
+          "201": {
+            "description": "Created project"
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get a project",
+        "responses": {
+          "200": {
+            "description": "Project"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a project",
+        "responses": {
+          "200": {
+            "description": "Updated project"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a project",
+        "responses": {
+          "200": {
+            "description": "Status"
+          }
+        }
+      }
+    },
+    "/projects/{id}/stats": {
+      "get": {
+        "summary": "Project statistics",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics"
+          }
+        }
+      }
+    },
+    "/projects/{id}/usage": {
+      "get": {
+        "summary": "Project usage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage"
+          }
+        }
+      }
+    },
+    "/projects/{id}/databases": {
+      "get": {
+        "summary": "List databases",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Databases"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created database"
+          }
+        }
+      }
+    },
+    "/projects/{id}/databases/{db}/query": {
+      "post": {
+        "summary": "Execute a guarded SQL query",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "db",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Query result"
+          }
+        }
+      }
+    },
+    "/projects/{id}/files": {
+      "get": {
+        "summary": "List files",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Files"
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload a file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Uploaded file metadata"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups": {
+      "get": {
+        "summary": "List backups",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backups"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created backup"
+          }
+        }
+      }
+    },
+    "/mail/accounts": {
+      "get": {
+        "summary": "List mail accounts without passwords",
+        "responses": {
+          "200": {
+            "description": "Accounts"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a mail account after verifying SMTP and IMAP",
+        "responses": {
+          "201": {
+            "description": "Created account"
+          }
+        }
+      }
+    },
+    "/mail/accounts/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get a mail account without the password",
+        "responses": {
+          "200": {
+            "description": "Account"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a mail account after verifying SMTP and IMAP",
+        "responses": {
+          "200": {
+            "description": "Updated account"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a mail account and cached messages",
+        "responses": {
+          "200": {
+            "description": "Status"
+          }
+        }
+      }
+    },
+    "/mail/accounts/{id}/test": {
+      "post": {
+        "summary": "Verify SMTP and IMAP settings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connection verified"
+          },
+          "502": {
+            "description": "Connection or authentication failed"
+          }
+        }
+      }
+    },
+    "/mail/accounts/{id}/sync": {
+      "post": {
+        "summary": "Synchronize INBOX into the local cache",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synchronized message count"
+          }
+        }
+      }
+    },
+    "/mail/accounts/{id}/send": {
+      "post": {
+        "summary": "Send a message over SMTP",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Local sent message"
+          }
+        }
+      }
+    },
+    "/mail/accounts/{id}/messages": {
+      "get": {
+        "summary": "List cached messages or search the local cache",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages"
+          }
+        }
+      }
+    },
+    "/mail/messages/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get a full cached message with sanitized HTML",
+        "responses": {
+          "200": {
+            "description": "Message"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete the local cached copy",
+        "responses": {
+          "200": {
+            "description": "Status"
+          }
+        }
+      }
+    },
+    "/mail/messages/{id}/read": {
+      "post": {
+        "summary": "Set local and IMAP read state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status"
+          }
+        }
+      }
+    },
+    "/mail/messages/{id}/attachments/{index}": {
+      "get": {
+        "summary": "Download a prepared attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attachment bytes"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API token created in the app or via /tokens"
+      },
+      "passwordHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Auth-Password",
+        "description": "Admin access password"
+      }
+    }
+  }
+}

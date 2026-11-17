@@ -150,6 +150,18 @@ A dedicated **File Sharing** section creates browser links for individual files 
 - **Transport honesty** — local share links use HTTPS only when a public origin or CA-signed certificate is configured; with the generated self-signed certificate they use HTTP so browsers do not block them with `ERR_CERT_AUTHORITY_INVALID`. Share links use the LAN IP (or the configured public origin), never the unresolvable `phoneserver.local` name. A configured public URL must be an HTTPS origin (`https://host[:port]`) with no path. HTTP links display an explicit “not encrypted” warning in the app and on the served page, without a false “secure” label.
 - **Abuse limits** — 240 share requests/min/IP and 20 password attempts/min/IP+link; password unlock sessions are in-memory, HTTP-only cookies with a 30-minute lifetime.
 
+### 1.12 Mail accounts and email setup
+
+The **Mail** section connects PhoneServer to an external SMTP/IMAP provider, such as a VPS mailbox or hosted email account. PhoneServer does not publish SMTP or IMAP ports itself.
+
+- **Multiple accounts** — independent SMTP/IMAP settings, cached messages, Sent folder, and Drafts folder per account
+- **Verified saving** — SMTP and IMAP logins are checked before an account is persisted; **Test** rechecks an existing account
+- **Protected credentials** — passwords are encrypted with the Android Keystore, never returned by mail APIs, and never logged
+- **Client features** — INBOX/Sent/Drafts views, sync, local cache search, compose with attachments, sanitized HTML, and safe attachment sharing
+- **Mail API** — `/api/v1/mail` endpoints for account setup, sync, send, drafts, read state, and attachment download
+
+See [email-setup.md](web/docs/email-setup.md) for account creation, common provider settings, VPS setup, and troubleshooting, or [mail.md](web/docs/mail.md) for the integration overview.
+
 ---
 
 ## 2. Tech Stack & Requirements
