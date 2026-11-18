@@ -1,5 +1,12 @@
 # PhoneServer Security Audit
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Security overview](overview.md)
+- [Architecture overview](../architecture/overview.md)
+- [Testing](../development/testing.md)
+
 Date: 2026-11-15
 Scope: `com.yadaventerprise.phoneserver` (app module), including the legacy
 `SimpleHttpServer`, the `/api/v1` data API, and the `adnet` advertising surface.
@@ -300,7 +307,8 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest
 ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
-Last results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `144 tests, 0 failures` (49 Robolectric
-tests skipped by design on this host; 95 passed, including all 14 sharing tests and 7 ad-network storage tests). `SimpleHttpServerEncodingTest` passed;
-`SimpleHttpServerSecurityTest` skipped (`tests="2" skipped="2" failures="0"`).
+Latest results on this host (aarch64): compile and `assembleDebug`
+`BUILD SUCCESSFUL`; full unit suite `157 tests, 0 failures, 0 errors, 50 skipped`.
+The skipped tests are Robolectric/unit cases that depend on runtime support
+unavailable on this host. Mail-core, docs-assets, sharing, token-policy and
+ad-network storage regression tests run in the suite.

@@ -1,5 +1,12 @@
 # PhoneServer Storage Layout
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Architecture overview](overview.md)
+- [Configuration](../getting-started/configuration.md)
+- [Security overview](../security/overview.md)
+
 PhoneServer uses four storage families:
 
 1. **SQLite** — `system.db` for projects, databases, files, backups, tokens and
@@ -47,7 +54,7 @@ database files, stored files and `metadata.json`.
 `ContentStore` keeps user settings in `SharedPreferences`, including the access
 password, start-on-boot, remote access, hidden files, CORS origins and the
 server `desired_running` flag. The password is still plaintext in app-private
-storage; see [SECURITY_AUDIT.md](SECURITY_AUDIT.md) R-01.
+storage; see [Security audit](../security/audit.md) R-01.
 
 ## Retention
 

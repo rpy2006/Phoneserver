@@ -1,5 +1,11 @@
 # Changelog
 
+## Navigation
+
+- [Docs home](index.html)
+- [Mail client](mail.md)
+- [Email setup](email-setup.md)
+
 ## Phase 5
 - Added external SMTP/IMAP mail accounts with TLS/STARTTLS, Android Keystore credential protection, and encrypted local mail data.
 - Added Inbox/Sent/Drafts mail screens, compose with attachments, message detail, attachment sharing, and local search.

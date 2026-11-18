@@ -1,5 +1,12 @@
 # Testing PhoneServer
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Architecture overview](../architecture/overview.md)
+- [Security audit](../security/audit.md)
+- [Changelog](../changelog.md)
+
 ## Commands
 
 ```sh
@@ -37,6 +44,6 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Last full run after Phase 4: `144 tests, 0 failures, 49 skipped` (95 passed).
-The 14 sharing tests and the 7 ad-network storage tests run as
-pure-JVM/unit tests and pass on this host.
+Latest full run after Phase 5: `157 tests, 0 failures, 0 errors, 50 skipped`.
+The sharing, ad-network storage, mail-core, docs-assets and token-policy tests
+run in this suite. Some Robolectric tests skip on this aarch64 host by design.

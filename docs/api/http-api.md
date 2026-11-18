@@ -1,5 +1,12 @@
 # PhoneServer HTTP API
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Data API](data-api.md)
+- [Configuration](../getting-started/configuration.md)
+- [Security overview](../security/overview.md)
+
 Base URLs:
 
 - HTTP: `http://<device-ip>:8080`
@@ -143,7 +150,7 @@ HTTP status matching the failure.
 ## Ad network API
 
 The ad network is a separate origin on `:8090` with its own encrypted JSON data
-store, accounts and bearer sessions. See [ad-network.md](ad-network.md) for the
+store, accounts and bearer sessions. See [Ad Network Manager](../features/ad-network.md) for the
 full reference.
 
 | Area | Endpoints |

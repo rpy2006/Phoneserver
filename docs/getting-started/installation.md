@@ -1,5 +1,12 @@
 # Platform compatibility & setup
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Configuration](configuration.md)
+- [Feature overview](../features/overview.md)
+- [Ad Network Manager](../features/ad-network.md)
+
 This project targets **Android** (the app) and is built with the existing
 Gradle/AGP setup. The storage layer itself is plain Java + Android SQLite and
 runs on the device.
@@ -15,7 +22,7 @@ runs on the device.
 
 ## Build environment
 
-- JDK 21, Gradle wrapper 9.0.0, Android Gradle Plugin 8.5.2.
+- A JDK supported by Gradle 9 (the test environment used JDK 21), Gradle wrapper 9.0.0, Android Gradle Plugin 8.5.2, Java source/target 11.
 - `local.properties` must point at an Android SDK
   (`sdk.dir=/path/to/android-sdk`). It is git-ignored and intentionally **not**
   part of the update archive.
@@ -82,4 +89,4 @@ this change.
 - HTTPS client pages require `public_base_url` to be an HTTPS URL for the ad server, or the browser blocks `/sdk.js` as mixed content. The page's own CSP must also allow the ad-server origin in `script-src`, `img-src` and `connect-src`.
 - Ad data is app-private (`files/adnet/adnet.json`, `files/adnet/geo.csv`, `files/adnet/creatives/`) and is not covered by the `/api/v1` data-platform backup format.
 
-See [ad-network.md](ad-network.md).
+See [Ad Network Manager](../features/ad-network.md).

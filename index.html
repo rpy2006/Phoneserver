@@ -1,4 +1,4 @@
-<script src="data/docs.js"></script>
+<script src="web/data/docs.js"></script>
 <script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
 <script src="https://unpkg.com/dompurify@3.0.6/dist/purify.min.js"></script>
 <!DOCTYPE html>
@@ -565,7 +565,7 @@ footer a:hover{color:var(--accent);text-decoration:none}
     <input id="q" type="search" placeholder="Search documentation…" autocomplete="off" aria-label="Search documentation">
     <div id="results" role="listbox"></div>
   </div>
-  <a class="btn-guide" href="guide.html">Guide ↗</a>
+  <a class="btn-guide" href="docs/README.md">Guide ↗</a>
 </header>
 
 <div class="sidebar-backdrop" id="backdrop"></div>
@@ -794,13 +794,21 @@ footer a:hover{color:var(--accent);text-decoration:none}
     <details class="nav-group" data-page="techdocs">
       <summary><svg class="nav-ico" aria-hidden="true"><use href="#i-file"/></svg><span>Technical Documentation</span></summary>
       <ul class="nav-list">
-        <li><a class="nav-link lvl1" href="docs/API.md">API Documentation</a></li>
-        <li><a class="nav-link lvl1" href="docs/architecture.md">Architecture</a></li>
-        <li><a class="nav-link lvl1" href="docs/security.md">Security</a></li>
-        <li><a class="nav-link lvl1" href="docs/storage.md">Storage</a></li>
-        <li><a class="nav-link lvl1" href="docs/testing.md">Testing</a></li>
-        <li><a class="nav-link lvl1" href="docs/ad-network.md">Ad Network</a></li>
-        <li><a class="nav-link lvl1" href="docs/platform-compatibility.md">Platform Compatibility</a></li>
+        <li><a class="nav-link lvl1" href="docs/README.md">Documentation Index</a></li>
+        <li><a class="nav-link lvl1" href="docs/getting-started/installation.md">Installation</a></li>
+        <li><a class="nav-link lvl1" href="docs/getting-started/configuration.md">Configuration</a></li>
+        <li><a class="nav-link lvl1" href="docs/getting-started/email-setup.md">Email Setup</a></li>
+        <li><a class="nav-link lvl1" href="docs/features/overview.md">Features</a></li>
+        <li><a class="nav-link lvl1" href="docs/features/mail.md">Mail Client</a></li>
+        <li><a class="nav-link lvl1" href="docs/features/ad-network.md">Ad Network</a></li>
+        <li><a class="nav-link lvl1" href="docs/architecture/overview.md">Architecture</a></li>
+        <li><a class="nav-link lvl1" href="docs/architecture/storage.md">Storage</a></li>
+        <li><a class="nav-link lvl1" href="docs/api/http-api.md">HTTP API</a></li>
+        <li><a class="nav-link lvl1" href="docs/api/data-api.md">Data API</a></li>
+        <li><a class="nav-link lvl1" href="docs/security/overview.md">Security</a></li>
+        <li><a class="nav-link lvl1" href="docs/security/audit.md">Security Audit</a></li>
+        <li><a class="nav-link lvl1" href="docs/development/testing.md">Testing</a></li>
+        <li><a class="nav-link lvl1" href="docs/changelog.md">Changelog</a></li>
       </ul>
     </details>
 
@@ -2381,12 +2389,14 @@ EXCLUDED ON PURPOSE:
 
 <script>
 document.addEventListener('click', function(e){
-  var a = e.target.closest('a.nav-link[href$=".md"]');
+  var a = e.target.closest('a[href$=".md"], a[href*=".md#"]');
   if(!a) return;
-  e.preventDefault();
   var href = a.getAttribute('href');
+  var cleanHref = href.split('#')[0];
+  if(!/\.md$/.test(cleanHref)) return;
+  e.preventDefault();
   var title = a.textContent.trim();
-  var key = href.split('/').pop().replace('.md','');
+  var key = cleanHref.replace(/^\.\//, '').replace(/\.md$/, '');
   var t = (window.DOCS_DATA && window.DOCS_DATA[key]) ? window.DOCS_DATA[key].content : null;
   if(t && typeof marked !== 'undefined') {
     var html = marked.parse(t);

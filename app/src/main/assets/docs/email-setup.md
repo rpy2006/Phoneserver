@@ -1,5 +1,11 @@
 # Add an email account and set up mail
 
+## Navigation
+
+- [Docs home](index.html)
+- [Mail client](mail.md)
+- [API reference](API.md#7-mail-api-apiv1mail)
+
 PhoneServer connects to an external SMTP/IMAP provider, such as a VPS mail server, cPanel mailbox, or hosted email account. PhoneServer does not publish SMTP or IMAP ports itself and is not a public mail server.
 
 ## Before you start

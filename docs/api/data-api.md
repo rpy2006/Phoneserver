@@ -1,15 +1,23 @@
 # Data & storage API (`/api/v1`)
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [HTTP API](http-api.md)
+- [OpenAPI document](openapi.json)
+- [Mail client](../features/mail.md)
+- [Storage layout](../architecture/storage.md)
+
 The local SQL + file storage platform is exposed as a versioned JSON API. This
 document is the complete reference. It is self-contained; the in-app
 **ApiDocsActivity** screen shows a short summary.
 
-- **Base URL:** `http://<device-ip>:8080/api/v1`
+- **Base URL:** `http://<device-ip>:8080/api/v1`, or `https://<device-ip>:8443/api/v1` when the HTTPS listener is enabled with a trusted certificate.
 - **Content type:** requests and responses are `application/json; charset=utf-8`
   unless a binary resource is streamed.
 - **Errors:** `{"error":"<message>","status":<code>}` with a meaningful HTTP
   status code.
-- **Port:** fixed at `8080` (`ServerService.PORT`).
+- **Ports:** HTTP is fixed at `8080` (`ServerService.PORT`); the optional HTTPS listener defaults to `8443` (`HttpsConfig`).
 
 ---
 
@@ -42,7 +50,8 @@ Authorization: Bearer pst_3f9c…
 Tokens are created in the app (or via `POST /tokens` by an admin). They can be:
 
 - **global** (access every project) or **project-scoped** (one project only);
-- **read-write** or **read-only**.
+- **read-write** or **read-only**;
+- optionally granted the `auth.admin` policy for admin-only routes such as `/system` and policy/token administration.
 
 Only the SHA-256 hash of a token is stored; the plaintext (`pst_` + 64 hex
 characters) is returned **once** at creation and cannot be shown again.
@@ -519,14 +528,15 @@ curl -s -X POST "$BASE/projects/$PID/backups/import?confirm=true" \
   `writable_schema`, selected `PRAGMA`s, explicit transactions).
 - Row results are paginated (`limit`/`offset`) and time-bounded.
 - This is a local-first store, **not** a hardened multi-tenant SQL service. See
-  [security.md](security.md) for the full threat model and production
+  [security overview](../security/overview.md) for the current controls and
+  [security audit](../security/audit.md) for the full findings and production
   requirements (notably: put it behind HTTPS/VPN for any non-LAN access).
 
 ---
 
 ## 6. Ad Network API (port 8090)
 
-The optional ad network is a **separate origin** with its own API and auth. It is documented in full in [ad-network.md](ad-network.md); this section is the endpoint index.
+The optional ad network is a **separate origin** with its own API and auth. It is documented in full in [Ad Network Manager](../features/ad-network.md); this section is the endpoint index.
 
 Base URL: `http://<phone-ip>:8090`. Management endpoints use `Authorization: Bearer <session-token>` from `/api/auth/login` (12-hour sessions). Public delivery has no account auth and is constrained by placement keys, site domains, signed tokens and rate limits.
 
@@ -581,7 +591,7 @@ Nothing is shared: different port, encrypted JSON data store, files, auth and ra
 
 ## 7. Mail API (`/api/v1/mail`)
 
-The mail API connects PhoneServer to an external SMTP/IMAP provider. PhoneServer is not a public mail server. Account passwords are encrypted with the Android Keystore and are never returned in API responses. For app setup steps and provider settings, see [email-setup.md](email-setup.md).
+The mail API connects PhoneServer to an external SMTP/IMAP provider. PhoneServer is not a public mail server. Account passwords are encrypted with the Android Keystore and are never returned in API responses. For app setup steps and provider settings, see [Email setup](../getting-started/email-setup.md).
 
 ### 7.1 Permissions
 
@@ -641,4 +651,4 @@ The mail API connects PhoneServer to an external SMTP/IMAP provider. PhoneServer
 }
 ```
 
-See [mail.md](mail.md) for the full client/security notes.
+See [Mail client](../features/mail.md) for the full client/security notes.

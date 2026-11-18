@@ -1,5 +1,13 @@
 # PhoneServer Architecture
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Feature overview](../features/overview.md)
+- [Storage layout](storage.md)
+- [Security overview](../security/overview.md)
+- [Testing](../development/testing.md)
+
 This document describes the final, reorganised structure of the PhoneServer
 Android app. It is the source of truth for where code lives and which layers
 may depend on which.
@@ -315,8 +323,8 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 Last verification after the security phase:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 144 tests, 0 failures, 49 skipped.
-  49 Robolectric tests are skipped on this aarch64 host by
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 157 tests, 0 failures, 0 errors, 50 skipped.
+  Some Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
 - `assembleDebug` — see the build log; the APK packages the manifest,
   resources and dex.

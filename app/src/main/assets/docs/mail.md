@@ -1,5 +1,11 @@
 # Mail client and SMTP/IMAP integration
 
+## Navigation
+
+- [Docs home](index.html)
+- [Email setup](email-setup.md)
+- [API reference](API.md#7-mail-api-apiv1mail)
+
 PhoneServer's mail feature connects to an external mail provider, usually a VPS mail server or a hosted mailbox that you control. It does not publish SMTP or IMAP ports itself and must not be described as a public mail server.
 
 For step-by-step account creation, provider settings, VPS setup, and troubleshooting, see [email-setup.md](email-setup.md).

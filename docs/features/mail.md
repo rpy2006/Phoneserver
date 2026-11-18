@@ -1,8 +1,16 @@
 # Mail client and SMTP/IMAP integration
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Email setup](../getting-started/email-setup.md)
+- [Data API](../api/data-api.md)
+- [Security overview](../security/overview.md)
+- [Feature overview](overview.md)
+
 PhoneServer's mail feature connects to an external mail provider, usually a VPS mail server or a hosted mailbox that you control. It does not publish SMTP or IMAP ports itself and must not be described as a public mail server.
 
-For step-by-step account creation, provider settings, VPS setup, and troubleshooting, see [email-setup.md](email-setup.md).
+For step-by-step account creation, provider settings, VPS setup, and troubleshooting, see [Email setup](../getting-started/email-setup.md).
 
 ## Supported settings
 
@@ -39,4 +47,4 @@ Downloaded message bodies are capped at 20 MB. Attachments are capped at 5 MB ea
 
 ## API reference
 
-See [API.md](API.md#7-mail-api-apiv1mail) for the endpoint table and request bodies.
+See [Mail API](../api/data-api.md#7-mail-api-apiv1mail) for the endpoint table and request bodies.

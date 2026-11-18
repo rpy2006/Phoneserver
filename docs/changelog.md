@@ -1,5 +1,11 @@
 # Changelog
 
+## Navigation
+
+- [Documentation index](README.md)
+- [Root README](../README.md)
+- [Testing](development/testing.md)
+
 ## Phase 5
 - Added external SMTP/IMAP mail accounts with TLS/STARTTLS, Android Keystore credential protection, and encrypted local mail data.
 - Added Inbox/Sent/Drafts mail screens, compose with attachments, message detail, attachment sharing, and local search.

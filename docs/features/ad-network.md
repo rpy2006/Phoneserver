@@ -1,5 +1,13 @@
 # Ad Network Manager
 
+## Navigation
+
+- [Documentation index](../README.md)
+- [Feature overview](overview.md)
+- [Architecture overview](../architecture/overview.md)
+- [Data API](../api/data-api.md)
+- [Security overview](../security/overview.md)
+
 The Ad Network Manager is an **optional**, self-hosted advertising server that
 runs inside PhoneServer. It is a separate HTTP server on its **own port**
 (`8090`), with its own encrypted JSON data store, its own files and its own
@@ -570,7 +578,6 @@ or campaign identities.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/admin/overview` | Platform totals |
-| `GET` | `/api/admin/audit?limit=50` | Recent administrator activity (maximum 200) |
 | `GET` | `/api/admin/fraud` | Invalid-traffic summary and flagged sites |
 | `GET` | `/api/admin/settings` | Current platform settings |
 | `PUT` | `/api/admin/settings` | Update platform settings |
@@ -662,8 +669,9 @@ not runtime data.
 - **Conversions.** Pixels require a valid click token; postbacks are HMAC-signed
   with a per-advertiser key, transaction ids are deduplicated, and only admins
   can move a conversion between invalid and valid states.
-- **Known limitations.** HTTP is plaintext on the LAN; there is no TLS in the
-  app, no email verification/password reset, no CAPTCHA, and no guarantee that
+- **Known limitations.** The ad server speaks plaintext HTTP on the LAN; the
+  main app has a separate optional HTTPS listener on `8443`, but the ad server
+  itself has no TLS. There is no email verification/password reset, no CAPTCHA, and no guarantee that
   a determined attacker cannot generate invalid traffic. Treat it as a
   small/private ad server, not an ad exchange. For anything beyond a trusted
   network, terminate TLS at a reverse proxy and keep port 8090 off the public
@@ -736,7 +744,9 @@ Common causes:
 | `assets/adnet/dashboard.css` | Dashboard styles, responsive drawer navigation |
 | `assets/adnet/sdk.js` | Public embed script and viewability beacon |
 
-Related documentation: [API.md](API.md) (port 8080 data API),
-[architecture.md](architecture.md), [storage.md](storage.md),
-[security.md](security.md), [testing.md](testing.md) and
-[platform-compatibility.md](platform-compatibility.md).
+Related documentation: [Data API](../api/data-api.md) (port 8080 data API),
+[architecture overview](../architecture/overview.md),
+[storage layout](../architecture/storage.md),
+[security overview](../security/overview.md),
+[testing](../development/testing.md) and
+[installation](../getting-started/installation.md).
