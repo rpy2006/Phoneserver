@@ -3,7 +3,7 @@
   "info": {
     "title": "PhoneServer API",
     "version": "1.0.0",
-    "description": "Implemented local data, storage, token, and mail APIs served by PhoneServer on port 8080."
+    "description": "Implemented local data, storage, token, mail, and system-management APIs served by PhoneServer on port 8080."
   },
   "servers": [
     {
@@ -44,13 +44,768 @@
     },
     "/system": {
       "get": {
-        "summary": "System statistics (admin only)",
+        "summary": "Legacy system statistics (admin only)",
         "responses": {
           "200": {
             "description": "Statistics"
           },
           "403": {
             "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/system/monitor": {
+      "get": {
+        "operationId": "getSystemMonitor",
+        "summary": "Live server and resource monitor (system.read or admin)",
+        "responses": {
+          "200": {
+            "description": "Current server metrics and content counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemMonitor"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/diagnostics": {
+      "get": {
+        "operationId": "getSystemDiagnostics",
+        "summary": "Server, storage, security and health diagnostics",
+        "responses": {
+          "200": {
+            "description": "Diagnostics snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemDiagnostics"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/automation": {
+      "get": {
+        "operationId": "getAutomationSettings",
+        "summary": "Read automation settings",
+        "responses": {
+          "200": {
+            "description": "Automation settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAutomationSettings",
+        "summary": "Update automation settings (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated automation settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/notifications": {
+      "get": {
+        "operationId": "getNotificationSettings",
+        "summary": "Read notification settings and channel availability",
+        "responses": {
+          "200": {
+            "description": "Notification settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateNotificationSettings",
+        "summary": "Update notification settings (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated notification settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/tasks": {
+      "get": {
+        "operationId": "listSystemTasks",
+        "summary": "List scheduled tasks",
+        "responses": {
+          "200": {
+            "description": "Scheduled tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ScheduledTask"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSystemTask",
+        "summary": "Create a scheduled task (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledTask"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTask"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/tasks/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getSystemTask",
+        "summary": "Read a scheduled task",
+        "responses": {
+          "200": {
+            "description": "Scheduled task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateSystemTask",
+        "summary": "Update a scheduled task (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledTask"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSystemTask",
+        "summary": "Delete a scheduled task (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/tasks/{id}/run": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "runSystemTask",
+        "summary": "Run a task now (admin only)",
+        "responses": {
+          "200": {
+            "description": "Real task execution result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/tasks/{id}/pause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "pauseSystemTask",
+        "summary": "Disable a scheduled task (admin only)",
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/tasks/{id}/resume": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "resumeSystemTask",
+        "summary": "Re-enable and reschedule a task (admin only)",
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/tasks/{id}/history": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getSystemTaskHistory",
+        "summary": "Read bounded task execution history",
+        "responses": {
+          "200": {
+            "description": "Task history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskHistoryEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/webhooks": {
+      "get": {
+        "operationId": "listSystemWebhooks",
+        "summary": "List webhook targets (secrets redacted)",
+        "responses": {
+          "200": {
+            "description": "Webhook configurations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhooks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WebhookConfig"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSystemWebhook",
+        "summary": "Create a webhook target (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created webhook",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/webhooks/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getSystemWebhook",
+        "summary": "Read a webhook target (secret redacted)",
+        "responses": {
+          "200": {
+            "description": "Webhook configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfig"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateSystemWebhook",
+        "summary": "Update a webhook target (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated webhook",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfig"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSystemWebhook",
+        "summary": "Delete a webhook target (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/webhooks/{id}/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "testSystemWebhook",
+        "summary": "Deliver a test event and return the real result (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/system/start": {
+      "post": {
+        "operationId": "startServer",
+        "summary": "Start the foreground server service (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/stop": {
+      "post": {
+        "operationId": "stopServer",
+        "summary": "Stop the foreground server service (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/restart": {
+      "post": {
+        "operationId": "restartServer",
+        "summary": "Stop and start the server service (admin only)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionResult"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/logs": {
+      "get": {
+        "operationId": "getSystemLogs",
+        "summary": "Read sanitized unified system logs",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by event source"
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by event level"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sanitized log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemLogEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/maintenance": {
+      "get": {
+        "operationId": "getMaintenanceStatus",
+        "summary": "Inspect maintenance candidates and log size",
+        "responses": {
+          "200": {
+            "description": "Maintenance snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/maintenance/clean": {
+      "post": {
+        "operationId": "cleanSystemFiles",
+        "summary": "Clean app view-cache files (admin only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "confirm"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cleanup result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/maintenance/verify-backups": {
+      "post": {
+        "operationId": "verifySystemBackups",
+        "summary": "Validate recent backups for every project (admin only)",
+        "responses": {
+          "200": {
+            "description": "Backup verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -568,6 +1323,487 @@
     }
   },
   "components": {
+    "parameters": {
+      "Id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Forbidden": {
+        "description": "Authentication or authorization failed"
+      },
+      "BadRequest": {
+        "description": "Invalid or missing request field"
+      },
+      "NotFound": {
+        "description": "Resource not found"
+      },
+      "ActionResult": {
+        "description": "Action completed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ActionResult"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ActionResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SystemMonitor": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Real RAM/storage values and app-process CPU only"
+          },
+          "content": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
+          },
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            }
+          }
+        }
+      },
+      "SystemDiagnostics": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "appVersion": {
+            "type": "string"
+          },
+          "apiLevel": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "security": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "automation": {
+            "$ref": "#/components/schemas/AutomationSettings"
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "content": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
+          }
+        }
+      },
+      "HealthCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "AutomationSettings": {
+        "type": "object",
+        "properties": {
+          "autoRestartEnabled": {
+            "type": "boolean"
+          },
+          "watchdogIntervalMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "startOnBoot": {
+            "type": "boolean"
+          },
+          "notifyServerFailures": {
+            "type": "boolean"
+          },
+          "notifyServerRecovery": {
+            "type": "boolean"
+          },
+          "notifyTaskResults": {
+            "type": "boolean"
+          },
+          "notifyStorageWarnings": {
+            "type": "boolean"
+          },
+          "storageWarningMb": {
+            "type": "integer",
+            "minimum": 10
+          },
+          "logRetentionDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        },
+        "additionalProperties": true
+      },
+      "NotificationSettings": {
+        "type": "object",
+        "properties": {
+          "notificationsEnabled": {
+            "type": "boolean"
+          },
+          "notifyServerFailures": {
+            "type": "boolean"
+          },
+          "notifyServerRecovery": {
+            "type": "boolean"
+          },
+          "notifyTaskResults": {
+            "type": "boolean"
+          },
+          "notifyStorageWarnings": {
+            "type": "boolean"
+          },
+          "storageWarningMb": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ScheduledTask": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "webhookId": {
+            "type": "string"
+          },
+          "includeFiles": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scheduleType": {
+            "type": "string",
+            "enum": [
+              "recurring",
+              "once"
+            ]
+          },
+          "intervalMinutes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "runAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "retryDelayMinutes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "currentAttempt": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastRunAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nextRunAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastStatus": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "TaskHistoryEntry": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "retryScheduled": {
+            "type": "boolean"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "type": "integer"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskRunResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "retryScheduled": {
+            "type": "boolean"
+          },
+          "nextRunAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "WebhookConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH"
+            ]
+          },
+          "headersJson": {
+            "type": "string",
+            "description": "Write-only JSON object of custom headers"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Write-only signing secret; omitted from responses"
+          },
+          "hasSecret": {
+            "type": "boolean"
+          },
+          "hasHeaders": {
+            "type": "boolean"
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastDeliveryAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastStatus": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "failureCount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SystemLogEntry": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MaintenanceReport": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tempFilesCount": {
+            "type": "integer"
+          },
+          "tempBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "removedFiles": {
+            "type": "integer"
+          },
+          "removedBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "jsonFilesChecked": {
+            "type": "integer"
+          },
+          "backupsChecked": {
+            "type": "integer"
+          },
+          "validBackups": {
+            "type": "integer"
+          },
+          "invalidBackups": {
+            "type": "integer"
+          },
+          "logBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issueCount": {
+            "type": "integer"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",

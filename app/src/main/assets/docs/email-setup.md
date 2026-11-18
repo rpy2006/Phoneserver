@@ -2,9 +2,11 @@
 
 ## Navigation
 
-- [Docs home](index.html)
-- [Mail client](mail.md)
-- [API reference](API.md#7-mail-api-apiv1mail)
+- [Documentation index](../README.md)
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- [Mail client](../features/mail.md)
+- [Mail API](../api/data-api.md)
 
 PhoneServer connects to an external SMTP/IMAP provider, such as a VPS mail server, cPanel mailbox, or hosted email account. PhoneServer does not publish SMTP or IMAP ports itself and is not a public mail server.
 
@@ -107,7 +109,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   http://<device-ip>:8080/api/v1/mail/accounts
 ```
 
-Passwords are encrypted with the Android Keystore, never returned by mail API responses, and never written to logs. See [API.md](API.md#7-mail-api-apiv1mail) for the complete mail endpoint reference.
+Passwords are encrypted with the Android Keystore, never returned by mail API responses, and never written to logs. See [Mail API](../api/data-api.md#7-mail-api-apiv1mail) for the complete mail endpoint reference.
 
 ## Troubleshooting
 

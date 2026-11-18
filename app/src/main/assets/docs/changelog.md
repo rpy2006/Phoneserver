@@ -2,9 +2,15 @@
 
 ## Navigation
 
-- [Docs home](index.html)
-- [Mail client](mail.md)
-- [Email setup](email-setup.md)
+- [Documentation index](README.md)
+- [Root README](../README.md)
+- [Testing](development/testing.md)
+
+## Phase 6
+- Added a System Management screen and `/api/v1/system/*` routes for live monitoring, automation, diagnostics, logs, maintenance and server lifecycle control.
+- Added one-time and recurring scheduled tasks with bounded retries, persisted execution history and failure/recovery notifications.
+- Added configurable webhook methods, headers, timeouts and attempts, with signed delivery, secret redaction and expanded event coverage.
+- Added watchdog auto-restart, boot start, storage warnings, notification channels, and explicit confirmation for temporary-file cleanup.
 
 ## Phase 5
 - Added external SMTP/IMAP mail accounts with TLS/STARTTLS, Android Keystore credential protection, and encrypted local mail data.

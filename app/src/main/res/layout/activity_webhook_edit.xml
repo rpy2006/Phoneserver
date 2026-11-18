@@ -95,6 +95,45 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:text="HTTP method"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_method"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="POST"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Additional headers (JSON object, optional)"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_headers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="{&quot;X-Source&quot;:&quot;PhoneServer&quot;}"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="Signing secret (optional)"
                     android:textColor="@color/home_text_secondary"
                     android:textSize="12sp"
@@ -155,6 +194,13 @@
                 <CheckBox android:id="@+id/check_backup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup completed" android:textColor="@color/home_text_primary" />
                 <CheckBox android:id="@+id/check_task_completed" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Scheduled task completed" android:textColor="@color/home_text_primary" />
                 <CheckBox android:id="@+id/check_task_failed" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Scheduled task failed" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_file_downloaded" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="File downloaded" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_share_created" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Share created" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_server_failure" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Server failure" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_server_recovered" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Server recovered" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_ad_state" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ad network state changed" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_storage_warning" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Storage warning" android:textColor="@color/home_text_primary" />
+                <CheckBox android:id="@+id/check_maintenance" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Maintenance completed" android:textColor="@color/home_text_primary" />
 
                 <TextView
                     android:id="@+id/status_text"

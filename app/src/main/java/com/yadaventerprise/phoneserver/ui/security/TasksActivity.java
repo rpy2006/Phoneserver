@@ -51,10 +51,13 @@ public class TasksActivity extends AppCompatActivity {
             String action = task.isBackup() ? "Project backup" : "Webhook delivery";
             String next = task.nextRunAt == 0 ? "not scheduled"
                     : format.format(new Date(task.nextRunAt));
+            String schedule = task.isOneTime()
+                    ? "one time · next " + next
+                    : "every " + task.intervalMinutes + " min · next " + next;
             String status = task.enabled ? "Enabled" : "Disabled";
             if (!task.lastStatus.isEmpty()) status += " · last " + task.lastStatus;
-            row.setText(task.name + "\n" + action + " · every " + task.intervalMinutes + " min"
-                    + "\n" + status + " · next " + next);
+            row.setText(task.name + "\n" + action + " · " + schedule
+                    + "\n" + status + " · retries " + task.maxAttempts);
             row.setTypeface(Typeface.DEFAULT);
             row.setLineSpacing(dp(2), 1f);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(

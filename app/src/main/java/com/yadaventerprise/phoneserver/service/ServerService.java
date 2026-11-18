@@ -11,6 +11,10 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import com.yadaventerprise.phoneserver.ads.AdNetworkManager;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
+import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettings;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettingsStore;
+import com.yadaventerprise.phoneserver.data.system.SystemEventStore;
 import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.network.http.SimpleHttpServer;
 import com.yadaventerprise.phoneserver.network.tls.HttpsConfig;
@@ -21,6 +25,7 @@ import com.yadaventerprise.phoneserver.network.tls.TlsIdentity;
 import com.yadaventerprise.phoneserver.ui.main.MainActivity;
 import com.yadaventerprise.phoneserver.util.IconSwitcher;
 import com.yadaventerprise.phoneserver.util.NetworkUtils;
+import java.io.File;
 import javax.net.ssl.SSLContext;
 import org.json.JSONObject;
 
@@ -64,60 +69,118 @@ public class ServerService extends Service {
     }
 
     private void startServer() {
-        com.yadaventerprise.phoneserver.data.storage.ContentStore.setServerDesiredRunning(this, true);
-        if (server == null) {
-            server = new SimpleHttpServer(this, PORT);
-        }
+        ContentStore.setServerDesiredRunning(this, true);
+        if (server == null) server = new SimpleHttpServer(this, PORT);
+        boolean started = false;
+        String error = "";
         if (!server.isRunning()) {
-            server.start();
-            startTimeMillis = System.currentTimeMillis();
-            ServerStats.get().reset();
-            ServerStats.get().logServerStarted();
-            IconSwitcher.setOnline(this, true);
-            JSONObject data = new JSONObject();
-            try {
-                data.put("port", PORT);
-                data.put("https", HttpsConfigStore.get(this).get().enabled);
-            } catch (Exception ignored) {
+            started = server.start();
+            error = server.getLastStartError();
+            if (started) {
+                startTimeMillis = System.currentTimeMillis();
+                ServerStats.get().reset();
+                ServerStats.get().logServerStarted();
+                IconSwitcher.setOnline(this, true);
+                JSONObject data = new JSONObject();
+                try {
+                    data.put("port", PORT);
+                    data.put("https", HttpsConfigStore.get(this).get().enabled);
+                } catch (Exception ignored) {
+                }
+                WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_SERVER_STARTED, data);
             }
-            WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_SERVER_STARTED, data);
+        } else {
+            started = true;
         }
-        startHttpsIfEnabled();
+        boolean httpsStarted = startHttpsIfEnabled();
+        if (!started && !httpsStarted) {
+            reportStartFailure(error.isEmpty() ? "The server could not bind to its port." : error);
+        } else if (started) {
+            reportRecoveryIfNeeded();
+            warnIfStorageLow();
+        }
         AdNetworkManager.startIfEnabled(this);
         BackupScheduler.scheduleNext(this);
         ScheduledTaskScheduler.scheduleNext(this);
         ServerWatchdog.scheduleNext(this);
     }
 
-    private void startHttpsIfEnabled() {
+    private boolean startHttpsIfEnabled() {
         HttpsConfig config = HttpsConfigStore.get(this).get();
         if (!config.enabled) {
             if (secureServer != null) {
                 secureServer.stop();
                 secureServer = null;
             }
-            return;
+            return false;
         }
-        if (secureServer != null && secureServer.isRunning()) return;
+        if (secureServer != null && secureServer.isRunning()) return true;
         try {
             TlsIdentity identity = TlsCertificateStore.get(this).getOrCreate(this, config);
             SSLContext sslContext = TlsContextFactory.create(identity);
-            secureServer = new SimpleHttpServer(this, config.port, sslContext);
-            secureServer.start();
+            SimpleHttpServer candidate = new SimpleHttpServer(this, config.port, sslContext);
+            if (!candidate.start()) {
+                throw new IllegalStateException(candidate.getLastStartError());
+            }
+            secureServer = candidate;
+            return true;
         } catch (Exception e) {
             android.util.Log.e("ServerService", "could not start HTTPS server", e);
             secureServer = null;
+            return false;
         }
+    }
+
+    private void reportStartFailure(String error) {
+        AutomationSettings settings = AutomationSettingsStore.get(this).get();
+        if (!settings.serverFailureActive) {
+            settings.serverFailureActive = true;
+            AutomationSettingsStore.get(this).save(settings);
+        }
+        SystemEventStore.get(this).error("server", "Server failed to start: " + error);
+        JSONObject data = new JSONObject();
+        try {
+            data.put("error", error);
+            data.put("port", PORT);
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_SERVER_FAILURE, data);
+        SystemNotifier.serverFailure(this, error);
+    }
+
+    private void reportRecoveryIfNeeded() {
+        AutomationSettings settings = AutomationSettingsStore.get(this).get();
+        if (!settings.serverFailureActive) return;
+        settings.serverFailureActive = false;
+        AutomationSettingsStore.get(this).save(settings);
+        SystemEventStore.get(this).info("server", "Server recovered and is listening again");
+        WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_SERVER_RECOVERED, new JSONObject());
+        SystemNotifier.serverRecovered(this);
+    }
+
+    private void warnIfStorageLow() {
+        AutomationSettings settings = AutomationSettingsStore.get(this).get();
+        if (!settings.notifyStorageWarnings) return;
+        File root = ContentStore.getDataRoot(this);
+        long threshold = Math.max(10, settings.storageWarningMb) * 1024L * 1024L;
+        long free = root.getUsableSpace();
+        if (free <= 0 || free > threshold) return;
+        SystemEventStore.get(this).warn("storage", "Low storage: " + ServerStats.formatBytes(free) + " free");
+        JSONObject data = new JSONObject();
+        try {
+            data.put("freeBytes", free);
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_STORAGE_WARNING, data);
+        SystemNotifier.storageWarning(this, free);
     }
 
     private void stopServer(boolean userInitiated) {
         boolean wasRunning = isServerRunning();
-        AdNetworkManager.stop();
-        if (server != null) {
-            server.stop();
-        }
+        AdNetworkManager.stop(this);
+        if (server != null) server.stopGracefully(userInitiated ? 1500L : 0L);
         if (secureServer != null) {
-            secureServer.stop();
+            secureServer.stopGracefully(userInitiated ? 1500L : 0L);
             secureServer = null;
         }
         startTimeMillis = 0;
@@ -125,6 +188,8 @@ public class ServerService extends Service {
         IconSwitcher.setOnline(this, false);
         if (userInitiated) ServerWatchdog.cancel(this);
         if (wasRunning) {
+            SystemEventStore.get(this).info("server", userInitiated
+                    ? "Server stopped by user" : "Server stopped for restart");
             JSONObject data = new JSONObject();
             try {
                 data.put("userInitiated", userInitiated);

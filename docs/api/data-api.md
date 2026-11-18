@@ -51,7 +51,7 @@ Tokens are created in the app (or via `POST /tokens` by an admin). They can be:
 
 - **global** (access every project) or **project-scoped** (one project only);
 - **read-write** or **read-only**;
-- optionally granted the `auth.admin` policy for admin-only routes such as `/system` and policy/token administration.
+- optionally granted the `admin` role for admin-only routes such as `/system` and policy/token administration.
 
 Only the SHA-256 hash of a token is stored; the plaintext (`pst_` + 64 hex
 characters) is returned **once** at creation and cannot be shown again.
@@ -122,6 +122,47 @@ Returns the server name/version and the list of endpoint patterns.
   "apiVersion": "v1"
 }
 ```
+
+#### System management (`system.read` or admin)
+
+The sub-routes under `/system` expose real device/server state and management
+actions. Reads require the `system.read` permission or the admin password; every
+mutation requires the admin password or an admin token. CPU is reported as
+**app-process CPU only** — no system-wide CPU percentage is invented.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/system/monitor` | Live server/resource summary, content counts and recent activity |
+| `GET` | `/system/diagnostics` | Server, resource, content, security and health-check snapshot |
+| `GET/PATCH` | `/system/automation` | Watchdog, boot start, notification and retention settings |
+| `GET/PATCH` | `/system/notifications` | Notification channel availability and alert preferences |
+| `GET/POST` | `/system/tasks` | List or create scheduled backup/webhook tasks |
+| `GET/PATCH/DELETE` | `/system/tasks/{id}` | Inspect, update or remove a task |
+| `POST` | `/system/tasks/{id}/run` | Run a task now; returns success, retry and timing state |
+| `POST` | `/system/tasks/{id}/pause` | Disable a task |
+| `POST` | `/system/tasks/{id}/resume` | Re-enable and reschedule a task |
+| `GET` | `/system/tasks/{id}/history` | Bounded execution history |
+| `GET/POST` | `/system/webhooks` | List or create webhook targets |
+| `GET/PATCH/DELETE` | `/system/webhooks/{id}` | Inspect or change a webhook |
+| `POST` | `/system/webhooks/{id}/test` | Deliver a test event and return the real result |
+| `GET` | `/system/logs` | Unified system/access/security/webhook/task log (`source`, `level`, `search`, `limit`) |
+| `GET` | `/system/maintenance` | Inspect temp files, JSON configs, backups and log size |
+| `POST` | `/system/maintenance/clean` | Remove only app view-cache files; requires `{"confirm":true}` |
+| `POST` | `/system/maintenance/verify-backups` | Validate recent backups for every project |
+| `POST` | `/system/start` | Start the foreground server service |
+| `POST` | `/system/stop` | Stop the foreground server service |
+| `POST` | `/system/restart` | Stop and start the server service |
+
+Task objects support `scheduleType: "recurring" | "once"`, `runAt` for one-time
+execution, `maxAttempts`, `retryDelayMinutes`, and the same backup/webhook
+actions as the in-app task editor. Webhook objects support `method`,
+`headersJson`, `timeoutSeconds`, `maxAttempts` and event subscriptions. Webhook
+`secret` and header values are **write-only**: responses return `hasSecret` /
+`hasHeaders`, and omitting them on `PATCH` preserves the saved values.
+
+System events, task history, webhook history and access/security logs are
+sanitized before display or API output so tokens, passwords and Authorization
+headers are redacted.
 
 ### 2.4 Tokens (admin only)
 

@@ -39,6 +39,20 @@ The `/api/v1` API exposes projects, databases, files, backups, tokens, usage sta
 
 See [Storage layout](../architecture/storage.md).
 
+## System management
+
+The **System Management** screen and `/api/v1/system/*` routes report live server
+and resource state, schedule automation, run diagnostics, inspect a unified
+system log, verify backups, clean only app view-cache files, and start/stop the
+foreground server. Monitoring uses real `ServerStats`, `DeviceStats`, storage and
+uptime values; app CPU is explicitly reported as app-process CPU because Android
+does not expose system-wide CPU without elevated privileges.
+
+Notification channels cover server failures/recovery, task results, low storage
+and maintenance completion. Watchdog auto-restart and boot start honor Android
+background limits and are stored in app-private JSON. See
+[Data API](../api/data-api.md#system-management-systemread-or-admin) for the API.
+
 ## Mail
 
 The mail feature is a client for an external SMTP/IMAP provider. It supports multiple accounts, TLS/STARTTLS, password/app-password login, inbox/sent/drafts folders, attachments, local search, and a REST API. It does not publish SMTP or IMAP ports.

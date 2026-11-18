@@ -5,6 +5,8 @@ import org.json.JSONObject;
 public class ScheduledTask {
     public static final String ACTION_BACKUP = "backup";
     public static final String ACTION_WEBHOOK = "webhook";
+    public static final String SCHEDULE_RECURRING = "recurring";
+    public static final String SCHEDULE_ONCE = "once";
 
     public String id = "";
     public String name = "";
@@ -13,7 +15,12 @@ public class ScheduledTask {
     public String webhookId = "";
     public boolean includeFiles = true;
     public boolean enabled = true;
+    public String scheduleType = SCHEDULE_RECURRING;
     public int intervalMinutes = 1440;
+    public long runAt;
+    public int maxAttempts = 1;
+    public int retryDelayMinutes = 5;
+    public int currentAttempt;
     public long createdAt;
     public long lastRunAt;
     public long nextRunAt;
@@ -29,6 +36,15 @@ public class ScheduledTask {
         return ACTION_WEBHOOK.equals(action);
     }
 
+    public boolean isOneTime() {
+        return SCHEDULE_ONCE.equals(scheduleType);
+    }
+
+    public long computeNextRunAt(long now) {
+        if (isOneTime()) return runAt > 0 ? runAt : now;
+        return now + Math.max(1, intervalMinutes) * 60_000L;
+    }
+
     public JSONObject toJson() throws Exception {
         JSONObject json = new JSONObject();
         json.put("id", id);
@@ -38,7 +54,12 @@ public class ScheduledTask {
         json.put("webhookId", webhookId);
         json.put("includeFiles", includeFiles);
         json.put("enabled", enabled);
+        json.put("scheduleType", scheduleType);
         json.put("intervalMinutes", intervalMinutes);
+        json.put("runAt", runAt);
+        json.put("maxAttempts", maxAttempts);
+        json.put("retryDelayMinutes", retryDelayMinutes);
+        json.put("currentAttempt", currentAttempt);
         json.put("createdAt", createdAt);
         json.put("lastRunAt", lastRunAt);
         json.put("nextRunAt", nextRunAt);
@@ -57,7 +78,13 @@ public class ScheduledTask {
         task.webhookId = json.optString("webhookId", "");
         task.includeFiles = json.optBoolean("includeFiles", true);
         task.enabled = json.optBoolean("enabled", true);
+        task.scheduleType = SCHEDULE_ONCE.equalsIgnoreCase(json.optString("scheduleType", ""))
+                ? SCHEDULE_ONCE : SCHEDULE_RECURRING;
         task.intervalMinutes = Math.max(1, json.optInt("intervalMinutes", 1440));
+        task.runAt = json.optLong("runAt", 0);
+        task.maxAttempts = Math.max(1, json.optInt("maxAttempts", 1));
+        task.retryDelayMinutes = Math.max(1, json.optInt("retryDelayMinutes", 5));
+        task.currentAttempt = Math.max(0, json.optInt("currentAttempt", 0));
         task.createdAt = json.optLong("createdAt", 0);
         task.lastRunAt = json.optLong("lastRunAt", 0);
         task.nextRunAt = json.optLong("nextRunAt", 0);
@@ -76,7 +103,12 @@ public class ScheduledTask {
         copy.webhookId = source.webhookId;
         copy.includeFiles = source.includeFiles;
         copy.enabled = source.enabled;
+        copy.scheduleType = source.scheduleType;
         copy.intervalMinutes = source.intervalMinutes;
+        copy.runAt = source.runAt;
+        copy.maxAttempts = source.maxAttempts;
+        copy.retryDelayMinutes = source.retryDelayMinutes;
+        copy.currentAttempt = source.currentAttempt;
         copy.createdAt = source.createdAt;
         copy.lastRunAt = source.lastRunAt;
         copy.nextRunAt = source.nextRunAt;

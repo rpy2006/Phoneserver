@@ -173,8 +173,12 @@ public final class DataApi {
             return;
         }
         if (head.equals("system")) {
-            requireMethod(method, "GET");
-            sendSystem(context, req, out, auth);
+            if (parts.size() == 1) {
+                requireMethod(method, "GET");
+                sendSystem(context, req, out, auth);
+            } else {
+                SystemApi.handle(context, req, out, auth, parts);
+            }
             return;
         }
         if (head.equals("tokens")) {
@@ -380,6 +384,21 @@ public final class DataApi {
         JSONArray endpoints = new JSONArray();
         endpoints.put("GET  " + BASE + "/health");
         endpoints.put("GET  " + BASE + "/system");
+        endpoints.put("GET " + BASE + "/system/monitor");
+        endpoints.put("GET " + BASE + "/system/diagnostics");
+        endpoints.put("GET/PATCH " + BASE + "/system/automation");
+        endpoints.put("GET/POST " + BASE + "/system/tasks");
+        endpoints.put("GET/PATCH/POST/DELETE " + BASE + "/system/tasks/{id}");
+        endpoints.put("GET/POST " + BASE + "/system/webhooks");
+        endpoints.put("GET/PATCH/DELETE " + BASE + "/system/webhooks/{id}");
+        endpoints.put("POST " + BASE + "/system/webhooks/{id}/test");
+        endpoints.put("POST " + BASE + "/system/start");
+        endpoints.put("POST " + BASE + "/system/stop");
+        endpoints.put("POST " + BASE + "/system/restart");
+        endpoints.put("GET " + BASE + "/system/logs");
+        endpoints.put("GET " + BASE + "/system/maintenance");
+        endpoints.put("POST " + BASE + "/system/maintenance/clean");
+        endpoints.put("POST " + BASE + "/system/maintenance/verify-backups");
         endpoints.put("GET/POST " + BASE + "/projects");
         endpoints.put("GET/PATCH/DELETE " + BASE + "/projects/{id}");
         endpoints.put("GET/POST " + BASE + "/projects/{id}/databases");

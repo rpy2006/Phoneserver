@@ -25,10 +25,12 @@ import com.yadaventerprise.phoneserver.data.sharing.ShareSettingsStore;
 import com.yadaventerprise.phoneserver.data.sharing.ShareStore;
 import com.yadaventerprise.phoneserver.data.sharing.ShareUrlBuilder;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.security.PathGuard;
 import java.io.File;
 import java.text.DateFormat;
 import java.util.Date;
+import org.json.JSONObject;
 
 public class ShareEditActivity extends AppCompatActivity {
 
@@ -393,9 +395,18 @@ public class ShareEditActivity extends AppCompatActivity {
             id = created.link.id;
             currentLink = created.link;
             creating = false;
-            ShareAccessLogStore.get(this).record("created", created.link, 200, "", "", "",
-                    "");
+            ShareAccessLogStore.get(this).record("created", created.link, 200, "", "", "", "");
+            JSONObject hookData = new JSONObject();
+            try {
+                hookData.put("shareId", created.link.id);
+                hookData.put("name", created.link.name);
+                hookData.put("type", created.link.type);
+                hookData.put("permission", created.link.permission);
+            } catch (Exception ignored) {
+            }
+            WebhookDispatcher.emit(this, WebhookDispatcher.EVENT_SHARE_CREATED, hookData);
             screenTitle.setText("Edit Share");
+
             passwordInput.setText("");
             removePassword.setVisibility(created.link.isPasswordProtected()
                     ? View.VISIBLE : View.GONE);

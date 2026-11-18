@@ -83,6 +83,7 @@ public class SimpleHttpServer {
     private ServerSocket serverSocket;
     private Thread acceptThread;
     private volatile boolean running = false;
+    private volatile String lastStartError = "";
 
     public SimpleHttpServer(Context context, int port) {
         this(context, port, null);
@@ -106,8 +107,9 @@ public class SimpleHttpServer {
         return port;
     }
 
-    public synchronized void start() {
-        if (running) return;
+    public synchronized boolean start() {
+        if (running) return true;
+        lastStartError = "";
         try {
             serverSocket = sslContext == null
                     ? new ServerSocket(port)
@@ -116,18 +118,44 @@ public class SimpleHttpServer {
             acceptThread = new Thread(this::acceptLoop, "PhoneServer-Accept");
             acceptThread.start();
             Log.i(TAG, "Server started on port " + port);
+            return true;
         } catch (IOException e) {
+            lastStartError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             Log.e(TAG, "Failed to start server", e);
             running = false;
+            return false;
         }
     }
 
+    public String getLastStartError() {
+        return lastStartError;
+    }
+
+    public int getActiveClientCount() {
+        return MAX_CLIENTS - clientSlots.availablePermits();
+    }
+
     public synchronized void stop() {
+        stopGracefully(0);
+    }
+
+    public synchronized void stopGracefully(long waitMillis) {
         running = false;
         try {
             if (serverSocket != null) serverSocket.close();
         } catch (IOException ignored) {
         }
+        long deadline = System.currentTimeMillis() + Math.max(0, waitMillis);
+        while (waitMillis > 0 && clientSlots.availablePermits() < MAX_CLIENTS
+                && System.currentTimeMillis() < deadline) {
+            try {
+                wait(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        if (acceptThread != null) acceptThread.interrupt();
         Log.i(TAG, "Server stopped");
     }
 
@@ -581,7 +609,7 @@ public class SimpleHttpServer {
         } else if (path.equals("/files")) {
             serveFileListingHtml(out);
         } else if (path.startsWith("/files/")) {
-            serveFile(out, path.substring("/files/".length()));
+            serveFile(out, req, path.substring("/files/".length()));
         } else if (path.startsWith("/api/")) {
             serveCustomApi(out, req.path, req.method);
         } else if (!serveWebsiteAsset(out, path)) {
@@ -877,7 +905,7 @@ public class SimpleHttpServer {
         }
     }
 
-    private void serveFile(OutputStream out, String encodedName) throws IOException {
+    private void serveFile(OutputStream out, Request req, String encodedName) throws IOException {
         String name;
         try {
             name = URLDecoder.decode(encodedName, "UTF-8");
@@ -891,6 +919,15 @@ public class SimpleHttpServer {
         }
         byte[] bytes = readFile(file);
         writeResponse(out, 200, guessMime(file.getName()), bytes);
+        JSONObject data = new JSONObject();
+        try {
+            data.put("name", file.getName());
+            data.put("size", bytes.length);
+            data.put("ip", req == null ? "unknown" : req.remoteIp);
+            data.put("source", "website");
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(appContext, WebhookDispatcher.EVENT_FILE_DOWNLOADED, data);
     }
 
     private void serveCustomApi(OutputStream out, String path, String method) throws IOException {

@@ -11,6 +11,10 @@ public class WebhookConfig {
     public String url = "";
     public String secret = "";
     public boolean enabled = true;
+    public String method = "POST";
+    public String headersJson = "";
+    public int timeoutSeconds = 12;
+    public int maxAttempts = 3;
     public final Set<String> events = new LinkedHashSet<>();
     public long createdAt;
     public long lastDeliveryAt;
@@ -31,6 +35,10 @@ public class WebhookConfig {
         json.put("url", url);
         json.put("secret", secret);
         json.put("enabled", enabled);
+        json.put("method", method);
+        json.put("headersJson", headersJson);
+        json.put("timeoutSeconds", timeoutSeconds);
+        json.put("maxAttempts", maxAttempts);
         JSONArray array = new JSONArray();
         for (String event : events) array.put(event);
         json.put("events", array);
@@ -49,6 +57,11 @@ public class WebhookConfig {
         config.url = json.optString("url", "");
         config.secret = json.optString("secret", "");
         config.enabled = json.optBoolean("enabled", true);
+        config.method = json.optString("method", "POST");
+        if (config.method.trim().isEmpty()) config.method = "POST";
+        config.headersJson = json.optString("headersJson", "");
+        config.timeoutSeconds = Math.max(1, Math.min(60, json.optInt("timeoutSeconds", 12)));
+        config.maxAttempts = Math.max(1, Math.min(5, json.optInt("maxAttempts", 3)));
         JSONArray array = json.optJSONArray("events");
         if (array != null) {
             for (int i = 0; i < array.length(); i++) {
@@ -71,6 +84,10 @@ public class WebhookConfig {
         copy.url = source.url;
         copy.secret = source.secret;
         copy.enabled = source.enabled;
+        copy.method = source.method;
+        copy.headersJson = source.headersJson;
+        copy.timeoutSeconds = source.timeoutSeconds;
+        copy.maxAttempts = source.maxAttempts;
         copy.events.addAll(source.events);
         copy.createdAt = source.createdAt;
         copy.lastDeliveryAt = source.lastDeliveryAt;

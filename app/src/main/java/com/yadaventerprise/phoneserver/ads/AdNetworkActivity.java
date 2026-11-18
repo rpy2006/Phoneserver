@@ -47,7 +47,7 @@ public class AdNetworkActivity extends AppCompatActivity {
         toggle = button("", v -> {
             if (AdNetworkManager.isRunning()) {
                 AdNetworkManager.setEnabled(this, false);
-                AdNetworkManager.stop();
+                AdNetworkManager.stop(this);
             } else {
                 AdNetworkManager.setEnabled(this, true);
                 String err = AdNetworkManager.start(this);

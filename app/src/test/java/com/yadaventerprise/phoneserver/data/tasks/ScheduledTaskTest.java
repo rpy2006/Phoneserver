@@ -35,6 +35,26 @@ public class ScheduledTaskTest {
     }
 
     @Test
+    public void roundTripsOneTimeRetrySettings() throws Exception {
+        ScheduledTask task = new ScheduledTask();
+        task.name = "One shot";
+        task.action = ScheduledTask.ACTION_WEBHOOK;
+        task.webhookId = "hook-1";
+        task.scheduleType = ScheduledTask.SCHEDULE_ONCE;
+        task.runAt = 1_700_000_000_000L;
+        task.maxAttempts = 4;
+        task.retryDelayMinutes = 15;
+        task.currentAttempt = 2;
+
+        ScheduledTask copy = ScheduledTask.fromJson(new JSONObject(task.toJson().toString()));
+        assertTrue(copy.isOneTime());
+        assertEquals(task.runAt, copy.runAt);
+        assertEquals(4, copy.maxAttempts);
+        assertEquals(15, copy.retryDelayMinutes);
+        assertEquals(task.runAt, copy.computeNextRunAt(1234));
+    }
+
+    @Test
     public void clampsInvalidIntervals() throws Exception {
         ScheduledTask task = ScheduledTask.fromJson(new JSONObject().put("intervalMinutes", 0));
         assertEquals(1, task.intervalMinutes);

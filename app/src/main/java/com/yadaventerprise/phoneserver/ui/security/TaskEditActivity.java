@@ -20,8 +20,11 @@ import com.yadaventerprise.phoneserver.data.tasks.ScheduledTaskStore;
 import com.yadaventerprise.phoneserver.data.webhooks.WebhookConfig;
 import com.yadaventerprise.phoneserver.data.webhooks.WebhookStore;
 import com.yadaventerprise.phoneserver.service.ScheduledTaskScheduler;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class TaskEditActivity extends AppCompatActivity {
@@ -30,11 +33,16 @@ public class TaskEditActivity extends AppCompatActivity {
 
     private EditText nameInput;
     private EditText intervalInput;
+    private EditText runAtInput;
+    private EditText maxAttemptsInput;
+    private EditText retryDelayInput;
+    private Spinner scheduleSpinner;
     private Spinner actionSpinner;
     private Spinner projectSpinner;
     private Spinner webhookSpinner;
     private View projectSection;
     private View webhookSection;
+    private View runAtSection;
     private Switch includeFilesSwitch;
     private Switch enabledSwitch;
     private TextView statusText;
@@ -48,11 +56,16 @@ public class TaskEditActivity extends AppCompatActivity {
         setContentView(R.layout.activity_task_edit);
         nameInput = findViewById(R.id.input_name);
         intervalInput = findViewById(R.id.input_interval);
+        runAtInput = findViewById(R.id.input_run_at);
+        maxAttemptsInput = findViewById(R.id.input_max_attempts);
+        retryDelayInput = findViewById(R.id.input_retry_delay);
+        scheduleSpinner = findViewById(R.id.schedule_spinner);
         actionSpinner = findViewById(R.id.action_spinner);
         projectSpinner = findViewById(R.id.project_spinner);
         webhookSpinner = findViewById(R.id.webhook_spinner);
         projectSection = findViewById(R.id.project_section);
         webhookSection = findViewById(R.id.webhook_section);
+        runAtSection = findViewById(R.id.run_at_section);
         includeFilesSwitch = findViewById(R.id.switch_include_files);
         enabledSwitch = findViewById(R.id.switch_enabled);
         statusText = findViewById(R.id.status_text);
@@ -63,6 +76,13 @@ public class TaskEditActivity extends AppCompatActivity {
         actions.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         actionSpinner.setAdapter(actions);
         actionSpinner.setOnItemSelectedListener(new SimpleItemSelected(this::updateSections));
+
+        ArrayAdapter<String> schedules = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item,
+                new String[]{"Repeating", "One time"});
+        schedules.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        scheduleSpinner.setAdapter(schedules);
+        scheduleSpinner.setOnItemSelectedListener(new SimpleItemSelected(this::updateSections));
 
         loadTargets();
         id = getIntent().getStringExtra(EXTRA_ID);
@@ -82,6 +102,8 @@ public class TaskEditActivity extends AppCompatActivity {
             load();
         } else {
             intervalInput.setText("1440");
+            maxAttemptsInput.setText("1");
+            retryDelayInput.setText("5");
             includeFilesSwitch.setChecked(true);
             enabledSwitch.setChecked(true);
             actionSpinner.setSelection(0);
@@ -124,6 +146,13 @@ public class TaskEditActivity extends AppCompatActivity {
         }
         nameInput.setText(task.name);
         intervalInput.setText(String.valueOf(task.intervalMinutes));
+        scheduleSpinner.setSelection(task.isOneTime() ? 1 : 0);
+        if (task.runAt > 0) {
+            runAtInput.setText(new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                    .format(new Date(task.runAt)));
+        }
+        maxAttemptsInput.setText(String.valueOf(task.maxAttempts));
+        retryDelayInput.setText(String.valueOf(task.retryDelayMinutes));
         includeFilesSwitch.setChecked(task.includeFiles);
         enabledSwitch.setChecked(task.enabled);
         actionSpinner.setSelection(task.isWebhook() ? 1 : 0);
@@ -140,8 +169,10 @@ public class TaskEditActivity extends AppCompatActivity {
 
     private void updateSections() {
         boolean backup = actionSpinner.getSelectedItemPosition() == 0;
+        boolean oneTime = scheduleSpinner.getSelectedItemPosition() == 1;
         projectSection.setVisibility(backup ? View.VISIBLE : View.GONE);
         webhookSection.setVisibility(backup ? View.GONE : View.VISIBLE);
+        runAtSection.setVisibility(oneTime ? View.VISIBLE : View.GONE);
         includeFilesSwitch.setEnabled(backup);
     }
 
@@ -159,12 +190,34 @@ public class TaskEditActivity extends AppCompatActivity {
                 ? webhookIds.get(Math.max(0, webhookSpinner.getSelectedItemPosition())) : "";
         task.includeFiles = includeFilesSwitch.isChecked();
         task.enabled = enabledSwitch.isChecked();
+        task.scheduleType = scheduleSpinner.getSelectedItemPosition() == 1
+                ? ScheduledTask.SCHEDULE_ONCE : ScheduledTask.SCHEDULE_RECURRING;
         try {
             task.intervalMinutes = Math.max(1, Integer.parseInt(intervalInput.getText().toString().trim()));
         } catch (Exception e) {
             task.intervalMinutes = 0;
         }
+        task.runAt = parseRunAt(runAtInput.getText().toString().trim());
+        try {
+            task.maxAttempts = Math.max(1, Integer.parseInt(maxAttemptsInput.getText().toString().trim()));
+        } catch (Exception e) {
+            task.maxAttempts = 0;
+        }
+        try {
+            task.retryDelayMinutes = Math.max(1, Integer.parseInt(retryDelayInput.getText().toString().trim()));
+        } catch (Exception e) {
+            task.retryDelayMinutes = 0;
+        }
         return task;
+    }
+
+    private long parseRunAt(String value) {
+        if (value.isEmpty()) return 0;
+        try {
+            return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).parse(value).getTime();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private boolean validate(ScheduledTask task) {
@@ -172,8 +225,20 @@ public class TaskEditActivity extends AppCompatActivity {
             nameInput.setError("Name is required");
             return false;
         }
-        if (task.intervalMinutes < 1) {
+        if (!task.isOneTime() && task.intervalMinutes < 1) {
             intervalInput.setError("Enter minutes, minimum 1");
+            return false;
+        }
+        if (task.isOneTime() && task.runAt <= 0) {
+            runAtInput.setError("Use yyyy-MM-dd HH:mm");
+            return false;
+        }
+        if (task.maxAttempts < 1) {
+            maxAttemptsInput.setError("Enter 1 or more");
+            return false;
+        }
+        if (task.retryDelayMinutes < 1) {
+            retryDelayInput.setError("Enter minutes, minimum 1");
             return false;
         }
         if (task.isBackup() && task.projectId.isEmpty()) {
@@ -190,7 +255,7 @@ public class TaskEditActivity extends AppCompatActivity {
     private boolean persist() {
         ScheduledTask task = buildTask();
         if (!validate(task)) return false;
-        task.nextRunAt = System.currentTimeMillis() + task.intervalMinutes * 60_000L;
+        task.nextRunAt = task.computeNextRunAt(System.currentTimeMillis());
         ScheduledTaskStore.get(this).save(task);
         ScheduledTaskScheduler.scheduleNext(this);
         id = task.id;
@@ -200,7 +265,7 @@ public class TaskEditActivity extends AppCompatActivity {
     private void runNow() {
         ScheduledTask task = buildTask();
         if (!validate(task)) return;
-        task.nextRunAt = System.currentTimeMillis() + task.intervalMinutes * 60_000L;
+        task.nextRunAt = task.computeNextRunAt(System.currentTimeMillis());
         ScheduledTaskStore.get(this).save(task);
         id = task.id;
         ScheduledTaskScheduler.scheduleNext(this);

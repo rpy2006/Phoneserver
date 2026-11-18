@@ -77,12 +77,12 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 
 | Package | Responsibility | Examples |
 |---|---|---|
-| `ui.*` | Activities, Fragments, RecyclerView adapters and custom views. Renders state and calls into lower layers. | `MainActivity`, `DashboardFragment`, `FilesActivity` |
-| `network.http` | Socket HTTP/HTTPS server, request parsing, multipart uploads, pairing, WebDAV and the `/api/v1` facade. | `SimpleHttpServer`, `DataApi`, `MultipartParser`, `PairingApi`, `WebDavHandler` |
+| `ui.*` | Activities, Fragments, RecyclerView adapters and custom views. Renders state and calls into lower layers. | `MainActivity`, `DashboardFragment`, `SystemManagementActivity` |
+| `network.http` | Socket HTTP/HTTPS server, request parsing, multipart uploads, pairing, WebDAV and the `/api/v1` facade. | `SimpleHttpServer`, `DataApi`, `SystemApi`, `MultipartParser`, `PairingApi`, `WebDavHandler` |
 | `network.tls` | Self-signed certificate generation/import, encrypted identity storage, SSL contexts and pinned clients. | `TlsCertificateFactory`, `TlsCertificateStore`, `TlsContextFactory`, `TlsClient` |
 | `network.pairing` | One-time pairing code storage and QR payload parsing. | `PairingStore`, `PairingCode`, `PairingPayload` |
 | `network.remote` | Client for talking to another PhoneServer instance. | `RemoteApiClient` |
-| `service` | Foreground service, boot/watchdog receivers and `AlarmManager` backup/task scheduling. | `ServerService`, `BootReceiver`, `ServerWatchdog`, `BackupScheduler`, `ScheduledTaskScheduler` |
+| `service` | Foreground service, boot/watchdog receivers, `AlarmManager` scheduling and system notifications. | `ServerService`, `ServerWatchdog`, `ScheduledTaskScheduler`, `SystemNotifier` |
 | `ads` | Vertical feature slice for the optional ad network (HTTP, delivery, fraud, reports, DB, screen). | `AdHttpServer`, `AdDelivery`, `AdNetworkActivity` |
 | `data.storage` | Storage layout, shared preferences-backed settings, file/project/model stores, backups. | `ContentStore`, `ProjectStore`, `BackupManager` |
 | `data.database` | SQLite/JSON database access, schema helpers, cursors and records. | `DatabaseManager`, `SystemDatabase`, `Records` |
@@ -92,7 +92,8 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.security` | Access/event logs, IP blocks, intrusion settings, token policies, security scanner/reports. | `AccessLogStore`, `IpBlockStore`, `TokenPolicyStore`, `SecurityScanner` |
 | `data.sharing` | Share-link models/stores, token/password hashing, in-memory unlock sessions, URL construction and bounded access log. | `ShareStore`, `SharePassword`, `ShareToken`, `ShareSessionStore`, `ShareUrlBuilder` |
 | `data.webhooks` | Webhook configs, signed delivery, retries and bounded delivery history. | `WebhookStore`, `WebhookDispatcher`, `WebhookHistoryStore` |
-| `data.tasks` | Repeating task model/store and backup/webhook execution. | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
+| `data.tasks` | Recurring/one-time task model, retries, history and backup/webhook execution. | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner`, `TaskHistoryStore` |
+| `data.system` | Automation settings, bounded system events, diagnostics, maintenance, log aggregation and sanitization. | `AutomationSettingsStore`, `SystemEventStore`, `SystemDiagnostics`, `SystemMaintenance`, `SystemLogCollector` |
 | `security` | Path containment, SQL safety, rate limiting and constant-time comparison. | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` | Plain data objects shared across layers. | `ServerProfile`, `KeyValue`, `RemoteEntry` |
 | `util` | Small cross-cutting helpers. | `ByteUtils`, `MimeTypes`, `TimeFormat`, `NetworkUtils` |
@@ -111,11 +112,12 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `ui.security` (15) | `SecurityCenterActivity`, `AccessLogActivity`, `SecurityEventsActivity`, `BlockedIpsActivity`, `BackupScheduleActivity`, `HttpsSetupActivity`, `WebDavActivity`, `WebhookActivity`, `WebhookEditActivity`, `TasksActivity`, `TaskEditActivity`, `AccessLogAdapter`, `SecurityEventAdapter`, `BlockedIpAdapter`, `SecurityFindingAdapter` |
 | `ui.qr` (2) | `QrCodeActivity`, `QrFragment` |
 | `ui.sharing` (7) | `SharingOverviewActivity`, `ShareListActivity`, `ShareEditActivity`, `SharePathPickerActivity`, `ShareQrActivity`, `ShareAccessHistoryActivity`, `SharingSettingsActivity` |
-| `network.http` (7) | `SimpleHttpServer`, `DataApi`, `DataException`, `MultipartParser`, `PairingApi`, `WebDavHandler`, `ShareHandler` |
+| `ui.system` (1) | `SystemManagementActivity` |
+| `network.http` (8) | `SimpleHttpServer`, `DataApi`, `SystemApi`, `DataException`, `MultipartParser`, `PairingApi`, `WebDavHandler`, `ShareHandler` |
 | `network.tls` (8) | `HttpsConfig`, `HttpsConfigStore`, `NetworkPaths`, `TlsCertificateFactory`, `TlsCertificateStore`, `TlsClient`, `TlsContextFactory`, `TlsIdentity` |
 | `network.pairing` (3) | `PairingCode`, `PairingPayload`, `PairingStore` |
 | `network.remote` (1) | `RemoteApiClient` |
-| `service` (8) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver`, `ServerWatchdog`, `ServerWatchdogReceiver`, `ScheduledTaskScheduler`, `ScheduledTaskReceiver` |
+| `service` (9) | `ServerService`, `BootReceiver`, `BackupScheduler`, `BackupAlarmReceiver`, `ServerWatchdog`, `ServerWatchdogReceiver`, `ScheduledTaskScheduler`, `ScheduledTaskReceiver`, `SystemNotifier` |
 | `ads` (17) | `AdApi`, `AdConversion`, `AdDb`, `AdDelivery`, `AdExperimentEngine`, `AdFraud`, `AdGeo`, `AdGeoReport`, `AdHttp`, `AdHttpServer`, `AdNetworkActivity`, `AdNetworkManager`, `AdPayouts`, `AdRateLimiter`, `AdReports`, `AdSecurity`, `AdSummaryMailer` |
 | `data.storage` (10) | `ContentStore`, `ContentStoreBridge`, `StorageLayout`, `FileStore`, `ProjectStore`, `ModelStore`, `BackupManager`, `BackupArchive`, `BackupSchedule`, `BackupScheduleStore` |
 | `data.database` (7) | `DatabaseManager`, `SystemDatabase`, `SystemStore`, `JsonCursor`, `JsonMetaStore`, `JsonStorage`, `Records` |
@@ -125,7 +127,8 @@ class. Configuration files remain in `res/xml/` and are listed in section 6.
 | `data.security` (16) | `SecurityPaths`, `AccessLogEntry`, `AccessLogStore`, `SecurityEvent`, `SecurityEventStore`, `SecuritySettings`, `SecuritySettingsStore`, `IpBlockStore`, `IntrusionDetector`, `TokenPolicy`, `TokenPolicyStore`, `SecurityConfig`, `SecurityFinding`, `SecurityReport`, `SecurityScanner`, `SecurityReportStore` |
 | `data.sharing` (11) | `ShareAccessEvent`, `ShareAccessLogStore`, `ShareLink`, `SharePassword`, `SharePaths`, `ShareSessionStore`, `ShareSettings`, `ShareSettingsStore`, `ShareStore`, `ShareToken`, `ShareUrlBuilder` |
 | `data.webhooks` (5) | `WebhookConfig`, `WebhookDispatcher`, `WebhookHistoryEntry`, `WebhookHistoryStore`, `WebhookStore` |
-| `data.tasks` (3) | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner` |
+| `data.tasks` (5) | `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskRunner`, `TaskHistoryEntry`, `TaskHistoryStore` |
+| `data.system` (9) | `AutomationSettings`, `AutomationSettingsStore`, `SystemEvent`, `SystemEventStore`, `SystemLogSanitizer`, `SystemLogCollector`, `SystemDiagnostics`, `SystemMaintenance`, `MaintenanceReport` |
 | `security` (4) | `PathGuard`, `SqlGuard`, `RateLimiter`, `TokenUtil` |
 | `model` (4) | `ApiEndpointConfig`, `KeyValue`, `RemoteEntry`, `ServerProfile` |
 | `util` (6) | `ByteUtils`, `FileTypeUtils`, `IconSwitcher`, `MimeTypes`, `NetworkUtils`, `TimeFormat` |
@@ -179,10 +182,12 @@ SimpleHttpServer (network.http, optional SSLServerSocket)
         │  routes /api/pair ──► PairingApi ──► PairingStore + TokenStore
         │  routes /s/*    ──► ShareHandler ──► data.sharing + ContentStore public root
         │  routes /dav/*   ──► WebDavHandler ──► data.storage.ContentStore
-        │  routes /api/v1 ──► DataApi ──► data.storage / data.database
-        │       ├─ global + per-token rate limits
-        │       ├─ password (admin) or bearer token (role/permissions/expiry)
-        │       └─ project scope + permission checks
+         │  routes /api/v1 ──► DataApi ──► data.storage / data.database
+         │       ├─ /system/* ─► SystemApi ─► data.system / data.tasks / data.webhooks
+         │       ├─ global + per-token rate limits
+         │       ├─ password (admin) or bearer token (role/permissions/expiry)
+         │       └─ project scope + permission checks
+
         │  routes /api/*   ──► custom endpoints (data.servers)
         │  routes files    ──► data.storage.ContentStore
         ▼
@@ -224,7 +229,8 @@ Configuration stays out of Java code:
 | Backup schedule | app-private encrypted JSON via `BackupScheduleStore` |
 | HTTPS config / TLS identity | app-private encrypted JSON under `files/network/` |
 | Webhooks / delivery history | app-private encrypted JSON under `files/webhooks/` |
-| Scheduled tasks | app-private encrypted JSON under `files/tasks/` |
+| Scheduled tasks / task history | app-private encrypted JSON under `files/tasks/` |
+| Automation settings / system events | app-private JSON under `files/system/`; event logs are bounded JSONL and sanitized |
 | Share links/settings | app-private encrypted JSON under `files/shares/`; access log is bounded plain JSONL |
 | Share unlock sessions | in-memory only (`ShareSessionStore`); never persisted |
 | Ad network data | encrypted `filesDir/adnet/adnet.json`, geo CSV and creative files |
@@ -258,7 +264,8 @@ traffic, vulnerabilities or usage numbers.
 - **Scanner** (`SecurityScanner`) — checks real password/CORS/rate/backup/token/
   event state and returns concrete findings with severity weights.
 - **Webhooks** (`WebhookDispatcher`) — signed POSTs with retry/backoff and bounded history for file, server, security, backup and task events.
-- **Scheduled tasks** (`ScheduledTaskRunner`) — repeating project backups or webhook deliveries via `AlarmManager`, with boot rescheduling.
+- **Scheduled tasks** (`ScheduledTaskRunner`) — repeating or one-time project backups and webhook deliveries via `AlarmManager`, with bounded retries, persisted task history, boot rescheduling and notification results.
+- **System management** (`SystemApi`, `SystemDiagnostics`, `SystemMaintenance`, `SystemLogCollector`) — real monitoring, automation settings, unified logs, backup verification and explicit view-cache cleanup. `SystemNotifier` owns the alert/routine notification channels.
 - **Scheduled backups** (`BackupScheduler`) — `AlarmManager` schedules the next
   run from the persisted `BackupSchedule`; `BackupAlarmReceiver` runs the pass
   with `goAsync()`, backs up every project, then rotates old automatic backups.
@@ -320,10 +327,10 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest
 ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
-Last verification after the security phase:
+Last verification after Phase 6:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 157 tests, 0 failures, 0 errors, 50 skipped.
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 170 tests, 0 failures, 0 errors, 55 skipped.
   Some Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
 - `assembleDebug` — see the build log; the APK packages the manifest,
@@ -335,8 +342,9 @@ Last verification after the security phase:
   package, declare it in `AndroidManifest.xml`, and add its layout under
   `res/layout/`.
 - **New HTTP route:** add a handler in `network.http` (legacy routes in
-  `SimpleHttpServer`, versioned routes in `DataApi`). Reuse
-  `security.RateLimiter` / `PathGuard` for validation.
+  `SimpleHttpServer`, versioned routes in `DataApi` or `SystemApi`). Reuse
+  `security.RateLimiter` / `PathGuard` for validation and require
+  `TokenPolicy.SYSTEM_READ` for system reads and admin for mutations.
 - **New persisted entity:** put the model in `model` and its store in the
   appropriate `data.*` package. Use `StorageLayout` for paths and `PathGuard`
   for containment.

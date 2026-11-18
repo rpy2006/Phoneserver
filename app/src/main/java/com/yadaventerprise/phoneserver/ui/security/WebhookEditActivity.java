@@ -24,6 +24,8 @@ public class WebhookEditActivity extends AppCompatActivity {
 
     private EditText nameInput;
     private EditText urlInput;
+    private EditText methodInput;
+    private EditText headersInput;
     private EditText secretInput;
     private Switch enabledSwitch;
     private TextView statusText;
@@ -39,30 +41,30 @@ public class WebhookEditActivity extends AppCompatActivity {
         setContentView(R.layout.activity_webhook_edit);
         nameInput = findViewById(R.id.input_name);
         urlInput = findViewById(R.id.input_url);
+        methodInput = findViewById(R.id.input_method);
+        headersInput = findViewById(R.id.input_headers);
         secretInput = findViewById(R.id.input_secret);
         enabledSwitch = findViewById(R.id.switch_enabled);
         statusText = findViewById(R.id.status_text);
         checkAll = findViewById(R.id.check_all);
         eventChecks = new CheckBox[]{
                 findViewById(R.id.check_file_uploaded),
+                findViewById(R.id.check_file_downloaded),
+                findViewById(R.id.check_share_created),
                 findViewById(R.id.check_server_started),
                 findViewById(R.id.check_server_stopped),
+                findViewById(R.id.check_server_failure),
+                findViewById(R.id.check_server_recovered),
+                findViewById(R.id.check_ad_state),
                 findViewById(R.id.check_auth_failure),
                 findViewById(R.id.check_suspicious),
                 findViewById(R.id.check_backup),
+                findViewById(R.id.check_storage_warning),
+                findViewById(R.id.check_maintenance),
                 findViewById(R.id.check_task_completed),
                 findViewById(R.id.check_task_failed)
         };
-        eventNames = new String[]{
-                WebhookDispatcher.EVENT_FILE_UPLOADED,
-                WebhookDispatcher.EVENT_SERVER_STARTED,
-                WebhookDispatcher.EVENT_SERVER_STOPPED,
-                WebhookDispatcher.EVENT_AUTH_FAILURE,
-                WebhookDispatcher.EVENT_SUSPICIOUS,
-                WebhookDispatcher.EVENT_BACKUP_COMPLETED,
-                WebhookDispatcher.EVENT_TASK_COMPLETED,
-                WebhookDispatcher.EVENT_TASK_FAILED
-        };
+        eventNames = WebhookDispatcher.ALL_EVENTS;
 
         id = getIntent().getStringExtra(EXTRA_ID);
         boolean editing = id != null;
@@ -84,6 +86,7 @@ public class WebhookEditActivity extends AppCompatActivity {
             load();
         } else {
             loading = true;
+            methodInput.setText("POST");
             checkAll.setChecked(true);
             for (CheckBox check : eventChecks) check.setChecked(true);
             enabledSwitch.setChecked(true);
@@ -100,6 +103,8 @@ public class WebhookEditActivity extends AppCompatActivity {
         loading = true;
         nameInput.setText(config.name);
         urlInput.setText(config.url);
+        methodInput.setText(config.method);
+        headersInput.setText(config.headersJson);
         secretInput.setText(config.secret);
         enabledSwitch.setChecked(config.enabled);
         boolean all = config.events.contains("*") || config.events.isEmpty();
@@ -121,6 +126,9 @@ public class WebhookEditActivity extends AppCompatActivity {
         if (config.createdAt == 0) config.createdAt = System.currentTimeMillis();
         config.name = nameInput.getText().toString().trim();
         config.url = urlInput.getText().toString().trim();
+        config.method = methodInput.getText().toString().trim().toUpperCase(java.util.Locale.US);
+        if (config.method.isEmpty()) config.method = "POST";
+        config.headersJson = headersInput.getText().toString().trim();
         config.secret = secretInput.getText().toString().trim();
         config.enabled = enabledSwitch.isChecked();
         config.events.clear();
@@ -149,6 +157,20 @@ public class WebhookEditActivity extends AppCompatActivity {
         } catch (Exception e) {
             urlInput.setError("Invalid URL");
             return false;
+        }
+        if (!config.method.equals("GET") && !config.method.equals("POST")
+                && !config.method.equals("PUT") && !config.method.equals("PATCH")
+                && !config.method.equals("DELETE")) {
+            methodInput.setError("Use GET, POST, PUT, PATCH or DELETE");
+            return false;
+        }
+        if (!config.headersJson.isEmpty()) {
+            try {
+                new org.json.JSONObject(config.headersJson);
+            } catch (Exception e) {
+                headersInput.setError("Enter a valid JSON object");
+                return false;
+            }
         }
         if (config.events.isEmpty()) {
             Toast.makeText(this, "Choose at least one event", Toast.LENGTH_SHORT).show();

@@ -31,10 +31,28 @@ public class WebhookConfigTest {
         assertEquals(config.id, copy.id);
         assertEquals(config.url, copy.url);
         assertEquals(2, copy.events.size());
+        assertEquals("POST", copy.method);
+        assertEquals(12, copy.timeoutSeconds);
+        assertEquals(3, copy.maxAttempts);
         assertTrue(copy.matches(WebhookDispatcher.EVENT_FILE_UPLOADED));
         assertFalse(copy.matches(WebhookDispatcher.EVENT_BACKUP_COMPLETED));
         copy.enabled = false;
         assertFalse(copy.matches(WebhookDispatcher.EVENT_FILE_UPLOADED));
+    }
+
+    @Test
+    public void roundTripsDeliverySettings() throws Exception {
+        WebhookConfig config = new WebhookConfig();
+        config.method = "PUT";
+        config.headersJson = "{\"X-Test\":\"yes\"}";
+        config.timeoutSeconds = 25;
+        config.maxAttempts = 5;
+
+        WebhookConfig copy = WebhookConfig.fromJson(new JSONObject(config.toJson().toString()));
+        assertEquals("PUT", copy.method);
+        assertEquals("{\"X-Test\":\"yes\"}", copy.headersJson);
+        assertEquals(25, copy.timeoutSeconds);
+        assertEquals(5, copy.maxAttempts);
     }
 
     @Test

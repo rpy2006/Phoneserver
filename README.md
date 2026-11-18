@@ -26,7 +26,8 @@ See [installation](docs/getting-started/installation.md), [configuration](docs/g
 
 - Local file browsing, upload, download, rename, delete, and hosted website files.
 - User-defined JSON endpoints under `/api/<name>`, status/statistics screens, WebDAV, and share links.
-- A versioned `/api/v1` JSON API for projects, databases, files, backups, tokens, usage, webhooks, scheduled tasks, and settings.
+- A versioned `/api/v1` JSON API for projects, databases, files, backups, tokens, usage, webhooks, scheduled tasks, settings, and system management.
+- A System Management screen and `/api/v1/system/*` routes for live monitoring, automation, diagnostics, logs, maintenance, and server lifecycle control.
 - External SMTP/IMAP mail accounts with TLS/STARTTLS, Keystore-protected credentials, inbox/sent/drafts, attachments, and local search.
 - An optional ad network with its own port, encrypted JSON store, accounts, campaigns, placements, creatives, tracking, and payouts.
 - A small on-device chat surface backed by the bundled `llama_bridge` native library; only `arm64-v8a` is bundled today.

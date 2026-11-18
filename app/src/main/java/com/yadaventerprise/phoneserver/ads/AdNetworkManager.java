@@ -2,6 +2,7 @@ package com.yadaventerprise.phoneserver.ads;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
@@ -52,6 +53,7 @@ public final class AdNetworkManager {
             s.start();
             server = s;
             startSweeper(app, db);
+            emitState(app, "started");
             return null;
         } catch (IOException e) {
             return "Could not start on port " + PORT + ": " + e.getMessage();
@@ -61,9 +63,25 @@ public final class AdNetworkManager {
     }
 
     public static synchronized void stop() {
+        stop(null);
+    }
+
+    public static synchronized void stop(Context context) {
+        boolean wasRunning = isRunning();
         if (server != null) server.stop();
         server = null;
         sweeper = null;
+        if (wasRunning && context != null) emitState(context.getApplicationContext(), "stopped");
+    }
+
+    private static void emitState(Context context, String state) {
+        JSONObject data = new JSONObject();
+        try {
+            data.put("state", state);
+            data.put("port", PORT);
+        } catch (Exception ignored) {
+        }
+        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_AD_STATE_CHANGED, data);
     }
 
     public static synchronized String setupCode(Context c) {

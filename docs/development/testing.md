@@ -23,14 +23,16 @@ Use `--offline` when the dependency cache is already populated.
 - `data/security/` — intrusion detection, token policy, scanner and schedules.
 - `data/webhooks/` — webhook config round-trip and signed delivery to a
   loopback HTTP server.
-- `data/tasks/` — scheduled task JSON round-trip and interval validation.
+- `data/tasks/` — scheduled task JSON round-trip, one-time/retry settings and interval validation.
+- `data/system/` — automation settings, sanitized/pruned system events and log sanitization.
 - `data/sharing/` — token shape/hashing, PBKDF2 verification, link state,
   store lifecycle, download consumption and access-log queries.
 - `ads/` — encrypted ad JSON persistence and rollback, delete filters, geo
   CSV/CIDR lookup, conversion attribution/dedupe and experiment/payout
   ownership.
-- `network/http/` — request parsing, encoding and HTTP security regression
-  tests.
+- `network/http/` — request parsing, encoding, system-management API auth,
+  webhook secret redaction, one-time tasks, maintenance confirmation and HTTP
+  security regression tests.
 - `network/tls/` — self-signed certificate generation, fingerprinting and
   signature verification.
 - `security/`, `util/`, `testing/` — guards, MIME helpers and shared
@@ -44,6 +46,7 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Latest full run after Phase 5: `157 tests, 0 failures, 0 errors, 50 skipped`.
-The sharing, ad-network storage, mail-core, docs-assets and token-policy tests
-run in this suite. Some Robolectric tests skip on this aarch64 host by design.
+Latest full run after Phase 6: `170 tests, 0 failures, 0 errors, 55 skipped`.
+The sharing, ad-network storage, mail-core, system-management, docs-assets and
+token-policy tests run in this suite. Some Robolectric tests skip on this
+aarch64 host by design.

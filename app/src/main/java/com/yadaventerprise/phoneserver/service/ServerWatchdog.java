@@ -6,26 +6,32 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.util.Log;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettings;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettingsStore;
 
 public final class ServerWatchdog {
 
     public static final String ACTION_CHECK = "com.yadaventerprise.phoneserver.WATCHDOG_CHECK";
     private static final int REQUEST_CODE = 9201;
-    private static final long INTERVAL_MS = 5L * 60L * 1000L;
 
     private ServerWatchdog() {
     }
 
     public static void scheduleNext(Context context) {
         Context app = context.getApplicationContext();
+        AutomationSettings settings = AutomationSettingsStore.get(app).get();
         AlarmManager alarmManager = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
         if (alarmManager == null) return;
-        long next = System.currentTimeMillis() + INTERVAL_MS;
+        if (!settings.autoRestartEnabled) {
+            alarmManager.cancel(pendingIntent(app));
+            return;
+        }
+        long interval = Math.max(1, settings.watchdogIntervalMinutes) * 60L * 1000L;
+        long next = System.currentTimeMillis() + interval;
         try {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pendingIntent(app));
         } catch (SecurityException e) {
             Log.w("ServerWatchdog", "could not schedule exact watchdog", e);
-
             alarmManager.set(AlarmManager.RTC_WAKEUP, next, pendingIntent(app));
         }
     }

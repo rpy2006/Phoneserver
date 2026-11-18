@@ -140,6 +140,93 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:text="Schedule"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <Spinner
+                    android:id="@+id/schedule_spinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_input_outline"
+                    android:padding="14dp"
+                    android:minHeight="52dp"
+                    android:layout_marginBottom="14dp" />
+
+                <LinearLayout
+                    android:id="@+id/run_at_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Run at (yyyy-MM-dd HH:mm)"
+                        android:textColor="@color/home_text_secondary"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="6dp" />
+
+                    <EditText
+                        android:id="@+id/input_run_at"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="2026-11-20 02:00"
+                        android:background="@drawable/bg_input_outline"
+                        android:textColor="@color/home_text_primary"
+                        android:textColorHint="@color/home_text_secondary"
+                        android:padding="14dp"
+                        android:singleLine="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Maximum attempts"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_max_attempts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="1"
+                    android:inputType="number"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Retry delay (minutes)"
+                    android:textColor="@color/home_text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
+                <EditText
+                    android:id="@+id/input_retry_delay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="5"
+                    android:inputType="number"
+                    android:background="@drawable/bg_input_outline"
+                    android:textColor="@color/home_text_primary"
+                    android:textColorHint="@color/home_text_secondary"
+                    android:padding="14dp"
+                    android:singleLine="true"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="Run every (minutes)"
                     android:textColor="@color/home_text_secondary"
                     android:textSize="12sp"

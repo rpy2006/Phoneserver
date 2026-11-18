@@ -26,6 +26,11 @@ public class DocsAssetsTest {
         assertTrue(spec.contains("\"/mail/accounts/{id}/sync\""));
         assertTrue(spec.contains("\"/mail/accounts/{id}/send\""));
         assertTrue(spec.contains("\"/mail/messages/{id}/attachments/{index}\""));
+        assertTrue(spec.contains("\"/system/monitor\""));
+        assertTrue(spec.contains("\"/system/automation\""));
+        assertTrue(spec.contains("\"/system/tasks/{id}/run\""));
+        assertTrue(spec.contains("\"/system/webhooks/{id}/test\""));
+        assertTrue(spec.contains("\"/system/maintenance/clean\""));
         assertTrue(spec.contains("bearerAuth"));
     }
 
@@ -38,6 +43,7 @@ public class DocsAssetsTest {
         assertTrue(html.contains("email-setup.md"));
         assertTrue(html.contains("Try API"));
         assertTrue(js.contains("/mail/accounts/{id}/test"));
+        assertTrue(js.contains("/system/maintenance/clean"));
         assertTrue(js.contains("window.PhoneServerDocs.tryApi"));
     }
 

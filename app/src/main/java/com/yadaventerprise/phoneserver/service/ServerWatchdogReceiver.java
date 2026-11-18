@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.os.Build;
 import android.util.Log;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettings;
+import com.yadaventerprise.phoneserver.data.system.AutomationSettingsStore;
 
 public class ServerWatchdogReceiver extends BroadcastReceiver {
 
@@ -13,8 +15,10 @@ public class ServerWatchdogReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !ServerWatchdog.ACTION_CHECK.equals(intent.getAction())) return;
         Context app = context.getApplicationContext();
+        AutomationSettings settings = AutomationSettingsStore.get(app).get();
         try {
-            if (ContentStore.getServerDesiredRunning(app) && !ServerService.isServerRunning()) {
+            if (settings.autoRestartEnabled && ContentStore.getServerDesiredRunning(app)
+                    && !ServerService.isServerRunning()) {
                 Intent start = new Intent(app, ServerService.class);
                 start.setAction(ServerService.ACTION_START);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -26,7 +30,9 @@ public class ServerWatchdogReceiver extends BroadcastReceiver {
         } catch (Exception e) {
             Log.w("ServerWatchdog", "could not restart server", e);
         } finally {
-            if (ContentStore.getServerDesiredRunning(app)) ServerWatchdog.scheduleNext(app);
+            if (settings.autoRestartEnabled && ContentStore.getServerDesiredRunning(app)) {
+                ServerWatchdog.scheduleNext(app);
+            }
         }
     }
 }

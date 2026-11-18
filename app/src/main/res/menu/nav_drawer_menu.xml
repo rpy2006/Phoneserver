@@ -30,6 +30,10 @@
 
     <group android:id="@+id/group_drawer_tools">
         <item
+            android:id="@+id/nav_drawer_system"
+            android:icon="@drawable/ic_server_stack"
+            android:title="System Management" />
+        <item
             android:id="@+id/nav_drawer_files"
             android:icon="@drawable/ic_folder"
             android:title="Files" />
