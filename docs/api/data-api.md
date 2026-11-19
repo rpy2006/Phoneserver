@@ -5,6 +5,7 @@
 - [Documentation index](../README.md)
 - [HTTP API](http-api.md)
 - [OpenAPI document](openapi.json)
+- [Remote access API](remote-api.md)
 - [Mail client](../features/mail.md)
 - [Storage layout](../architecture/storage.md)
 

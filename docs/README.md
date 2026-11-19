@@ -21,12 +21,14 @@ PhoneServer is a single-module Android app that runs an HTTP server on the devic
 - [Storage layout](architecture/storage.md) — SQLite, encrypted JSON, app-private files, and shared media.
 - [Mail client](features/mail.md) — external SMTP/IMAP integration, local cache, and API surface.
 - [Ad Network Manager](features/ad-network.md) — opt-in ad server, accounts, campaigns, creatives, counting, and billing.
+- [Remote access and management](features/remote-access.md) — enable switch, HTTPS, QR pairing, roles, device monitoring, audit and file controls.
 
 ## API reference
 
 - [HTTP API](api/http-api.md) — file, website, stats, auth, WebDAV, sharing, tokens, and system routes.
 - [Data and storage API](api/data-api.md) — `/api/v1` JSON API for projects, databases, files, backups, tokens, mail, and `/system/*` management.
-- [OpenAPI document](api/openapi.json) — machine-readable description of the `/api/v1` surface.
+- [Remote access API](api/remote-api.md) — `/api/v1/remote` login, pairing, RBAC, devices, files, audit and settings endpoints.
+- [OpenAPI document](api/openapi.json) — machine-readable description of the `/api/v1` surface, including remote management.
 
 ## Security and development
 

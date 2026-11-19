@@ -28,6 +28,7 @@ See [installation](docs/getting-started/installation.md), [configuration](docs/g
 - User-defined JSON endpoints under `/api/<name>`, status/statistics screens, WebDAV, and share links.
 - A versioned `/api/v1` JSON API for projects, databases, files, backups, tokens, usage, webhooks, scheduled tasks, settings, and system management.
 - A System Management screen and `/api/v1/system/*` routes for live monitoring, automation, diagnostics, logs, maintenance, and server lifecycle control.
+- Opt-in remote access and multi-device management with HTTPS-gated login, QR/code pairing approval, roles, heartbeat metrics, audit logs and file access controls.
 - External SMTP/IMAP mail accounts with TLS/STARTTLS, Keystore-protected credentials, inbox/sent/drafts, attachments, and local search.
 - An optional ad network with its own port, encrypted JSON store, accounts, campaigns, placements, creatives, tracking, and payouts.
 - A small on-device chat surface backed by the bundled `llama_bridge` native library; only `arm64-v8a` is bundled today.
@@ -51,7 +52,8 @@ See [testing](docs/development/testing.md).
 
 - [HTTP API](docs/api/http-api.md) — legacy/file/website/system routes, auth, WebDAV, sharing, and tokens.
 - [Data and storage API](docs/api/data-api.md) — `/api/v1` resource API, including mail.
-- [OpenAPI JSON](docs/api/openapi.json) — machine-readable `/api/v1` reference.
+- [Remote access API](docs/api/remote-api.md) — `/api/v1/remote` login, pairing, RBAC, devices, files and audit.
+- [OpenAPI JSON](docs/api/openapi.json) — machine-readable `/api/v1` reference, including remote management.
 
 ## Architecture
 
@@ -65,8 +67,8 @@ The canonical Markdown documentation is under [`docs/`](docs/README.md):
 |---|---|
 | Setup | [Installation](docs/getting-started/installation.md), [Configuration](docs/getting-started/configuration.md), [Email setup](docs/getting-started/email-setup.md) |
 | Architecture | [Overview](docs/architecture/overview.md), [Storage](docs/architecture/storage.md) |
-| Features | [Overview](docs/features/overview.md), [Mail](docs/features/mail.md), [Ad network](docs/features/ad-network.md) |
-| API | [HTTP API](docs/api/http-api.md), [Data API](docs/api/data-api.md), [OpenAPI](docs/api/openapi.json) |
+| Features | [Overview](docs/features/overview.md), [Mail](docs/features/mail.md), [Ad network](docs/features/ad-network.md), [Remote access and management](docs/features/remote-access.md) |
+| API | [HTTP API](docs/api/http-api.md), [Data API](docs/api/data-api.md), [Remote API](docs/api/remote-api.md), [OpenAPI](docs/api/openapi.json) |
 | Security | [Overview](docs/security/overview.md), [Audit](docs/security/audit.md) |
 | Development | [Testing](docs/development/testing.md), [Changelog](docs/changelog.md) |
 

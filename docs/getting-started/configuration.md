@@ -24,6 +24,8 @@ If no password is configured, anonymous admin API access is refused. Protected f
 
 See [HTTP API](../api/http-api.md) and [Data API](../api/data-api.md).
 
+Remote management has its own app-private settings under `filesDir/remote/settings.json`: `enabled` (off by default), `requireHttps` (on), `allowPairing` (on), `allowRemoteFiles` (off), `allowServerControl` (off), session/pairing lifetimes and login lockout values. Review the [remote access guide](../features/remote-access.md) before exposing the HTTPS listener.
+
 ## Ports
 
 | Service | Default port | Notes |

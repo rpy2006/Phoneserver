@@ -26,6 +26,7 @@
         <a href="#authentication">Authentication</a>
         <a href="#endpoints">API reference</a>
         <a href="#mail">Mail API</a>
+        <a href="#remote">Remote access and management</a>
         <a href="#explorer">Try API</a>
         <a href="#openapi">OpenAPI</a>
         <a href="#changelog">Changelog</a>
@@ -148,6 +149,25 @@ curl -H "Authorization: Bearer $TOKEN" \
         </div>
       </section>
 
+      <section id="remote" class="doc-section">
+        <h2>Remote access and management</h2>
+        <p>Remote management is opt-in under <code>/api/v1/remote</code>. Turn on the enable switch in the app, then choose the safety settings: <code>requireHttps</code> (on by default), <code>allowPairing</code>, <code>allowRemoteFiles</code> (off by default) and <code>allowServerControl</code> (off by default). Non-loopback requests without HTTPS are rejected with <code>403</code>; loopback is allowed for local diagnostics.</p>
+        <h3>Login and roles</h3>
+        <pre><code class="language-bash">curl -X POST https://&lt;device-ip&gt;:8443/api/v1/remote/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"viewer1","password":"long-password-123"}'</code></pre>
+        <p>The response contains a one-time bearer token. Roles are <code>owner</code>, <code>administrator</code>, <code>manager</code>, <code>viewer</code> and <code>device</code>; each maps to <code>remote.*</code> permissions such as <code>remote.dashboard</code>, <code>remote.users.write</code>, <code>remote.files.read</code> and <code>remote.audit.read</code>. The access password or an admin token has full remote access.</p>
+        <h3>QR/code pairing</h3>
+        <ol>
+          <li>An admin creates a pairing code with <code>POST /api/v1/remote/pairing</code>; the QR payload contains the host and code but no token or permanent credential.</li>
+          <li>The device submits the code and its information to <code>POST /api/v1/remote/pairing/request</code>.</li>
+          <li>The owner approves the request; the device polls <code>POST /api/v1/remote/pairing/status</code> and receives a device token once. A second poll returns no token.</li>
+        </ol>
+        <p>Devices send heartbeats to <code>/api/v1/remote/devices/{id}/heartbeat</code> and can only report their own id. The dashboard marks a device offline after the configured threshold and flags metrics as available or stale using real heartbeat reports only.</p>
+        <p>File routes require <code>allowRemoteFiles</code> and reject paths that escape the public files root. Every login, pairing, device, user, file and settings action is recorded in <code>GET /api/v1/remote/audit</code>, which requires <code>remote.audit.read</code> and redacts secrets. Logout, user session revocation, device disconnect and device deletion revoke the corresponding sessions.</p>
+        <p>No static IP or cloud relay is assumed: use the host that currently reaches the HTTPS listener. See the <a href="remote-access.md" target="_blank" rel="noopener">remote access guide</a> and the <a href="remote-api.md" target="_blank" rel="noopener">remote API reference</a>.</p>
+      </section>
+
       <section id="explorer" class="doc-section">
         <h2>Try API</h2>
         <p>Enter a token or access password and choose an implemented endpoint. The request runs from this app and is sent directly to the address below.</p>
@@ -180,7 +200,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
       <section id="openapi" class="doc-section">
         <h2>OpenAPI</h2>
-        <p>The machine-readable specification is bundled with the app and with the web docs as <code>openapi.json</code>. It describes the implemented data API and mail endpoints.</p>
+        <p>The machine-readable specification is bundled with the app and with the web docs as <code>openapi.json</code>. It describes the implemented data API, mail endpoints and the full <code>/api/v1/remote/*</code> management surface.</p>
         <a class="link-button" href="openapi.json" target="_blank" rel="noopener">Open OpenAPI JSON</a>
       </section>
 

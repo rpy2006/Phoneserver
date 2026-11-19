@@ -18,6 +18,7 @@ import com.yadaventerprise.phoneserver.ui.files.FilesActivity;
 import com.yadaventerprise.phoneserver.ui.files.WebsiteFilesActivity;
 import com.yadaventerprise.phoneserver.ui.mail.MailActivity;
 import com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity;
+import com.yadaventerprise.phoneserver.ui.remote.RemoteManagementActivity;
 import com.yadaventerprise.phoneserver.ui.security.SecurityCenterActivity;
 import com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity;
@@ -178,6 +179,9 @@ public class MainActivity extends AppCompatActivity {
     private Intent drawerNavIdToIntent(int drawerNavId) {
         if (drawerNavId == R.id.nav_drawer_system) {
             return new Intent(this, SystemManagementActivity.class);
+        }
+        if (drawerNavId == R.id.nav_drawer_remote) {
+            return new Intent(this, RemoteManagementActivity.class);
         }
         if (drawerNavId == R.id.nav_drawer_files) {
             return new Intent(this, FilesActivity.class);

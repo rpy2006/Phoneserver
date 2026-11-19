@@ -5,6 +5,8 @@ import android.util.Base64;
 import android.util.Log;
 import com.yadaventerprise.phoneserver.data.database.DatabaseManager;
 import com.yadaventerprise.phoneserver.data.database.Records;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSession;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSessionStore;
 import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
 import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
 import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
@@ -103,6 +105,7 @@ public final class DataApi {
         if (multipart) return false;
         String p = path;
         return p.endsWith("/files")
+                || p.endsWith("/remote/files/upload")
                 || (p.contains("/databases/") && p.endsWith("/import"))
                 || p.endsWith("/backups/import");
     }
@@ -151,6 +154,12 @@ public final class DataApi {
         List<String> parts = segments(req.path);
         String head = parts.isEmpty() ? "" : parts.get(0);
 
+        if (head.equals("remote") && RemoteApi.isPublicPath(parts)) {
+            if (!enforceRateLimit(context, req, out)) return;
+            RemoteApi.handlePublic(context, req, out, parts);
+            return;
+        }
+
         // Public, non-sensitive liveness probe.
         if (head.equals("health")) {
             requireMethod(method, "GET");
@@ -181,6 +190,10 @@ public final class DataApi {
             }
             return;
         }
+        if (head.equals("remote")) {
+            RemoteApi.handle(context, req, out, auth, parts);
+            return;
+        }
         if (head.equals("tokens")) {
             handleTokens(context, req, out, auth, parts);
             return;
@@ -206,11 +219,22 @@ public final class DataApi {
         String projectId;
         String tokenId;
         TokenPolicy policy;
+        RemoteSession remoteSession;
     }
 
     private static Auth authenticate(Context context, SimpleHttpServer.Request req) {
         // Bearer token first, so non-interactive clients have a scoped option.
         String bearer = bearerToken(req);
+        if (bearer != null && req.path != null && req.path.startsWith(BASE + "/remote/")) {
+            RemoteSession session = RemoteSessionStore.get(context).verify(bearer);
+            if (session != null) {
+                Auth auth = new Auth();
+                auth.remoteSession = session;
+                auth.canWrite = false;
+                SimpleHttpServer.noteActor(session.subjectType, session.subjectId);
+                return auth;
+            }
+        }
         if (bearer != null) {
             Records.ApiTokenRecord token = TokenStore.verify(context, bearer);
             if (token == null) {
@@ -399,6 +423,31 @@ public final class DataApi {
         endpoints.put("GET " + BASE + "/system/maintenance");
         endpoints.put("POST " + BASE + "/system/maintenance/clean");
         endpoints.put("POST " + BASE + "/system/maintenance/verify-backups");
+        endpoints.put("POST " + BASE + "/remote/auth/login");
+        endpoints.put("POST " + BASE + "/remote/auth/logout");
+        endpoints.put("GET " + BASE + "/remote/dashboard");
+        endpoints.put("POST " + BASE + "/remote/pairing/request");
+        endpoints.put("POST " + BASE + "/remote/pairing/status");
+        endpoints.put("GET/POST " + BASE + "/remote/pairing");
+        endpoints.put("POST " + BASE + "/remote/pairing/{id}/approve");
+        endpoints.put("POST " + BASE + "/remote/pairing/{id}/reject");
+        endpoints.put("GET " + BASE + "/remote/devices");
+        endpoints.put("GET/PATCH/DELETE " + BASE + "/remote/devices/{id}");
+        endpoints.put("POST " + BASE + "/remote/devices/{id}/heartbeat");
+        endpoints.put("POST " + BASE + "/remote/devices/{id}/disconnect");
+        endpoints.put("GET/POST " + BASE + "/remote/users");
+        endpoints.put("GET/PATCH/DELETE " + BASE + "/remote/users/{id}");
+        endpoints.put("DELETE " + BASE + "/remote/users/{id}/sessions");
+        endpoints.put("GET " + BASE + "/remote/roles");
+        endpoints.put("GET " + BASE + "/remote/audit");
+        endpoints.put("GET/PATCH " + BASE + "/remote/settings");
+        endpoints.put("POST " + BASE + "/remote/server/{action}");
+        endpoints.put("GET " + BASE + "/remote/files/list");
+        endpoints.put("GET " + BASE + "/remote/files/download");
+        endpoints.put("POST " + BASE + "/remote/files/upload");
+        endpoints.put("POST " + BASE + "/remote/files/delete");
+        endpoints.put("POST " + BASE + "/remote/files/rename");
+        endpoints.put("POST " + BASE + "/remote/files/mkdir");
         endpoints.put("GET/POST " + BASE + "/projects");
         endpoints.put("GET/PATCH/DELETE " + BASE + "/projects/{id}");
         endpoints.put("GET/POST " + BASE + "/projects/{id}/databases");
@@ -1269,7 +1318,7 @@ public final class DataApi {
 
     // ---- helpers: responses ----
 
-    private static JSONObject wrap(String key, Object array) throws JSONException {
+    static JSONObject wrap(String key, Object array) throws JSONException {
         JSONObject json = new JSONObject();
         json.put(key, array);
         return json;

@@ -29,6 +29,8 @@ An optional HTTPS listener runs on `8443` by default and can be configured with 
 
 See [Configuration](../getting-started/configuration.md) and [Security overview](../security/overview.md).
 
+The Phase 7 remote access surface adds opt-in remote management under `/api/v1/remote`: HTTPS-gated login, QR/code pairing with owner approval, roles and permissions, multi-device monitoring with heartbeat-based metrics and staleness flags, a sanitised audit log, controlled file access and session revocation. See [Remote access and management](remote-access.md) and the [remote API](../api/remote-api.md).
+
 ## Client mode
 
 The app can connect to another PhoneServer instance, list its shared files, and download or upload through the same HTTP API. Pairing and remote credentials are handled in the UI and stored in app-private preferences/database records.

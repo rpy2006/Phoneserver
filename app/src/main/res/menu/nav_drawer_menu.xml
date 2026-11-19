@@ -34,6 +34,10 @@
             android:icon="@drawable/ic_server_stack"
             android:title="System Management" />
         <item
+            android:id="@+id/nav_drawer_remote"
+            android:icon="@drawable/ic_device_admin"
+            android:title="Remote Management" />
+        <item
             android:id="@+id/nav_drawer_files"
             android:icon="@drawable/ic_folder"
             android:title="Files" />

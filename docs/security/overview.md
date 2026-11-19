@@ -14,7 +14,7 @@ This page summarizes the security controls that are present in the current code.
 
 The main HTTP server listens on `8080`; the optional HTTPS listener uses `8443` by default. There is no automatic redirect from HTTP to HTTPS. The opt-in ad server is separate on `8090` and has no TLS support of its own, so expose it only on a trusted network or behind a TLS-terminating proxy.
 
-Remote access is gated by the `allow_remote_access` setting. Public share links require an HTTPS public origin; local links remain on HTTP when only the generated self-signed certificate is available.
+Remote access is gated by the `allow_remote_access` setting. Public share links require an HTTPS public origin; local links remain on HTTP when only the generated self-signed certificate is available. The separate `/api/v1/remote` management surface is disabled by default, requires HTTPS for non-loopback clients, uses one-time bearer sessions and owner-approved QR pairing, and keeps remote file access and server control off until explicitly enabled. See [Remote access and management](../features/remote-access.md).
 
 ## Authentication
 

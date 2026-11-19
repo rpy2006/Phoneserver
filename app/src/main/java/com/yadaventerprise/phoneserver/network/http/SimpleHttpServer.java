@@ -208,6 +208,7 @@ public class SimpleHttpServer {
     static class Request {
         String method;
         String path;
+        boolean secure;
         String remoteIp = "unknown";
         Map<String, String> query = new HashMap<>();
         Map<String, String> headers = new HashMap<>();
@@ -261,6 +262,7 @@ public class SimpleHttpServer {
         if (requestLine == null || requestLine.isEmpty()) return null;
 
         Request req = new Request();
+        req.secure = sslContext != null;
         String[] parts = requestLine.split(" ");
         if (parts.length < 2) return null;
         req.method = parts[0];

@@ -6,6 +6,12 @@
 - [Root README](../README.md)
 - [Testing](development/testing.md)
 
+## Phase 7
+- Added opt-in remote access with an enable switch, HTTPS requirement, login lockout, role-based permissions and one-time bearer sessions.
+- Added QR/code device pairing with owner approval, one-time device tokens, device monitoring with heartbeat-based metrics and staleness flags, and session revocation.
+- Added remote user, role, audit, settings, server-control and file-management endpoints under `/api/v1/remote`, with sanitised audit logs and file access controls.
+- Added the remote access guide, API reference, OpenAPI operations and offline documentation entries.
+
 ## Phase 6
 - Added a System Management screen and `/api/v1/system/*` routes for live monitoring, automation, diagnostics, logs, maintenance and server lifecycle control.
 - Added one-time and recurring scheduled tasks with bounded retries, persisted execution history and failure/recovery notifications.

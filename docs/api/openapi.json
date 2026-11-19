@@ -3,7 +3,7 @@
   "info": {
     "title": "PhoneServer API",
     "version": "1.0.0",
-    "description": "Implemented local data, storage, token, mail, and system-management APIs served by PhoneServer on port 8080."
+    "description": "Implemented local data, storage, token, mail, system-management and remote-access APIs served by PhoneServer on port 8080 (HTTPS on 8443). Remote paths are served under /api/v1/remote."
   },
   "servers": [
     {
@@ -1320,6 +1320,3135 @@
           }
         }
       }
+    },
+    "/remote/auth/login": {
+      "post": {
+        "operationId": "remote_remote_auth_login",
+        "summary": "Public remote login",
+        "description": "Request URL: /api/v1/remote/auth/login.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteLoginRequest"
+              },
+              "example": {
+                "username": "viewer1",
+                "password": "long-password-123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bearer session token issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteLoginResponse"
+                },
+                "example": {
+                  "token": "pst_remote_9f3c...",
+                  "expiresAt": 1790000000000,
+                  "user": {
+                    "username": "viewer1",
+                    "role": "viewer",
+                    "status": "active"
+                  },
+                  "warning": "store this token securely; it is shown only once"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or pairing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing/request": {
+      "post": {
+        "operationId": "remote_remote_pairing_request",
+        "summary": "Public pairing code submission by a device",
+        "description": "Request URL: /api/v1/remote/pairing/request.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemotePairingSubmit"
+              },
+              "example": {
+                "code": "ABCD1234",
+                "name": "Tablet",
+                "deviceInfo": {
+                  "model": "Pixel Tablet"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending pairing request recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or pairing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing/status": {
+      "post": {
+        "operationId": "remote_remote_pairing_status",
+        "summary": "Public pairing status poll and one-time device token",
+        "description": "Request URL: /api/v1/remote/pairing/status.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemotePairingSubmit"
+              },
+              "example": {
+                "code": "ABCD1234"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending status, or a device token on the first poll after approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingStatus"
+                },
+                "example": {
+                  "requestId": "pair-123",
+                  "status": "consumed",
+                  "token": "pst_device_71ba...",
+                  "deviceId": "device-456",
+                  "expiresAt": 1790000000000,
+                  "warning": "store this token on the device; it is shown only once"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or pairing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/dashboard": {
+      "get": {
+        "operationId": "remote_remote_dashboard",
+        "summary": "Remote dashboard summary",
+        "description": "Request URL: /api/v1/remote/dashboard.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard counters and feature flags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDashboard"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/auth/logout": {
+      "post": {
+        "operationId": "remote_remote_auth_logout",
+        "summary": "Revoke the current remote session",
+        "description": "Request URL: /api/v1/remote/auth/logout.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing": {
+      "get": {
+        "operationId": "remote_remote_pairing",
+        "summary": "List pairing requests",
+        "description": "Request URL: /api/v1/remote/pairing.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RemotePairingRequest"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "requests": [
+                    {
+                      "id": "pair-123",
+                      "code": "ABCD1234",
+                      "status": "pending",
+                      "qrPayload": "phoneserver://pair?scheme=https&host=phone.example:8443&code=ABCD1234",
+                      "expiresAt": 1790000000000,
+                      "pollAfterSeconds": 3
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "remote_remote_pairing",
+        "summary": "Create a pairing code and QR payload",
+        "description": "Request URL: /api/v1/remote/pairing.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "example": {
+                "name": "Tablet"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Pairing request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingRequest"
+                },
+                "example": {
+                  "id": "pair-123",
+                  "code": "ABCD1234",
+                  "status": "pending",
+                  "qrPayload": "phoneserver://pair?scheme=https&host=phone.example:8443&code=ABCD1234",
+                  "expiresAt": 1790000000000,
+                  "pollAfterSeconds": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing/{id}/approve": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "post": {
+        "operationId": "remote_remote_pairing_id_approve",
+        "summary": "Approve a pairing request",
+        "description": "Request URL: /api/v1/remote/pairing/{id}/approve.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing request approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing/{id}/reject": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "post": {
+        "operationId": "remote_remote_pairing_id_reject",
+        "summary": "Reject a pairing request",
+        "description": "Request URL: /api/v1/remote/pairing/{id}/reject.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing request rejectd",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/pairing/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "delete": {
+        "operationId": "remote_remote_pairing_id",
+        "summary": "Delete or reject a pairing request",
+        "description": "Request URL: /api/v1/remote/pairing/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing request removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/devices": {
+      "get": {
+        "operationId": "remote_remote_devices",
+        "summary": "List monitored devices with online and metrics flags",
+        "description": "Request URL: /api/v1/remote/devices.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RemoteDevice"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "devices": [
+                    {
+                      "id": "device-456",
+                      "name": "Tablet",
+                      "online": true,
+                      "metricsAvailable": true,
+                      "metricsStale": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/devices/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "get": {
+        "operationId": "remote_remote_devices_id",
+        "summary": "Read one device",
+        "description": "Request URL: /api/v1/remote/devices/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDevice"
+                },
+                "example": {
+                  "id": "device-456",
+                  "name": "Tablet",
+                  "online": true,
+                  "metricsAvailable": true,
+                  "metricsStale": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "remote_remote_devices_id",
+        "summary": "Rename a device",
+        "description": "Request URL: /api/v1/remote/devices/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "example": {
+                "name": "Office tablet"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDevice"
+                },
+                "example": {
+                  "id": "device-456",
+                  "name": "Tablet",
+                  "online": true,
+                  "metricsAvailable": true,
+                  "metricsStale": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "remote_remote_devices_id",
+        "summary": "Revoke a device and its sessions",
+        "description": "Request URL: /api/v1/remote/devices/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/devices/{id}/heartbeat": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "post": {
+        "operationId": "remote_remote_devices_id_heartbeat",
+        "summary": "Apply a device heartbeat metrics report",
+        "description": "Request URL: /api/v1/remote/devices/{id}/heartbeat.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteHeartbeat"
+              },
+              "example": {
+                "uptimeMillis": 1234,
+                "storageFreeBytes": 1000000,
+                "healthStatus": "ok"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Heartbeat accepted; device token is limited to its own id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDevice"
+                },
+                "example": {
+                  "id": "device-456",
+                  "name": "Tablet",
+                  "online": true,
+                  "metricsAvailable": true,
+                  "metricsStale": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/devices/{id}/disconnect": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "post": {
+        "operationId": "remote_remote_devices_id_disconnect",
+        "summary": "Disconnect a device and revoke its session",
+        "description": "Request URL: /api/v1/remote/devices/{id}/disconnect.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device disconnected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDevice"
+                },
+                "example": {
+                  "id": "device-456",
+                  "name": "Tablet",
+                  "online": true,
+                  "metricsAvailable": true,
+                  "metricsStale": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/users": {
+      "get": {
+        "operationId": "remote_remote_users",
+        "summary": "List remote users without password hashes",
+        "description": "Request URL: /api/v1/remote/users.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RemoteUser"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "users": [
+                    {
+                      "id": "user-1",
+                      "username": "operator1",
+                      "role": "viewer",
+                      "status": "active"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "remote_remote_users",
+        "summary": "Create a remote user",
+        "description": "Request URL: /api/v1/remote/users.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteUserCreateRequest"
+              },
+              "example": {
+                "username": "operator1",
+                "password": "long-password-123",
+                "role": "viewer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteUser"
+                },
+                "example": {
+                  "id": "user-1",
+                  "username": "operator1",
+                  "role": "viewer",
+                  "status": "active"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/users/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "get": {
+        "operationId": "remote_remote_users_id",
+        "summary": "Read a remote user",
+        "description": "Request URL: /api/v1/remote/users/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteUser"
+                },
+                "example": {
+                  "id": "user-1",
+                  "username": "operator1",
+                  "role": "viewer",
+                  "status": "active"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "remote_remote_users_id",
+        "summary": "Update a remote user and revoke its sessions",
+        "description": "Request URL: /api/v1/remote/users/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteUserCreateRequest"
+              },
+              "example": {
+                "displayName": "Operator"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteUser"
+                },
+                "example": {
+                  "id": "user-1",
+                  "username": "operator1",
+                  "role": "viewer",
+                  "status": "active"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "remote_remote_users_id",
+        "summary": "Delete a remote user",
+        "description": "Request URL: /api/v1/remote/users/{id}.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/users/{id}/sessions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Identifier returned by the create/list endpoint"
+        }
+      ],
+      "delete": {
+        "operationId": "remote_remote_users_id_sessions",
+        "summary": "Revoke every session of a user",
+        "description": "Request URL: /api/v1/remote/users/{id}/sessions.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/roles": {
+      "get": {
+        "operationId": "remote_remote_roles",
+        "summary": "Role and permission catalogue",
+        "description": "Request URL: /api/v1/remote/roles.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role catalogue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRoleCatalogue"
+                },
+                "example": {
+                  "roles": [
+                    "owner",
+                    "administrator",
+                    "manager",
+                    "viewer",
+                    "device"
+                  ],
+                  "allPermissions": [
+                    "remote.dashboard",
+                    "remote.users.write"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/audit": {
+      "get": {
+        "operationId": "remote_remote_audit",
+        "summary": "Recent sanitised remote audit entries",
+        "description": "Request URL: /api/v1/remote/audit.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of entries (20-500, default 200)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteAuditList"
+                },
+                "example": {
+                  "entries": [
+                    {
+                      "event": "remote.auth.login",
+                      "actor": "user:1",
+                      "details": "remote session created",
+                      "allowed": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/settings": {
+      "get": {
+        "operationId": "remote_remote_settings",
+        "summary": "Read remote access settings",
+        "description": "Request URL: /api/v1/remote/settings.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Remote settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSettings"
+                },
+                "example": {
+                  "enabled": true,
+                  "requireHttps": true,
+                  "allowPairing": true,
+                  "allowRemoteFiles": false,
+                  "allowServerControl": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "remote_remote_settings",
+        "summary": "Update remote access settings",
+        "description": "Request URL: /api/v1/remote/settings.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteSettings"
+              },
+              "example": {
+                "enabled": true,
+                "requireHttps": true,
+                "allowPairing": true,
+                "allowRemoteFiles": false,
+                "allowServerControl": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSettings"
+                },
+                "example": {
+                  "enabled": true,
+                  "requireHttps": true,
+                  "allowPairing": true,
+                  "allowRemoteFiles": false,
+                  "allowServerControl": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/server/start": {
+      "post": {
+        "operationId": "remote_remote_server_start",
+        "summary": "Remote server start request",
+        "description": "Request URL: /api/v1/remote/server/start.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server start requested; requires allowServerControl",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/server/stop": {
+      "post": {
+        "operationId": "remote_remote_server_stop",
+        "summary": "Remote server stop request",
+        "description": "Request URL: /api/v1/remote/server/stop.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server stop requested; requires allowServerControl",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/server/restart": {
+      "post": {
+        "operationId": "remote_remote_server_restart",
+        "summary": "Remote server restart request",
+        "description": "Request URL: /api/v1/remote/server/restart.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server restart requested; requires allowServerControl",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/list": {
+      "get": {
+        "operationId": "remote_remote_files_list",
+        "summary": "List a directory under the public files root",
+        "description": "Request URL: /api/v1/remote/files/list.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "description": "Slash-separated relative directory; empty means root",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Directory listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteFileList"
+                },
+                "example": {
+                  "files": [
+                    {
+                      "name": "note.txt",
+                      "path": "note.txt",
+                      "directory": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/download": {
+      "get": {
+        "operationId": "remote_remote_files_download",
+        "summary": "Download a file as a streamed response",
+        "description": "Request URL: /api/v1/remote/files/download.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "description": "Relative file path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "required": false,
+            "description": "Set to 1 for inline-safe MIME types",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File bytes with Content-Disposition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/upload": {
+      "post": {
+        "operationId": "remote_remote_files_upload",
+        "summary": "Upload a raw file body",
+        "description": "Request URL: /api/v1/remote/files/upload.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "description": "Relative destination directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "Sanitised filename",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "overwrite",
+            "in": "query",
+            "required": false,
+            "description": "true allows replacing an existing file",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "example": "file bytes"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteFile"
+                },
+                "example": {
+                  "name": "note.txt",
+                  "path": "note.txt",
+                  "bytesWritten": 12
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/delete": {
+      "post": {
+        "operationId": "remote_remote_files_delete",
+        "summary": "Delete a file or directory",
+        "description": "Request URL: /api/v1/remote/files/delete.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteFileDelete"
+              },
+              "example": {
+                "path": "note.txt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteActionResult"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/rename": {
+      "post": {
+        "operationId": "remote_remote_files_rename",
+        "summary": "Rename a file or directory",
+        "description": "Request URL: /api/v1/remote/files/rename.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteFileRename"
+              },
+              "example": {
+                "path": "note.txt",
+                "newName": "final.txt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File renamed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteFile"
+                },
+                "example": {
+                  "name": "final.txt",
+                  "path": "final.txt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote/files/mkdir": {
+      "post": {
+        "operationId": "remote_remote_files_mkdir",
+        "summary": "Create a directory",
+        "description": "Request URL: /api/v1/remote/files/mkdir.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "passwordHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteFileMkdir"
+              },
+              "example": {
+                "path": "",
+                "name": "exports"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Directory created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteFile"
+                },
+                "example": {
+                  "name": "exports",
+                  "path": "exports",
+                  "directory": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, unsafe path or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remote access disabled, HTTPS required, missing permission or operation disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict or consumed pairing request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1802,13 +4931,639 @@
             }
           }
         }
+      },
+      "RemoteLoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "viewer1",
+            "description": "3-32 chars: lowercase letters, digits, dot, underscore, hyphen"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "long-password-123",
+            "description": "At least 10 characters"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "RemoteLoginResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "One-time bearer token; only its hash is stored"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user": {
+            "$ref": "#/components/schemas/RemoteUser"
+          },
+          "warning": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt"
+        ]
+      },
+      "RemoteUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastLoginAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "grantedPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deniedPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effectivePermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RemoteUserCreateRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "administrator",
+              "manager",
+              "viewer"
+            ],
+            "default": "viewer"
+          },
+          "grantedPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deniedPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "RemotePairingRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "requestedName": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "deviceInfo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "consumed"
+            ]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "qrPayload": {
+            "type": "string"
+          }
+        }
+      },
+      "RemotePairingSubmit": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "ABCD1234"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deviceInfo": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "RemotePairingStatus": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "consumed"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "Present only on the first poll after approval"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "warning": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "requestId",
+          "status"
+        ]
+      },
+      "RemoteHeartbeat": {
+        "type": "object",
+        "properties": {
+          "appVersion": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "uptimeMillis": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "storageTotalBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "storageFreeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "activeConnections": {
+            "type": "integer"
+          },
+          "healthStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "RemoteDevice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deviceUid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "appVersion": {
+            "type": "string"
+          },
+          "scheme": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "registeredAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSeenAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastReportAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "disconnected": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "lastUptimeMillis": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "storageTotalBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "storageFreeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "activeConnections": {
+            "type": "integer"
+          },
+          "healthStatus": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Derived from the last heartbeat and offlineThresholdSeconds"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline",
+              "disconnected",
+              "revoked"
+            ]
+          },
+          "metricsAvailable": {
+            "type": "boolean",
+            "description": "True only after a real heartbeat report"
+          },
+          "metricsStale": {
+            "type": "boolean",
+            "description": "True when the report is older than three offline thresholds"
+          }
+        }
+      },
+      "RemoteDashboard": {
+        "type": "object",
+        "properties": {
+          "serverRunning": {
+            "type": "boolean"
+          },
+          "httpsRunning": {
+            "type": "boolean"
+          },
+          "uptimeMillis": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "devicesTotal": {
+            "type": "integer"
+          },
+          "devicesOnline": {
+            "type": "integer"
+          },
+          "pendingPairing": {
+            "type": "integer"
+          },
+          "usersTotal": {
+            "type": "integer"
+          },
+          "sessionsActive": {
+            "type": "integer"
+          },
+          "projects": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "filesBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastAuditAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requireHttps": {
+            "type": "boolean"
+          },
+          "remoteFilesEnabled": {
+            "type": "boolean"
+          },
+          "serverControlEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RemoteRoleCatalogue": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "allPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RemoteAuditEntry": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "event": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string",
+            "description": "Sanitised; passwords and bearer values are redacted"
+          },
+          "allowed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RemoteAuditList": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteAuditEntry"
+            }
+          }
+        }
+      },
+      "RemoteSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "requireHttps": {
+            "type": "boolean"
+          },
+          "allowRemoteFiles": {
+            "type": "boolean"
+          },
+          "allowServerControl": {
+            "type": "boolean"
+          },
+          "allowPairing": {
+            "type": "boolean"
+          },
+          "sessionTtlMinutes": {
+            "type": "integer"
+          },
+          "deviceSessionTtlDays": {
+            "type": "integer"
+          },
+          "pairingTtlMinutes": {
+            "type": "integer"
+          },
+          "offlineThresholdSeconds": {
+            "type": "integer"
+          },
+          "maxFailedLoginAttempts": {
+            "type": "integer"
+          },
+          "lockoutMinutes": {
+            "type": "integer"
+          }
+        }
+      },
+      "RemoteFile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "directory": {
+            "type": "boolean"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "modifiedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bytesWritten": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RemoteFileList": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteFile"
+            }
+          }
+        }
+      },
+      "RemoteFileDelete": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "example": "note.txt"
+          }
+        }
+      },
+      "RemoteFileRename": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "RemoteFileMkdir": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RemoteActionResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      },
+      "RemoteError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "this credential lacks the remote.users.write permission"
+          },
+          "status": {
+            "type": "integer"
+          }
+        }
       }
     },
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "API token created in the app or via /tokens"
+        "description": "Bearer token: a token created in the app or a one-time remote login / paired-device session token"
       },
       "passwordHeader": {
         "type": "apiKey",
