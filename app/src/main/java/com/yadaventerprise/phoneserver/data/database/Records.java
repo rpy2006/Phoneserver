@@ -64,6 +64,10 @@ public final class Records {
         public long sizeBytes;
         public boolean includesFiles;
         public boolean valid;
+        public boolean encrypted;
+        public String backupType = "full";
+        public String checksum = "";
+        public String parentBackupId = "";
         public String note = "";
         public long createdAt;
     }

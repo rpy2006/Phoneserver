@@ -1010,9 +1010,18 @@ public final class DataApi {
             if (method.equals("POST")) {
                 requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
                 JSONObject body = readJson(req);
-                boolean includeFiles = !body.has("includeFiles") || body.optBoolean("includeFiles", true);
-                Records.BackupRecord backup = BackupManager.create(context, projectId, includeFiles,
-                        body.optString("note", ""));
+                com.yadaventerprise.phoneserver.data.storage.BackupOptions options =
+                        new com.yadaventerprise.phoneserver.data.storage.BackupOptions();
+                options.includeFiles = !body.has("includeFiles") || body.optBoolean("includeFiles", true);
+                options.note = body.optString("note", "");
+                String type = body.optString("type", com.yadaventerprise.phoneserver.data.storage.BackupOptions.TYPE_FULL);
+                options.type = com.yadaventerprise.phoneserver.data.storage.BackupOptions.TYPE_INCREMENTAL.equals(type)
+                        ? com.yadaventerprise.phoneserver.data.storage.BackupOptions.TYPE_INCREMENTAL
+                        : com.yadaventerprise.phoneserver.data.storage.BackupOptions.TYPE_FULL;
+                options.parentBackupId = body.optString("parentBackupId", "");
+                String password = body.optString("password", req.headers.get("x-backup-password"));
+                if (password != null && !password.isEmpty()) options.password = password.toCharArray();
+                Records.BackupRecord backup = BackupManager.create(context, projectId, options);
                 sendJson(context, req, out, 201, backupJson(backup));
                 return;
             }
@@ -1044,24 +1053,56 @@ public final class DataApi {
         if (action.equals("restore") && method.equals("POST")) {
             requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
             JSONObject body = readJson(req);
-            BackupManager.restore(context, projectId, backupId, body.optBoolean("confirm", false));
+            com.yadaventerprise.phoneserver.data.storage.RestoreOptions options =
+                    new com.yadaventerprise.phoneserver.data.storage.RestoreOptions();
+            options.confirm = body.optBoolean("confirm", false);
+            options.createRecoveryPoint = !body.has("createRecoveryPoint") || body.optBoolean("createRecoveryPoint", true);
+            options.restoreDatabases = !body.has("restoreDatabases") || body.optBoolean("restoreDatabases", true);
+            options.restoreFiles = !body.has("restoreFiles") || body.optBoolean("restoreFiles", true);
+            options.restoreProjectConfig = !body.has("restoreProjectConfig") || body.optBoolean("restoreProjectConfig", true);
+            String password = body.optString("password", req.headers.get("x-backup-password"));
+            if (password != null && !password.isEmpty()) options.password = password.toCharArray();
+            BackupManager.restore(context, projectId, backupId, options);
             sendJson(context, req, out, 200, ok());
             return;
         }
         if (action.equals("validate") && method.equals("POST")) {
             requirePermission(auth, TokenPolicy.BACKUPS_READ);
-            Map<String, String> manifest = BackupManager.validate(context, projectId, backupId);
-            JSONObject json = new JSONObject();
-            json.put("valid", true);
-            for (Map.Entry<String, String> e : manifest.entrySet()) json.put(e.getKey(), e.getValue());
-            sendJson(context, req, out, 200, json);
+            JSONObject body = readJson(req);
+            String password = body.optString("password", req.headers.get("x-backup-password"));
+            char[] pw = password != null && !password.isEmpty() ? password.toCharArray() : null;
+            try {
+                Map<String, String> manifest = BackupManager.validate(context, projectId, backupId, pw);
+                JSONObject json = new JSONObject();
+                json.put("valid", true);
+                for (Map.Entry<String, String> e : manifest.entrySet()) json.put(e.getKey(), e.getValue());
+                sendJson(context, req, out, 200, json);
+            } finally {
+                if (pw != null) java.util.Arrays.fill(pw, '\0');
+            }
+            return;
+        }
+        if (action.equals("preview") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
+            JSONObject body = readJson(req);
+            String password = body.optString("password", req.headers.get("x-backup-password"));
+            char[] pw = password != null && !password.isEmpty() ? password.toCharArray() : null;
+            try {
+                com.yadaventerprise.phoneserver.data.storage.BackupPreview preview =
+                        BackupManager.preview(context, projectId, backupId, pw);
+                sendJson(context, req, out, preview.valid ? 200 : 422, preview.toJson());
+            } finally {
+                if (pw != null) java.util.Arrays.fill(pw, '\0');
+            }
             return;
         }
         if (action.equals("download") && method.equals("GET")) {
             requirePermission(auth, TokenPolicy.BACKUPS_READ);
             Records.BackupRecord backup = BackupManager.require(context, projectId, backupId);
             File archive = BackupManager.archiveFile(context, projectId, backupId);
-            serveDownload(context, req, out, archive, "application/zip", backup.fileName, true);
+            String mime = backup.encrypted || archive.getName().endsWith(".enc")
+                    ? "application/octet-stream" : "application/zip";
+            serveDownload(context, req, out, archive, mime, backup.fileName, true);
             return;
         }
         throw DataException.notFound("endpoint");
@@ -1070,11 +1111,20 @@ public final class DataApi {
     private static void importBackup(Context context, SimpleHttpServer.Request req, OutputStream out,
                                      String projectId) throws Exception {
         boolean confirm = "true".equalsIgnoreCase(req.query.get("confirm"));
+        String password = req.headers.get("x-backup-password");
         File temp = ContentStore.getStorageLayout(context).newTempFile("restore-import");
         try {
             long written = storeBody(context, req, temp);
             if (written == 0) throw new DataException("no backup content was uploaded", 400);
-            BackupManager.importArchive(context, projectId, temp, confirm);
+            com.yadaventerprise.phoneserver.data.storage.RestoreOptions options =
+                    new com.yadaventerprise.phoneserver.data.storage.RestoreOptions();
+            options.confirm = confirm;
+            options.createRecoveryPoint = !"false".equalsIgnoreCase(req.query.get("createRecoveryPoint"));
+            options.restoreDatabases = !"false".equalsIgnoreCase(req.query.get("restoreDatabases"));
+            options.restoreFiles = !"false".equalsIgnoreCase(req.query.get("restoreFiles"));
+            options.restoreProjectConfig = !"false".equalsIgnoreCase(req.query.get("restoreProjectConfig"));
+            if (password != null && !password.isEmpty()) options.password = password.toCharArray();
+            BackupManager.importArchive(context, projectId, temp, options);
             sendJson(context, req, out, 200, ok());
         } finally {
             //noinspection ResultOfMethodCallIgnored
@@ -1090,6 +1140,10 @@ public final class DataApi {
         json.put("sizeBytes", b.sizeBytes);
         json.put("includesFiles", b.includesFiles);
         json.put("valid", b.valid);
+        json.put("encrypted", b.encrypted);
+        json.put("backupType", b.backupType == null ? "full" : b.backupType);
+        json.put("checksum", b.checksum == null ? "" : b.checksum);
+        json.put("parentBackupId", b.parentBackupId == null ? "" : b.parentBackupId);
         json.put("note", b.note);
         json.put("createdAt", b.createdAt);
         json.put("downloadPath", BASE + "/projects/" + b.projectId + "/backups/" + b.id + "/download");

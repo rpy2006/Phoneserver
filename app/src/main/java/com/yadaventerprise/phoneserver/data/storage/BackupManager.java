@@ -51,28 +51,45 @@ public final class BackupManager {
 
     public static Records.BackupRecord create(Context context, String projectId, boolean includeFiles,
                                               String note) throws DataException {
+        return create(context, projectId, BackupOptions.full(includeFiles, note));
+    }
+
+    public static Records.BackupRecord create(Context context, String projectId, BackupOptions options)
+            throws DataException {
+        BackupOptions opts = options == null ? BackupOptions.full(true, "") : options;
         Records.ProjectRecord project = ProjectStore.require(context, projectId);
         StorageLayout layout = ContentStoreBridge.layout(context);
-        String cleanNote = note == null ? "" : note.trim();
+        String cleanNote = opts.note == null ? "" : opts.note.trim();
         if (cleanNote.length() > 200) throw new DataException("backup note is too long", 400);
+
+        String type = BackupOptions.TYPE_INCREMENTAL.equals(opts.type)
+                ? BackupOptions.TYPE_INCREMENTAL : BackupOptions.TYPE_FULL;
+        if (BackupOptions.TYPE_RECOVERY.equals(opts.type)) type = BackupOptions.TYPE_RECOVERY;
+        boolean includeFiles = opts.includeFiles;
+        boolean includeDatabases = opts.includeDatabases;
 
         String id = StorageLayout.generateId();
         File backupsDir = StorageLayout.ensure(layout.backupsDir(projectId));
-        File archive = new File(backupsDir, id + ".zip");
+        File archive = new File(backupsDir, id + (opts.isEncrypted() ? ".zip.enc" : ".zip"));
 
-        List<Records.DbRecord> databases = DatabaseManager.list(context, projectId);
+        List<Records.DbRecord> databases = includeDatabases ? DatabaseManager.list(context, projectId)
+                : new ArrayList<>();
         List<Records.FileRecord> files = includeFiles ? FileStore.listAll(context, projectId)
                 : new ArrayList<>();
 
         Map<String, String> manifest = new LinkedHashMap<>();
         manifest.put("format", BackupArchive.FORMAT);
         manifest.put("version", BackupArchive.VERSION);
+        manifest.put("backupType", type);
         manifest.put("projectId", projectId);
         manifest.put("projectName", project.name);
         manifest.put("createdAt", String.valueOf(System.currentTimeMillis()));
         manifest.put("includesFiles", includeFiles ? "true" : "false");
+        manifest.put("includesDatabases", includeDatabases ? "true" : "false");
         manifest.put("databaseCount", String.valueOf(databases.size()));
         manifest.put("fileCount", String.valueOf(files.size()));
+        manifest.put("encrypted", opts.isEncrypted() ? "true" : "false");
+        manifest.put("parentBackupId", opts.parentBackupId == null ? "" : opts.parentBackupId);
         manifest.put("note", cleanNote);
         manifest.put("appVersion", "phoneserver");
 
@@ -80,7 +97,6 @@ public final class BackupManager {
         try {
             writeMetadataFile(context, projectId, databases, files, metadataJson);
         } catch (IOException e) {
-            //noinspection ResultOfMethodCallIgnored
             metadataJson.delete();
             throw new DataException("could not write backup metadata", 500);
         }
@@ -88,40 +104,58 @@ public final class BackupManager {
         List<BackupArchive.Entry> entries = new ArrayList<>();
         entries.add(new BackupArchive.Entry(METADATA_ENTRY, metadataJson));
         File config = layout.projectConfig(projectId);
-        if (config.exists()) entries.add(new BackupArchive.Entry(CONFIG_ENTRY, config));
+        if (opts.includeProjectConfig && config.exists()) entries.add(new BackupArchive.Entry(CONFIG_ENTRY, config));
 
-        for (Records.DbRecord db : databases) {
-            File file = new File(layout.databasesDir(projectId), db.fileName);
-            if (file.exists()) entries.add(new BackupArchive.Entry("databases/" + db.fileName, file));
+        if (includeDatabases) {
+            for (Records.DbRecord db : databases) {
+                File file = new File(layout.databasesDir(projectId), db.fileName);
+                if (file.exists()) entries.add(new BackupArchive.Entry("databases/" + db.fileName, file));
+            }
         }
-        for (Records.FileRecord file : files) {
-            try {
-                File content = FileStore.contentFile(context, file);
-                entries.add(new BackupArchive.Entry("files/" + file.storageKey, content));
-            } catch (DataException ignored) {
-                // content already missing - it is reported by detectIssues()
+        if (includeFiles) {
+            for (Records.FileRecord file : files) {
+                try {
+                    File content = FileStore.contentFile(context, file);
+                    entries.add(new BackupArchive.Entry("files/" + file.storageKey, content));
+                } catch (DataException ignored) {
+                }
             }
         }
 
+        File plainArchive = opts.isEncrypted() ? layout.newTempFile("backup-plain") : archive;
         try {
-            BackupArchive.create(archive, manifest, entries);
+            BackupArchive.create(plainArchive, manifest, entries);
+            if (opts.isEncrypted()) {
+                BackupCrypto.encrypt(plainArchive, archive, opts.password);
+            }
         } catch (IOException e) {
-            //noinspection ResultOfMethodCallIgnored
             archive.delete();
+            plainArchive.delete();
             throw new DataException("could not write backup archive: " + e.getMessage(), 500);
         } finally {
-            //noinspection ResultOfMethodCallIgnored
             metadataJson.delete();
+            if (opts.isEncrypted() && plainArchive.exists()) plainArchive.delete();
+            opts.clearPassword();
+        }
+
+        String checksum = "";
+        try {
+            checksum = sha256(archive);
+        } catch (IOException ignored) {
         }
 
         long now = System.currentTimeMillis();
         Records.BackupRecord record = new Records.BackupRecord();
         record.id = id;
         record.projectId = projectId;
-        record.fileName = backupDisplayName(project.name, now);
+        record.fileName = backupDisplayName(project.name, now) + (opts.isEncrypted() ? ".enc" : "");
         record.sizeBytes = archive.length();
         record.includesFiles = includeFiles;
         record.valid = true;
+        record.encrypted = opts.isEncrypted();
+        record.backupType = type;
+        record.checksum = checksum;
+        record.parentBackupId = opts.parentBackupId == null ? "" : opts.parentBackupId;
         record.note = cleanNote;
         record.createdAt = now;
 
@@ -132,6 +166,10 @@ public final class BackupManager {
         values.put("size_bytes", record.sizeBytes);
         values.put("includes_files", includeFiles ? 1 : 0);
         values.put("valid", 1);
+        values.put("encrypted", record.encrypted ? 1 : 0);
+        values.put("backup_type", record.backupType);
+        values.put("checksum", record.checksum);
+        values.put("parent_id", record.parentBackupId);
         values.put("note", record.note);
         values.put("created_at", now);
         SystemDatabase.get(context).getWritableDatabase().insertOrThrow("backups", null, values);
@@ -149,7 +187,8 @@ public final class BackupManager {
         List<Records.BackupRecord> result = new ArrayList<>();
         SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
         try (Cursor c = db.rawQuery(
-                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
+                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,encrypted,backup_type,"
+                        + "checksum,parent_id,note,created_at "
                         + "FROM backups WHERE project_id=? ORDER BY created_at DESC",
                 new String[]{projectId})) {
             while (c.moveToNext()) result.add(fromCursor(c));
@@ -161,7 +200,8 @@ public final class BackupManager {
             throws DataException {
         SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
         try (Cursor c = db.rawQuery(
-                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
+                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,encrypted,backup_type,"
+                        + "checksum,parent_id,note,created_at "
                         + "FROM backups WHERE project_id=? AND id=?", new String[]{projectId, backupId})) {
             if (c.moveToFirst()) return fromCursor(c);
         }
@@ -173,7 +213,9 @@ public final class BackupManager {
         if (!backupId.matches("[A-Za-z0-9_-]{1,64}")) {
             throw new DataException("invalid backup id", 400);
         }
-        File file = new File(layout.backupsDir(projectId), backupId + ".zip");
+        File dir = layout.backupsDir(projectId);
+        File file = new File(dir, backupId + ".zip");
+        if (!file.exists() || !file.isFile()) file = new File(dir, backupId + ".zip.enc");
         if (!file.exists() || !file.isFile()) throw DataException.notFound("backup");
         return file;
     }
@@ -181,17 +223,105 @@ public final class BackupManager {
     /** Re-validates the archive on demand and refreshes the stored flag. */
     public static Map<String, String> validate(Context context, String projectId, String backupId)
             throws DataException {
-        require(context, projectId, backupId);
+        return validate(context, projectId, backupId, null);
+    }
+
+    public static Map<String, String> validate(Context context, String projectId, String backupId, char[] password)
+            throws DataException {
+        Records.BackupRecord record = require(context, projectId, backupId);
         File file = archiveFile(context, projectId, backupId);
-        Map<String, String> manifest;
+        StorageLayout layout = ContentStoreBridge.layout(context);
+        File tempPlain = null;
         try {
-            manifest = BackupArchive.validate(file);
+            File plain = file;
+            if (BackupCrypto.isEncrypted(file) || record.encrypted) {
+                if (password == null || password.length == 0) {
+                    throw new DataException("backup password is required", 400);
+                }
+                tempPlain = layout.newTempFile("backup-validate");
+                BackupCrypto.decrypt(file, tempPlain, password);
+                plain = tempPlain;
+            }
+            if (record.checksum != null && !record.checksum.isEmpty()) {
+                String actual = sha256(plain);
+                if (!actual.equalsIgnoreCase(record.checksum)) {
+                    updateValid(context, backupId, false);
+                    throw new DataException("backup checksum verification failed", 422);
+                }
+            }
+            Map<String, String> manifest = BackupArchive.validate(plain);
+            updateValid(context, backupId, true);
+            return manifest;
         } catch (IOException e) {
             updateValid(context, backupId, false);
-            throw new DataException("backup archive failed validation: " + e.getMessage(), 422);
+            String msg = e.getMessage() == null ? "backup archive failed validation" : e.getMessage();
+            throw new DataException("backup archive failed validation: " + msg, 422);
+        } finally {
+            if (tempPlain != null) tempPlain.delete();
         }
-        updateValid(context, backupId, true);
-        return manifest;
+    }
+
+    public static BackupPreview preview(Context context, String projectId, String backupId, char[] password)
+            throws DataException {
+        BackupPreview preview = new BackupPreview();
+        Records.BackupRecord record = require(context, projectId, backupId);
+        File file = archiveFile(context, projectId, backupId);
+        preview.encrypted = record.encrypted || BackupCrypto.isEncrypted(file);
+        preview.backupType = record.backupType == null ? BackupOptions.TYPE_FULL : record.backupType;
+        preview.projectId = record.projectId;
+        preview.createdAt = record.createdAt;
+        preview.includesFiles = record.includesFiles;
+        preview.note = record.note == null ? "" : record.note;
+        preview.checksum = record.checksum == null ? "" : record.checksum;
+        preview.parentBackupId = record.parentBackupId == null ? "" : record.parentBackupId;
+        StorageLayout layout = ContentStoreBridge.layout(context);
+        File tempPlain = null;
+        try {
+            File plain = file;
+            if (preview.encrypted) {
+                if (password == null || password.length == 0) {
+                    preview.valid = false;
+                    preview.error = "backup password is required";
+                    return preview;
+                }
+                tempPlain = layout.newTempFile("backup-preview");
+                BackupCrypto.decrypt(file, tempPlain, password);
+                plain = tempPlain;
+            }
+            Map<String, String> manifest = BackupArchive.validate(plain);
+            preview.valid = true;
+            preview.manifest.putAll(manifest);
+            preview.format = manifest.get("format") == null ? "" : manifest.get("format");
+            preview.version = manifest.get("version") == null ? "" : manifest.get("version");
+            preview.projectName = manifest.get("projectName") == null ? "" : manifest.get("projectName");
+            preview.includesDatabases = !"false".equals(manifest.get("includesDatabases"));
+            Map<String, Records.FileRecord> known = readMetadataFromArchive(plain, layout);
+            for (Records.FileRecord f : known.values()) {
+                preview.files.add(f.folderPath == null || f.folderPath.isEmpty()
+                        ? f.originalName : f.folderPath + "/" + f.originalName);
+                if (f.folderPath != null && !f.folderPath.isEmpty() && !preview.folders.contains(f.folderPath)) {
+                    preview.folders.add(f.folderPath);
+                }
+            }
+            for (String name : BackupArchive.list(plain)) {
+                if (name.startsWith("databases/") && name.endsWith(".db")) {
+                    String db = name.substring("databases/".length());
+                    if (!preview.databases.contains(db)) preview.databases.add(db);
+                }
+            }
+            java.util.Collections.sort(preview.files);
+            java.util.Collections.sort(preview.folders);
+            java.util.Collections.sort(preview.databases);
+            updateValid(context, backupId, true);
+            return preview;
+        } catch (Exception e) {
+            updateValid(context, backupId, false);
+            preview.valid = false;
+            preview.error = e.getMessage() == null ? "backup preview failed" : e.getMessage();
+            return preview;
+        } finally {
+            if (tempPlain != null) tempPlain.delete();
+        }
     }
 
     public static void delete(Context context, String projectId, String backupId) throws DataException {
@@ -208,60 +338,131 @@ public final class BackupManager {
 
     // ---- restore ----
 
-    /**
-     * Extracts a validated archive into the project, replacing the project's
-     * databases (and files, when the archive contains them) only after the
-     * whole archive has been extracted safely.
-     */
     public static void restore(Context context, String projectId, String backupId, boolean confirm)
             throws DataException {
-        Records.BackupRecord record = require(context, projectId, backupId);
-        File archive = archiveFile(context, projectId, backupId);
-        restoreFromArchive(context, projectId, archive, record.includesFiles, confirm, "restore");
+        RestoreOptions options = new RestoreOptions();
+        options.confirm = confirm;
+        restore(context, projectId, backupId, options);
+    }
+
+    public static void restore(Context context, String projectId, String backupId, RestoreOptions options)
+            throws DataException {
+        RestoreOptions opts = options == null ? new RestoreOptions() : options;
+        try {
+            if (!opts.confirm) {
+                throw new DataException("restore requires confirm=true (it replaces existing data)", 400);
+            }
+            Records.BackupRecord record = require(context, projectId, backupId);
+            File archive = archiveFile(context, projectId, backupId);
+            restoreFromArchive(context, projectId, archive, record.includesFiles, opts, "restore", record.id);
+        } finally {
+            opts.clearPassword();
+        }
     }
 
     /** Restores an externally uploaded archive into a project (used by import). */
     public static void importArchive(Context context, String projectId, File archive, boolean confirm)
             throws DataException {
+        RestoreOptions options = new RestoreOptions();
+        options.confirm = confirm;
+        importArchive(context, projectId, archive, options);
+    }
+
+    public static void importArchive(Context context, String projectId, File archive, RestoreOptions options)
+            throws DataException {
         ProjectStore.require(context, projectId);
-        Map<String, String> manifest;
+        RestoreOptions opts = options == null ? new RestoreOptions() : options;
         try {
-            manifest = BackupArchive.validate(archive);
-        } catch (IOException e) {
-            throw new DataException("not a valid PhoneServer backup: " + e.getMessage(), 422);
+            if (!opts.confirm) {
+                throw new DataException("import requires confirm=true (it replaces existing data)", 400);
+            }
+            if (BackupCrypto.isEncrypted(archive) && !opts.isEncryptedPasswordProvided()) {
+                throw new DataException("backup password is required", 400);
+            }
+            restoreFromArchive(context, projectId, archive, true, opts, "import", null);
+        } finally {
+            opts.clearPassword();
         }
-        boolean includeFiles = !"false".equals(manifest.get("includesFiles"));
-        restoreFromArchive(context, projectId, archive, includeFiles, confirm, "import");
     }
 
     private static void restoreFromArchive(Context context, String projectId, File archive,
-                                           boolean includeFiles, boolean confirm, String action)
+                                           boolean includeFiles, RestoreOptions options, String action,
+                                           String recoverySourceId)
             throws DataException {
-        if (!confirm) {
-            throw new DataException(action + " requires confirm=true (it replaces existing data)", 400);
-        }
         ProjectStore.require(context, projectId);
         StorageLayout layout = ContentStoreBridge.layout(context);
         File staging = new File(StorageLayout.ensure(layout.tmpDir()),
                 "restore-" + StorageLayout.generateId());
+        File plainArchive = null;
+        String recoveryId = null;
         try {
+            File sourceArchive = archive;
+            if (BackupCrypto.isEncrypted(archive)) {
+                if (!options.isEncryptedPasswordProvided()) {
+                    throw new DataException("backup password is required", 400);
+                }
+                plainArchive = layout.newTempFile("restore-plain");
+                BackupCrypto.decrypt(archive, plainArchive, options.password);
+                sourceArchive = plainArchive;
+            }
+            Map<String, String> manifest;
             try {
-                BackupArchive.extract(archive, staging, BackupArchive.DEFAULT_MAX_TOTAL_BYTES);
+                manifest = BackupArchive.validate(sourceArchive);
+            } catch (IOException e) {
+                throw new DataException("not a valid PhoneServer backup: " + e.getMessage(), 422);
+            }
+            boolean includesFiles = includeFiles && !"false".equals(manifest.get("includesFiles")) && options.restoreFiles;
+            boolean includesDatabases = !"false".equals(manifest.get("includesDatabases")) && options.restoreDatabases;
+            boolean includesConfig = options.restoreProjectConfig;
+
+            try {
+                BackupArchive.extract(sourceArchive, staging, BackupArchive.DEFAULT_MAX_TOTAL_BYTES);
             } catch (IOException e) {
                 throw new DataException("could not extract backup: " + e.getMessage(), 422);
             }
-            Map<String, Records.FileRecord> knownFiles = readMetadata(new File(staging, METADATA_ENTRY));
 
-            // Databases are always replaced; files only when the archive has them.
-            replaceDir(new File(staging, "databases"), layout.databasesDir(projectId));
-            if (includeFiles) {
-                replaceDir(new File(staging, "files"), layout.filesDir(projectId));
+            if (options.createRecoveryPoint) {
+                BackupOptions recovery = new BackupOptions();
+                recovery.type = BackupOptions.TYPE_RECOVERY;
+                recovery.includeFiles = true;
+                recovery.includeDatabases = true;
+                recovery.includeProjectConfig = true;
+                recovery.note = "Recovery point before " + action;
+                recoveryId = create(context, projectId, recovery).id;
             }
 
-            rebuildMetadata(context, projectId, layout, knownFiles, includeFiles);
+            Map<String, Records.FileRecord> knownFiles = readMetadata(new File(staging, METADATA_ENTRY));
+            if (includesDatabases) {
+                replaceDir(new File(staging, "databases"), layout.databasesDir(projectId));
+            }
+            if (includesFiles) {
+                replaceDir(new File(staging, "files"), layout.filesDir(projectId));
+            }
+            if (includesConfig) {
+                File cfg = new File(staging, CONFIG_ENTRY);
+                if (cfg.exists()) {
+                    StorageLayout.ensure(layout.projectDir(projectId));
+                    copyFile(cfg, layout.projectConfig(projectId));
+                }
+            }
+            rebuildMetadata(context, projectId, layout, knownFiles, includesFiles, includesDatabases);
             ProjectStore.touch(context, projectId);
             ProjectStore.logOperation(context, projectId, "backup." + action, archive.getName());
+            recoveryId = null;
+        } catch (Exception e) {
+            if (recoveryId != null) {
+                try {
+                    RestoreOptions rollback = new RestoreOptions();
+                    rollback.confirm = true;
+                    rollback.createRecoveryPoint = false;
+                    restore(context, projectId, recoveryId, rollback);
+                } catch (Exception ignored) {
+                }
+            }
+            if (e instanceof DataException) throw (DataException) e;
+            throw new DataException("restore failed: " + safeMessage(e), 500);
         } finally {
+            if (plainArchive != null) plainArchive.delete();
             deleteRecursively(staging);
         }
     }
@@ -269,16 +470,15 @@ public final class BackupManager {
     // ---- internals ----
 
     private static void rebuildMetadata(Context context, String projectId, StorageLayout layout,
-                                        Map<String, Records.FileRecord> knownFiles, boolean includeFiles)
+                                        Map<String, Records.FileRecord> knownFiles, boolean includeFiles,
+                                        boolean includeDatabases)
             throws DataException {
         SQLiteDatabase db = SystemDatabase.get(context).getWritableDatabase();
         db.beginTransaction();
         try {
-            db.delete("files", "project_id=?", new String[]{projectId});
-            db.delete("folders", "project_id=?", new String[]{projectId});
-            db.delete("project_databases", "project_id=?", new String[]{projectId});
-
             if (includeFiles) {
+                db.delete("files", "project_id=?", new String[]{projectId});
+                db.delete("folders", "project_id=?", new String[]{projectId});
                 File filesDir = StorageLayout.ensure(layout.filesDir(projectId));
                 File[] stored = filesDir.listFiles();
                 if (stored != null) {
@@ -289,21 +489,27 @@ public final class BackupManager {
                     }
                 }
             }
+            if (includeDatabases) {
+                db.delete("project_databases", "project_id=?", new String[]{projectId});
+            }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
         }
 
-        // Re-adopt databases from disk and re-create the logical folders.
-        DatabaseManager.list(context, projectId);
-        for (Records.FileRecord file : FileStore.listAll(context, projectId)) {
-            if (file.folderPath != null && !file.folderPath.isEmpty()) {
-                ContentValues values = new ContentValues();
-                values.put("id", StorageLayout.generateId());
-                values.put("project_id", projectId);
-                values.put("path", file.folderPath);
-                values.put("created_at", System.currentTimeMillis());
-                db.insertWithOnConflict("folders", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+        if (includeDatabases) {
+            DatabaseManager.list(context, projectId);
+        }
+        if (includeFiles) {
+            for (Records.FileRecord file : FileStore.listAll(context, projectId)) {
+                if (file.folderPath != null && !file.folderPath.isEmpty()) {
+                    ContentValues values = new ContentValues();
+                    values.put("id", StorageLayout.generateId());
+                    values.put("project_id", projectId);
+                    values.put("path", file.folderPath);
+                    values.put("created_at", System.currentTimeMillis());
+                    db.insertWithOnConflict("folders", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                }
             }
         }
     }
@@ -478,18 +684,18 @@ public final class BackupManager {
         List<Records.BackupRecord> all = new ArrayList<>();
         SQLiteDatabase db = SystemDatabase.get(context).getReadableDatabase();
         try (Cursor c = db.rawQuery(
-                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,note,created_at "
+                "SELECT id,project_id,file_name,size_bytes,includes_files,valid,encrypted,backup_type,"
+                        + "checksum,parent_id,note,created_at "
                         + "FROM backups WHERE project_id=? ORDER BY created_at DESC",
                 new String[]{projectId})) {
             while (c.moveToNext()) all.add(fromCursor(c));
         }
         for (int i = MAX_BACKUPS_PER_PROJECT; i < all.size(); i++) {
             Records.BackupRecord stale = all.get(i);
-            File file = new File(ContentStoreBridge.layout(context).backupsDir(projectId),
-                    stale.id + ".zip");
-            if (file.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                file.delete();
+            try {
+                File file = archiveFile(context, projectId, stale.id);
+                if (file.exists()) file.delete();
+            } catch (Exception ignored) {
             }
             SystemDatabase.get(context).getWritableDatabase()
                     .delete("backups", "id=?", new String[]{stale.id});
@@ -518,9 +724,57 @@ public final class BackupManager {
         r.sizeBytes = c.getLong(3);
         r.includesFiles = c.getInt(4) != 0;
         r.valid = c.getInt(5) != 0;
-        r.note = c.isNull(6) ? "" : c.getString(6);
-        r.createdAt = c.getLong(7);
+        r.encrypted = c.getInt(6) != 0;
+        r.backupType = c.isNull(7) ? BackupOptions.TYPE_FULL : c.getString(7);
+        r.checksum = c.isNull(8) ? "" : c.getString(8);
+        r.parentBackupId = c.isNull(9) ? "" : c.getString(9);
+        r.note = c.isNull(10) ? "" : c.getString(10);
+        r.createdAt = c.getLong(11);
         return r;
+    }
+
+
+    private static Map<String, Records.FileRecord> readMetadataFromArchive(File plainZip, StorageLayout layout) {
+        File tmp = new File(layout.tmpDir(), "meta-" + StorageLayout.generateId());
+        try {
+            BackupArchive.extract(plainZip, tmp, 64L * 1024 * 1024);
+            return readMetadata(new File(tmp, METADATA_ENTRY));
+        } catch (Exception e) {
+            return new LinkedHashMap<>();
+        } finally {
+            deleteRecursively(tmp);
+        }
+    }
+
+    private static void copyFile(File source, File target) throws IOException {
+        File parent = target.getParentFile();
+        if (parent != null) StorageLayout.ensure(parent);
+        try (InputStream in = new java.io.FileInputStream(source);
+             OutputStream out = new FileOutputStream(target)) {
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+        }
+    }
+
+    private static String sha256(File file) throws IOException {
+        try (InputStream in = new java.io.BufferedInputStream(new java.io.FileInputStream(file))) {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) != -1) digest.update(buffer, 0, read);
+            byte[] hash = digest.digest();
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) sb.append(String.format(java.util.Locale.US, "%02x", b & 0xff));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new IOException("could not compute checksum", e);
+        }
+    }
+
+    private static String safeMessage(Exception e) {
+        String message = e == null ? null : e.getMessage();
+        return message == null || message.isEmpty() ? (e == null ? "unknown" : e.getClass().getSimpleName()) : message;
     }
 
     private static boolean deleteRecursively(File file) {

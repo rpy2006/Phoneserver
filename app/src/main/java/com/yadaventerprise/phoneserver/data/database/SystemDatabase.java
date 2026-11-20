@@ -16,7 +16,7 @@ import java.io.File;
 public class SystemDatabase extends SQLiteOpenHelper {
 
     public static final String DB_NAME = "system.db";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     private static volatile SystemDatabase instance;
 
@@ -110,6 +110,10 @@ public class SystemDatabase extends SQLiteOpenHelper {
                 + "size_bytes INTEGER NOT NULL DEFAULT 0,"
                 + "includes_files INTEGER NOT NULL DEFAULT 1,"
                 + "valid INTEGER NOT NULL DEFAULT 0,"
+                + "encrypted INTEGER NOT NULL DEFAULT 0,"
+                + "backup_type TEXT NOT NULL DEFAULT 'full',"
+                + "checksum TEXT NOT NULL DEFAULT '',"
+                + "parent_id TEXT NOT NULL DEFAULT '',"
                 + "note TEXT NOT NULL DEFAULT '',"
                 + "created_at INTEGER NOT NULL,"
                 + "FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE)");
@@ -129,10 +133,20 @@ public class SystemDatabase extends SQLiteOpenHelper {
         // Safe, additive migrations only. Each future version gets its own step
         // so existing user data is preserved across app upgrades.
         if (oldVersion < 2) {
-            // reserved for a future schema change
+            addColumn(db, "backups", "encrypted", "INTEGER NOT NULL DEFAULT 0");
+            addColumn(db, "backups", "backup_type", "TEXT NOT NULL DEFAULT 'full'");
+            addColumn(db, "backups", "checksum", "TEXT NOT NULL DEFAULT ''");
+            addColumn(db, "backups", "parent_id", "TEXT NOT NULL DEFAULT ''");
         }
         if (oldVersion < 3) {
             // reserved for a future schema change
+        }
+    }
+
+    private static void addColumn(SQLiteDatabase db, String table, String column, String definition) {
+        try {
+            db.execSQL("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+        } catch (Exception ignored) {
         }
     }
 
