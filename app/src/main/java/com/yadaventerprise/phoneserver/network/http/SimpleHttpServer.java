@@ -220,6 +220,7 @@ public class SimpleHttpServer {
         boolean bodyTooLarge = false;
         long startedAtMillis;
         int responseStatus;
+        long responseBytes;
         String actor = "anonymous";
         String tokenId = "";
         boolean blocked;
@@ -231,6 +232,11 @@ public class SimpleHttpServer {
     static void noteStatus(int code) {
         Request req = CURRENT_REQUEST.get();
         if (req != null) req.responseStatus = code;
+    }
+
+    static void noteResponseBytes(long bytes) {
+        Request req = CURRENT_REQUEST.get();
+        if (req != null && bytes > 0) req.responseBytes = bytes;
     }
 
     static void noteActor(String actor, String tokenId) {
@@ -411,6 +417,7 @@ public class SimpleHttpServer {
             }
 
             route(req, out);
+            req.responseBytes = out == null ? 0 : out.count();
 
             String ip = req.remoteIp;
             String userAgent = req.headers.get("user-agent");

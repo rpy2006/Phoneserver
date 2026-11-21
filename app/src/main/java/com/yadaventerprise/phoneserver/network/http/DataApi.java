@@ -138,6 +138,8 @@ public final class DataApi {
                 sendError(context, req, out, 500, "internal server error");
             } catch (IOException ignored) {
             }
+        } finally {
+            recordApiUsage(context, req);
         }
     }
 
@@ -198,6 +200,10 @@ public final class DataApi {
             handleTokens(context, req, out, auth, parts);
             return;
         }
+        if (head.equals("developer")) {
+            DeveloperApi.handle(context, req, out, auth, parts);
+            return;
+        }
         if (head.equals("projects")) {
             handleProjects(context, req, out, auth, parts);
             return;
@@ -236,14 +242,14 @@ public final class DataApi {
             }
         }
         if (bearer != null) {
-            Records.ApiTokenRecord token = TokenStore.verify(context, bearer);
+            Records.ApiTokenRecord token = TokenStore.verify(context, bearer, req.remoteIp);
             if (token == null) {
                 IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
-                        "invalid API token");
+                        "invalid, suspended, or expired API token");
                 return null;
             }
             TokenPolicy policy = TokenPolicyStore.get(context).get(token.id, token);
-            if (policy.isExpired()) {
+            if (policy.isExpired() || (token.expiresAt > 0 && token.expiresAt <= System.currentTimeMillis())) {
                 IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
                         "expired API token");
                 return null;
@@ -1177,10 +1183,13 @@ public final class DataApi {
                 }
                 TokenPolicy policy = TokenPolicy.preset(role);
                 applyPolicyBody(policy, body);
+                long expiresAt = policy.expiresAt;
+                if (expiresAt <= 0) expiresAt = body.optLong("expiresAt", 0);
                 boolean canWrite = policy.canWrite();
                 TokenStore.Created created = TokenStore.create(context, body.optString("name", null),
-                        projectId, canWrite);
+                        projectId, canWrite, expiresAt);
                 policy.tokenId = created.record.id;
+                policy.expiresAt = expiresAt;
                 policyStore.save(policy);
                 JSONObject json = tokenJson(created.record, policy);
                 json.put("token", created.token);
@@ -1200,10 +1209,16 @@ public final class DataApi {
         if (method.equals("PATCH") || method.equals("PUT")) {
             Records.ApiTokenRecord record = TokenStore.findById(context, id);
             if (record == null) throw DataException.notFound("token");
+            JSONObject body = readJson(req);
             TokenPolicy policy = policyStore.get(id, record);
-            applyPolicyBody(policy, readJson(req));
+            if (body.has("suspended")) TokenStore.setSuspended(context, id, body.optBoolean("suspended", false));
+            if (body.has("expiresAt")) TokenStore.setExpiresAt(context, id, Math.max(0, body.optLong("expiresAt", 0)));
+            if (body.has("revoked") && body.optBoolean("revoked", false)) TokenStore.revoke(context, id);
+            applyPolicyBody(policy, body);
+            if (body.has("expiresAt")) policy.expiresAt = Math.max(0, body.optLong("expiresAt", 0));
             policyStore.save(policy);
-            sendJson(context, req, out, 200, tokenJson(record, policy));
+            Records.ApiTokenRecord updated = TokenStore.findById(context, id);
+            sendJson(context, req, out, 200, tokenJson(updated == null ? record : updated, policy));
             return;
         }
         throw new DataException("method not allowed", 405);
@@ -1220,14 +1235,17 @@ public final class DataApi {
         for (String permission : policy.permissions) permissions.put(permission);
         json.put("permissions", permissions);
         json.put("rateLimitPerMinute", policy.rateLimitPerMinute);
-        json.put("expiresAt", policy.expiresAt);
+        json.put("expiresAt", token.expiresAt > 0 ? token.expiresAt : policy.expiresAt);
         json.put("createdAt", token.createdAt);
         json.put("lastUsedAt", token.lastUsedAt);
+        json.put("lastUsedIp", token.lastUsedIp == null ? "" : token.lastUsedIp);
+        json.put("keyPrefix", token.keyPrefix == null ? "" : token.keyPrefix);
+        json.put("suspended", token.suspended);
         json.put("revoked", token.revoked);
         return json;
     }
 
-    private static void applyPolicyBody(TokenPolicy policy, JSONObject body) throws DataException {
+    static void applyPolicyBody(TokenPolicy policy, JSONObject body) throws DataException {
         if (body.has("role")) {
             String role = body.optString("role", "");
             if (!TokenPolicy.isValidRole(role)) throw new DataException("unknown token role", 400);
@@ -1333,6 +1351,34 @@ public final class DataApi {
             if (value.equals(actual)) return;
         }
         throw new DataException("method not allowed", 405);
+    }
+
+    static void recordApiUsage(Context context, SimpleHttpServer.Request req) {
+        if (context == null || req == null || req.path == null || !isApiPath(req.path)) return;
+        try {
+            com.yadaventerprise.phoneserver.data.developer.ApiUsageEntry entry =
+                    new com.yadaventerprise.phoneserver.data.developer.ApiUsageEntry();
+            entry.time = System.currentTimeMillis();
+            entry.tokenId = req.tokenId == null ? "" : req.tokenId;
+            entry.tokenName = req.actor == null ? "" : req.actor;
+            entry.method = req.method == null ? "" : req.method;
+            entry.path = req.path;
+            entry.status = req.responseStatus;
+            entry.durationMs = Math.max(0, System.currentTimeMillis() - req.startedAtMillis);
+            entry.bytesIn = req.contentLength > 0 ? req.contentLength : (req.body == null ? 0 : req.body.length);
+            entry.bytesOut = req.responseBytes;
+            entry.rateLimited = req.responseStatus == 429;
+            entry.ip = req.remoteIp == null ? "" : req.remoteIp;
+            if (entry.tokenId != null && !entry.tokenId.isEmpty()) {
+                Records.ApiTokenRecord token = TokenStore.findById(context, entry.tokenId);
+                if (token != null) {
+                    entry.tokenName = token.name;
+                    entry.keyPrefix = token.keyPrefix == null ? "" : token.keyPrefix;
+                }
+            }
+            com.yadaventerprise.phoneserver.data.developer.ApiUsageStore.get(context).append(entry);
+        } catch (Exception ignored) {
+        }
     }
 
     /** Streams the request body to {@code dest}, never buffering the whole file. */
@@ -1453,6 +1499,7 @@ public final class DataApi {
                                  Context context, SimpleHttpServer.Request req, String extraHeaders)
             throws IOException {
         SimpleHttpServer.noteStatus(code);
+        SimpleHttpServer.noteResponseBytes(body == null ? 0 : body.length);
         StringBuilder headers = new StringBuilder();
         headers.append("HTTP/1.1 ").append(code).append(' ').append(status).append("\r\n");
         headers.append("Content-Type: ").append(contentType).append("\r\n");

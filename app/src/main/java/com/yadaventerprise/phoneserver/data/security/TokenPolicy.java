@@ -27,11 +27,32 @@ public class TokenPolicy {
     public static final String TOKENS_MANAGE = "tokens.manage";
     public static final String MAIL_READ = "mail.read";
     public static final String MAIL_WRITE = "mail.write";
+    public static final String SHARING_READ = "sharing.read";
+    public static final String SHARING_WRITE = "sharing.write";
+    public static final String ADS_READ = "ads.read";
+    public static final String ADS_WRITE = "ads.write";
+    public static final String ANALYTICS_READ = "analytics.read";
+    public static final String WEBHOOKS_READ = "webhooks.read";
+    public static final String WEBHOOKS_WRITE = "webhooks.write";
+    public static final String TASKS_READ = "tasks.read";
+    public static final String TASKS_WRITE = "tasks.write";
+    public static final String DEVICES_READ = "devices.read";
+    public static final String DEVICES_WRITE = "devices.write";
+    public static final String SYNC_READ = "sync.read";
+    public static final String SYNC_WRITE = "sync.write";
+    public static final String DEVELOPER_READ = "developer.read";
+    public static final String DEVELOPER_WRITE = "developer.write";
+    public static final String DASHBOARD_READ = "dashboard.read";
 
     private static final Set<String> ALL_PERMISSIONS = Collections.unmodifiableSet(
-            new LinkedHashSet<>(Arrays.asList(PROJECTS_READ, PROJECTS_WRITE, DATABASES_READ,
-                    DATABASES_WRITE,                     FILES_READ, FILES_WRITE, BACKUPS_READ, BACKUPS_WRITE,
-                    SYSTEM_READ, TOKENS_MANAGE, MAIL_READ, MAIL_WRITE)));
+            new LinkedHashSet<>(Arrays.asList(
+                    PROJECTS_READ, PROJECTS_WRITE, DATABASES_READ, DATABASES_WRITE,
+                    FILES_READ, FILES_WRITE, BACKUPS_READ, BACKUPS_WRITE,
+                    SYSTEM_READ, TOKENS_MANAGE, MAIL_READ, MAIL_WRITE,
+                    SHARING_READ, SHARING_WRITE, ADS_READ, ADS_WRITE,
+                    ANALYTICS_READ, WEBHOOKS_READ, WEBHOOKS_WRITE,
+                    TASKS_READ, TASKS_WRITE, DEVICES_READ, DEVICES_WRITE,
+                    SYNC_READ, SYNC_WRITE, DEVELOPER_READ, DEVELOPER_WRITE, DASHBOARD_READ)));
 
     public String tokenId = "";
     public String role = ROLE_VIEWER;
@@ -61,12 +82,26 @@ public class TokenPolicy {
         result.add(FILES_READ);
         result.add(BACKUPS_READ);
         result.add(MAIL_READ);
+        result.add(SHARING_READ);
+        result.add(ADS_READ);
+        result.add(ANALYTICS_READ);
+        result.add(WEBHOOKS_READ);
+        result.add(TASKS_READ);
+        result.add(DEVICES_READ);
+        result.add(SYNC_READ);
+        result.add(DASHBOARD_READ);
         if (ROLE_EDITOR.equals(role)) {
             result.add(PROJECTS_WRITE);
             result.add(DATABASES_WRITE);
             result.add(FILES_WRITE);
             result.add(BACKUPS_WRITE);
             result.add(MAIL_WRITE);
+            result.add(SHARING_WRITE);
+            result.add(ADS_WRITE);
+            result.add(WEBHOOKS_WRITE);
+            result.add(TASKS_WRITE);
+            result.add(DEVICES_WRITE);
+            result.add(SYNC_WRITE);
         }
         return result;
     }

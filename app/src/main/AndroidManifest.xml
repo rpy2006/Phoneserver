@@ -88,6 +88,15 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.security.TaskEditActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.api.ApiDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.docs.DeveloperDocsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperPlatformActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperOverviewActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperApiKeysActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperUsageActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperSdkActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperWebhookToolsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperExtensionsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperSandboxActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.developer.DeveloperSettingsActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.system.SystemManagementActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.remote.RemoteManagementActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.remote.DevicePairingActivity" android:theme="@style/Theme.PhoneServer.Home" android:exported="false" />

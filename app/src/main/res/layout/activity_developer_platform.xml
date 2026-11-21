@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/home_bg">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingBottom="12dp">
+                <ImageView android:id="@+id/back_button" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:src="@drawable/ic_back_arrow"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Developer Platform" android:textColor="@color/home_text_primary" android:textSize="22sp" android:textStyle="bold"/>
+            </LinearLayout>
+            <TextView android:id="@+id/overview_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_home_card" android:padding="16dp" android:textColor="@color/home_text_secondary" android:text="Loading developer status..."/>
+            <TextView android:id="@+id/usage_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="@drawable/bg_home_card" android:padding="16dp" android:textColor="@color/home_text_secondary" android:text=""/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:background="@drawable/bg_home_card" android:orientation="vertical">
+                <TextView android:id="@+id/row_overview" style="@style/Widget.AppCompat.TextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="Overview" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_api_keys" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="API Keys" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_usage" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="API Usage" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_sdk" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="SDK Documentation" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_webhooks" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="Webhook Tools" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_extensions" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="Extension Manager" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_sandbox" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="Developer Sandbox" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider"/>
+                <TextView android:id="@+id/row_settings" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:text="Developer Settings" android:textColor="@color/home_text_primary" android:textStyle="bold"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

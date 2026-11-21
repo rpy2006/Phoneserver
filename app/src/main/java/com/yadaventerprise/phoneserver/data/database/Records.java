@@ -81,6 +81,10 @@ public final class Records {
         public long createdAt;
         public long lastUsedAt;
         public boolean revoked;
+        public boolean suspended;
+        public long expiresAt;
+        public String keyPrefix = "";
+        public String lastUsedIp = "";
     }
 
     public static class ColumnInfo {

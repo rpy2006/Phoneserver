@@ -47,22 +47,31 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
         String rights;
         if (token.revoked) {
             rights = "Revoked";
+        } else if (token.suspended) {
+            rights = "Suspended · " + policy.role;
         } else {
             rights = policy.role + " · " + (policy.canWrite() ? "read & write" : "read only");
         }
         String rate = policy.rateLimitPerMinute == 0
                 ? "global rate limit"
                 : policy.rateLimitPerMinute + "/min";
-        String expiry = policy.expiresAt == 0
+        long expiresAt = token.expiresAt > 0 ? token.expiresAt : policy.expiresAt;
+        String expiry = expiresAt == 0
                 ? "no expiry"
-                : "expires " + TimeFormat.formatTime(policy.expiresAt);
+                : "expires " + TimeFormat.formatTime(expiresAt);
 
         StringBuilder meta = new StringBuilder();
         meta.append(scope).append(" · ").append(rights);
+        if (token.keyPrefix != null && !token.keyPrefix.isEmpty()) {
+            meta.append("\nKey ").append(token.keyPrefix).append("…");
+        }
         meta.append('\n').append(rate).append(" · ").append(expiry);
         meta.append('\n').append("Created ").append(TimeFormat.formatTime(token.createdAt));
         if (token.lastUsedAt > 0) {
             meta.append(" · Last used ").append(TimeFormat.formatTime(token.lastUsedAt));
+        }
+        if (token.lastUsedIp != null && !token.lastUsedIp.isEmpty()) {
+            meta.append(" from ").append(token.lastUsedIp);
         }
         holder.meta.setText(meta.toString());
 

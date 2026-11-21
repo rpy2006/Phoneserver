@@ -41,6 +41,12 @@ public final class TokenUtil {
         return MessageDigest.isEqual(a.getBytes(), b.getBytes());
     }
 
+    public static String prefix(String token) {
+        if (token == null || token.isEmpty()) return "";
+        int show = Math.min(token.length(), PREFIX.length() + 8);
+        return token.substring(0, show);
+    }
+
     private static String toHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) {

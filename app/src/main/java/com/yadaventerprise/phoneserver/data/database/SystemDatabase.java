@@ -16,7 +16,7 @@ import java.io.File;
 public class SystemDatabase extends SQLiteOpenHelper {
 
     public static final String DB_NAME = "system.db";
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
 
     private static volatile SystemDatabase instance;
 
@@ -100,7 +100,11 @@ public class SystemDatabase extends SQLiteOpenHelper {
                 + "can_write INTEGER NOT NULL DEFAULT 1,"
                 + "created_at INTEGER NOT NULL,"
                 + "last_used_at INTEGER NOT NULL DEFAULT 0,"
-                + "revoked INTEGER NOT NULL DEFAULT 0)");
+                + "revoked INTEGER NOT NULL DEFAULT 0,"
+                + "suspended INTEGER NOT NULL DEFAULT 0,"
+                + "expires_at INTEGER NOT NULL DEFAULT 0,"
+                + "key_prefix TEXT NOT NULL DEFAULT '',"
+                + "last_used_ip TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE UNIQUE INDEX idx_tokens_hash ON api_tokens(token_hash)");
 
         db.execSQL("CREATE TABLE backups ("
@@ -139,7 +143,10 @@ public class SystemDatabase extends SQLiteOpenHelper {
             addColumn(db, "backups", "parent_id", "TEXT NOT NULL DEFAULT ''");
         }
         if (oldVersion < 3) {
-            // reserved for a future schema change
+            addColumn(db, "api_tokens", "suspended", "INTEGER NOT NULL DEFAULT 0");
+            addColumn(db, "api_tokens", "expires_at", "INTEGER NOT NULL DEFAULT 0");
+            addColumn(db, "api_tokens", "key_prefix", "TEXT NOT NULL DEFAULT ''");
+            addColumn(db, "api_tokens", "last_used_ip", "TEXT NOT NULL DEFAULT ''");
         }
     }
 
