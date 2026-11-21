@@ -204,6 +204,10 @@ public final class DataApi {
             DeveloperApi.handle(context, req, out, auth, parts);
             return;
         }
+        if (head.equals("ai")) {
+            AiApi.handle(context, req, out, auth, parts);
+            return;
+        }
         if (head.equals("projects")) {
             handleProjects(context, req, out, auth, parts);
             return;

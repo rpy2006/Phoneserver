@@ -124,6 +124,16 @@
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.MusicPlayerActivity" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.TextFileViewerActivity" android:exported="false" />
         <activity android:name="com.yadaventerprise.phoneserver.ui.files.PdfViewerActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiAssistantActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiSettingsActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiOverviewActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiInsightsActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiLogAnalysisActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiSecurityInsightsActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiAutomationBuilderActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiAnalyticsAssistantActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiHistoryActivity" android:exported="false" />
+        <activity android:name="com.yadaventerprise.phoneserver.ui.ai.AiAuditHistoryActivity" android:exported="false" />
 
         <receiver
             android:name="com.yadaventerprise.phoneserver.service.BootReceiver"

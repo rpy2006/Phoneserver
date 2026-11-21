@@ -183,6 +183,9 @@ public class MainActivity extends AppCompatActivity {
         if (drawerNavId == R.id.nav_drawer_developer) {
             return new Intent(this, com.yadaventerprise.phoneserver.ui.developer.DeveloperPlatformActivity.class);
         }
+        if (drawerNavId == R.id.nav_drawer_ai) {
+            return new Intent(this, com.yadaventerprise.phoneserver.ui.ai.AiAssistantActivity.class);
+        }
         if (drawerNavId == R.id.nav_drawer_remote) {
             return new Intent(this, RemoteManagementActivity.class);
         }

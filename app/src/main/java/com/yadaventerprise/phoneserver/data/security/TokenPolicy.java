@@ -43,6 +43,10 @@ public class TokenPolicy {
     public static final String DEVELOPER_READ = "developer.read";
     public static final String DEVELOPER_WRITE = "developer.write";
     public static final String DASHBOARD_READ = "dashboard.read";
+    public static final String AI_USE = "ai.use";
+    public static final String AI_ACTIONS = "ai.actions";
+    public static final String AI_SETTINGS_READ = "ai.settings.read";
+    public static final String AI_SETTINGS_WRITE = "ai.settings.write";
 
     private static final Set<String> ALL_PERMISSIONS = Collections.unmodifiableSet(
             new LinkedHashSet<>(Arrays.asList(
@@ -52,7 +56,8 @@ public class TokenPolicy {
                     SHARING_READ, SHARING_WRITE, ADS_READ, ADS_WRITE,
                     ANALYTICS_READ, WEBHOOKS_READ, WEBHOOKS_WRITE,
                     TASKS_READ, TASKS_WRITE, DEVICES_READ, DEVICES_WRITE,
-                    SYNC_READ, SYNC_WRITE, DEVELOPER_READ, DEVELOPER_WRITE, DASHBOARD_READ)));
+                    SYNC_READ, SYNC_WRITE, DEVELOPER_READ, DEVELOPER_WRITE, DASHBOARD_READ,
+                    AI_USE, AI_ACTIONS, AI_SETTINGS_READ, AI_SETTINGS_WRITE)));
 
     public String tokenId = "";
     public String role = ROLE_VIEWER;
@@ -90,6 +95,8 @@ public class TokenPolicy {
         result.add(DEVICES_READ);
         result.add(SYNC_READ);
         result.add(DASHBOARD_READ);
+        result.add(AI_USE);
+        result.add(AI_SETTINGS_READ);
         if (ROLE_EDITOR.equals(role)) {
             result.add(PROJECTS_WRITE);
             result.add(DATABASES_WRITE);
@@ -102,6 +109,7 @@ public class TokenPolicy {
             result.add(TASKS_WRITE);
             result.add(DEVICES_WRITE);
             result.add(SYNC_WRITE);
+            result.add(AI_ACTIONS);
         }
         return result;
     }

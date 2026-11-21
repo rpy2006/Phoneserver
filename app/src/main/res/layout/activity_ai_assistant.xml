@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/home_bg">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingBottom="12dp">
+                <ImageView android:id="@+id/back_button" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:src="@drawable/ic_back_arrow"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AI Assistant" android:textColor="@color/home_text_primary" android:textSize="22sp" android:textStyle="bold"/>
+            </LinearLayout>
+            <TextView android:id="@+id/ai_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_home_card" android:padding="14dp" android:textColor="@color/home_text_secondary" android:textSize="13sp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="horizontal">
+                <Button android:id="@+id/ai_btn_overview" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Overview"/>
+                <Button android:id="@+id/ai_btn_settings" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Settings"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+                <Button android:id="@+id/ai_btn_insights" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Insights"/>
+                <Button android:id="@+id/ai_btn_logs" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Logs"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+                <Button android:id="@+id/ai_btn_security" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Security"/>
+                <Button android:id="@+id/ai_btn_analytics" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Analytics"/>
+            </LinearLayout>
+            <Button android:id="@+id/ai_btn_automation" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Automation Builder"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+                <Button android:id="@+id/ai_btn_history" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="History"/>
+                <Button android:id="@+id/ai_btn_audit" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Audit"/>
+            </LinearLayout>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Assistant Chat" android:textStyle="bold" android:textColor="@color/home_text_primary"/>
+            <EditText android:id="@+id/ai_question" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:minLines="3" android:gravity="top" android:background="@drawable/bg_home_card" android:padding="12dp" android:hint="Ask about server status, logs, backups, security, or APIs" android:inputType="textMultiLine" android:textColor="@color/home_text_primary" android:textColorHint="@color/home_text_secondary"/>
+            <Button android:id="@+id/ai_btn_ask" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Ask Assistant"/>
+            <Button android:id="@+id/ai_btn_execute" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Execute Proposed Action" android:visibility="gone"/>
+            <ProgressBar android:id="@+id/ai_progress" style="?android:attr/progressBarStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:visibility="gone"/>
+            <TextView android:id="@+id/ai_answer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/bg_home_card" android:padding="14dp" android:textColor="@color/home_text_primary" android:textIsSelectable="true" android:text="Ask a question to get started."/>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

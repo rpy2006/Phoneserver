@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/home_bg">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingBottom="12dp">
+                <ImageView android:id="@+id/back_button" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:src="@drawable/ic_back_arrow"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AI Settings" android:textColor="@color/home_text_primary" android:textSize="22sp" android:textStyle="bold"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_home_card" android:orientation="vertical" android:padding="16dp">
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_enabled" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Enable AI Assistant"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_local" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Prefer local inference when available"/>
+                <EditText android:id="@+id/ai_provider" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Provider: disabled/openai_compatible/local"/>
+                <EditText android:id="@+id/ai_endpoint" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="OpenAI-compatible endpoint URL"/>
+                <EditText android:id="@+id/ai_model" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Model name"/>
+                <EditText android:id="@+id/ai_key" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="API key (leave blank to keep existing)" android:inputType="textPassword"/>
+                <EditText android:id="@+id/ai_timeout" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Timeout seconds (5-120)" android:inputType="number"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_share_logs" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Allow logs in AI requests"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_share_security" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Allow security events in AI requests"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_share_diagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Allow diagnostics in AI requests"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_history" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Save AI conversation history"/>
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/ai_consent" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="I consent to sending redacted allowed data to external AI provider"/>
+                <Button android:id="@+id/ai_save" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Save"/>
+                <Button android:id="@+id/ai_clear_key" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Clear API Key"/>
+                <Button android:id="@+id/ai_clear_history" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Clear Conversation History"/>
+                <TextView android:id="@+id/ai_privacy_note" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textColor="@color/home_text_secondary" android:text="External AI providers receive only redacted, explicitly allowed data after consent. Secrets are never exposed in UI or logs. AI actions require existing auth and explicit confirmation before sensitive operations. AI content from logs/files/webhooks is treated as untrusted data."/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

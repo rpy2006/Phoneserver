@@ -107,6 +107,36 @@ public final class AdNetworkManager {
         return AdDb.get(c).count(AdDb.USERS) == 0;
     }
 
+    public static org.json.JSONObject summary(Context c) {
+        Context app = c.getApplicationContext();
+        AdDb db = AdDb.get(app);
+        db.open();
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("enabled", isEnabled(app));
+            out.put("running", isRunning());
+            out.put("port", PORT);
+            out.put("users", db.count(AdDb.USERS));
+            out.put("sites", db.count(AdDb.SITES));
+            out.put("placements", db.count(AdDb.PLACEMENTS));
+            out.put("campaigns", db.count(AdDb.CAMPAIGNS));
+            out.put("creatives", db.count(AdDb.CREATIVES));
+            long imps = 0, clicks = 0, spend = 0, earnings = 0;
+            for (org.json.JSONObject row : db.list(AdDb.STATS, x -> true)) {
+                imps += row.optLong("imps");
+                clicks += row.optLong("clicks");
+                spend += row.optLong("spend_micros");
+                earnings += row.optLong("pub_micros");
+            }
+            out.put("impressions", imps);
+            out.put("clicks", clicks);
+            out.put("spendMicros", spend);
+            out.put("earningsMicros", earnings);
+            out.put("actualRecordsOnly", true);
+        } catch (Exception ignored) {}
+        return out;
+    }
+
     private static void startSweeper(final Context app, final AdDb db) {
         final Thread t = new Thread(() -> {
             long tick = 0;
