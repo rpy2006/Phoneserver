@@ -155,8 +155,13 @@ public final class SystemMaintenance {
                             report.validBackups++;
                         }
                     } catch (Exception e) {
-                        report.invalidBackups++;
-                        report.issues.add("Backup failed validation: " + backup.fileName);
+                        String msg = e.getMessage() == null ? "" : e.getMessage();
+                        if (backup.encrypted && msg.toLowerCase(java.util.Locale.US).contains("password")) {
+                            report.issues.add("Backup verification requires password: " + backup.fileName);
+                        } else {
+                            report.invalidBackups++;
+                            report.issues.add("Backup failed validation: " + backup.fileName);
+                        }
                     }
                 }
             }

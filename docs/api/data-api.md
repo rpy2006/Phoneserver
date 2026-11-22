@@ -109,7 +109,53 @@ Credentials are never advertised via `Access-Control-Allow-Credentials`.
 
 Returns the server name/version and the list of endpoint patterns.
 
-### 2.3 System (admin only)
+### 2.3 Backups & configuration import/export
+
+All endpoints below require project authz (`backups.read`/`backups.write`). Project-scoped tokens are limited to their project.
+
+#### `GET /projects/{projectId}/backups`
+Lists backup records for the project.
+
+#### `POST /projects/{projectId}/backups`
+Creates a backup. Body fields: `includeFiles`, `note`, `type` (`full`|`incremental`), `parentBackupId`, `password` (optional; encrypted backups are `.psbak` packages).
+
+#### `POST /projects/{projectId}/backups/import?confirm=true`
+Imports a raw backup archive body. Requires `confirm=true`. Optional query: `createRecoveryPoint`, `restoreDatabases`, `restoreFiles`, `restoreProjectConfig`. Header `X-Backup-Password` for encrypted archives. Validates checksum/manifest/metadata before modifying data; creates recovery point and rolls back on failure.
+
+#### `POST /projects/{projectId}/backups/import-preview`
+Previews/validates an uploaded raw backup archive without modifying production data. Header `X-Backup-Password` for encrypted archives.
+
+#### `POST /projects/{projectId}/backups/import-validate`
+Read-only validation/preview of an uploaded raw backup archive. Same behavior as preview; requires `backups.read`.
+
+#### `GET /projects/{projectId}/backups/{backupId}`
+Returns backup metadata.
+
+#### `POST /projects/{projectId}/backups/{backupId}/preview`
+Previews stored backup contents and validity. Body `{password}` for encrypted backups.
+
+#### `POST /projects/{projectId}/backups/{backupId}/validate`
+Validates stored backup checksum/archive/manifest. Body `{password}` for encrypted backups.
+
+#### `POST /projects/{projectId}/backups/{backupId}/restore`
+Restores stored backup. Body: `confirm` required, `createRecoveryPoint`, `restoreDatabases`, `restoreFiles`, `restoreProjectConfig`, `password`. Validates before apply; creates recovery point; rolls back on failure.
+
+#### `GET /projects/{projectId}/backups/{backupId}/download`
+Downloads backup archive (`.zip` or encrypted `.psbak`).
+
+#### `DELETE /projects/{projectId}/backups/{backupId}`
+Deletes a backup record/archive.
+
+#### `POST /projects/{projectId}/backups/export-config`
+Exports selected config categories. Body: `{categories:[...]}`. Redacts secrets/password hashes.
+
+#### `POST /projects/{projectId}/backups/import-config-preview`
+Validates config import body. No production data modified. Returns per-category create/update/skip/reject and issues.
+
+#### `POST /projects/{projectId}/backups/import-config`
+Applies config import. Body: `{strategy, ...categories}`. Strategies: `merge`, `create_only`, `update_only`, `replace` (selective replacement for provided categories). Validates all categories, detects duplicates/conflicts, stages import, creates recovery point, applies atomically, verifies, rolls back on any failure.
+
+### 2.4 System (admin only)
 
 #### `GET /system`
 

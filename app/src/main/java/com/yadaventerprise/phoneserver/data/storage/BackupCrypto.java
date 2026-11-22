@@ -28,7 +28,7 @@ public final class BackupCrypto {
     private static final int IV_LENGTH = 12;
     private static final int KEY_LENGTH = 256;
     private static final int TAG_LENGTH = 128;
-    private static final int DEFAULT_ITERATIONS = 210000;
+    public static final int DEFAULT_ITERATIONS = 210000;
     private static final int MIN_ITERATIONS = 120000;
     private static final int BUFFER = 65536;
 

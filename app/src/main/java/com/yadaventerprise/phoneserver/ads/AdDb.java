@@ -72,6 +72,10 @@ final class AdDb {
         return instance;
     }
 
+    static synchronized void reset() {
+        instance = null;
+    }
+
     AdDb(File file, File legacyFile) {
         this.file = file;
         this.legacyFile = legacyFile;
@@ -252,6 +256,49 @@ final class AdDb {
         synchronized (lock) {
             open();
             return copy(data.optJSONArray(table));
+        }
+    }
+
+    synchronized JSONObject exportDocument() {
+        synchronized (lock) {
+            open();
+            return copy(data);
+        }
+    }
+
+    synchronized void restoreDocument(JSONObject snapshot) {
+        synchronized (lock) {
+            if (snapshot == null) throw new IllegalArgumentException("snapshot required");
+            data = copy(snapshot);
+            try { initialize(); } catch (JSONException e) { throw new IllegalStateException(e); }
+            save();
+        }
+    }
+
+    synchronized void replaceTable(String table, JSONArray rows) {
+        synchronized (lock) {
+            open();
+            AdHttp.put(data, table, copy(rows));
+            changed();
+        }
+    }
+
+    synchronized void reconcileNextIds() {
+        synchronized (lock) {
+            open();
+            try {
+                JSONObject next = data.optJSONObject("next_id");
+                if (next == null) { next = new JSONObject(); data.put("next_id", next); }
+                for (String table : TABLES) {
+                    JSONArray rows = data.optJSONArray(table);
+                    long max = 0;
+                    if (rows != null) for (int i = 0; i < rows.length(); i++) { JSONObject r = rows.optJSONObject(i); if (r != null) max = Math.max(max, r.optLong("id")); }
+                    next.put(table, Math.max(next.optLong(table, 1), max + 1));
+                }
+                changed();
+            } catch (JSONException e) {
+                throw new IllegalStateException(e);
+            }
         }
     }
 

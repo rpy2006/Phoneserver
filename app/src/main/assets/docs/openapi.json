@@ -1057,6 +1057,7 @@
     "/projects/{id}/backups": {
       "get": {
         "summary": "List backups",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read.",
         "parameters": [
           {
             "name": "id",
@@ -1069,12 +1070,13 @@
         ],
         "responses": {
           "200": {
-            "description": "Backups"
+            "description": "Backup list"
           }
         }
       },
       "post": {
-        "summary": "Create a backup",
+        "summary": "Create backup",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Body: {includeFiles,note,type,parentBackupId,password}.",
         "parameters": [
           {
             "name": "id",
@@ -1085,9 +1087,25 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Created backup"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
@@ -4446,6 +4464,527 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/import": {
+      "post": {
+        "summary": "Import backup archive",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Raw binary body. Query: confirm=true required, createRecoveryPoint, restoreDatabases, restoreFiles, restoreProjectConfig. Header X-Backup-Password for encrypted archives.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "createRecoveryPoint",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "restoreDatabases",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "restoreFiles",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "restoreProjectConfig",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "X-Backup-Password",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Imported"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "422": {
+            "description": "Invalid backup"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/import-preview": {
+      "post": {
+        "summary": "Preview backup archive import",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Raw binary body. Header X-Backup-Password for encrypted archives. Does not modify data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Backup-Password",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview"
+          },
+          "422": {
+            "description": "Invalid backup"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/import-validate": {
+      "post": {
+        "summary": "Validate backup archive",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Raw binary body; read permission. Header X-Backup-Password for encrypted archives. Does not modify data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Backup-Password",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation/preview"
+          },
+          "422": {
+            "description": "Invalid backup"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/export-config": {
+      "post": {
+        "summary": "Export configuration",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Body: {categories:[...]}. Redacts secrets/password hashes.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exported configuration"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/import-config-preview": {
+      "post": {
+        "summary": "Preview configuration import",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Validates import body and returns create/update/skip/reject counts. No production data modified.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import preview"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/import-config": {
+      "post": {
+        "summary": "Apply configuration import",
+        "description": "Requires Authorization: Bearer token or X-Auth-Password. Project-scoped tokens limited to project. Write endpoints require backups.write; read endpoints backups.read. Validates, stages, creates recovery point, applies atomically, verifies, rolls back on failure. Body includes strategy and categories.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "merge",
+                      "create_only",
+                      "update_only",
+                      "replace"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import applied"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/{backupId}": {
+      "get": {
+        "summary": "Get backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backup"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/{backupId}/restore": {
+      "post": {
+        "summary": "Restore backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "createRecoveryPoint": {
+                    "type": "boolean"
+                  },
+                  "restoreDatabases": {
+                    "type": "boolean"
+                  },
+                  "restoreFiles": {
+                    "type": "boolean"
+                  },
+                  "restoreProjectConfig": {
+                    "type": "boolean"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restored"
+          },
+          "400": {
+            "description": "Confirmation/password required"
+          },
+          "422": {
+            "description": "Invalid backup"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/{backupId}/validate": {
+      "post": {
+        "summary": "Validate stored backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid"
+          },
+          "422": {
+            "description": "Invalid"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/{backupId}/preview": {
+      "post": {
+        "summary": "Preview stored backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview"
+          },
+          "422": {
+            "description": "Invalid preview"
+          }
+        }
+      }
+    },
+    "/projects/{id}/backups/{backupId}/download": {
+      "get": {
+        "summary": "Download backup archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binary archive"
           }
         }
       }

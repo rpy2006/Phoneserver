@@ -15,6 +15,7 @@ import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import com.yadaventerprise.phoneserver.data.storage.BackupManager;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.data.storage.FileStore;
+import com.yadaventerprise.phoneserver.data.storage.ImportExportService;
 import com.yadaventerprise.phoneserver.data.storage.ProjectStore;
 import com.yadaventerprise.phoneserver.data.tokens.TokenStore;
 import com.yadaventerprise.phoneserver.security.RateLimiter;
@@ -1044,6 +1045,35 @@ public final class DataApi {
             importBackup(context, req, out, projectId);
             return;
         }
+        if (backupId.equals("import-preview") && method.equals("POST")) {
+            requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
+            previewBackupImport(context, req, out, projectId);
+            return;
+        }
+        if (backupId.equals("import-validate") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
+            previewBackupImport(context, req, out, projectId);
+            return;
+        }
+        if (backupId.equals("export-config") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
+            JSONObject body = readJson(req);
+            JSONArray categories = body.optJSONArray("categories");
+            sendJson(context, req, out, 200, ImportExportService.exportConfig(context, projectId, categories));
+            return;
+        }
+        if (backupId.equals("import-config-preview") && method.equals("POST")) {
+            requirePermission(auth, TokenPolicy.BACKUPS_READ);
+            JSONObject body = readJson(req);
+            sendJson(context, req, out, 200, ImportExportService.previewConfigImport(context, projectId, body).toJson());
+            return;
+        }
+        if (backupId.equals("import-config") && method.equals("POST")) {
+            requireWrite(auth, TokenPolicy.BACKUPS_WRITE);
+            JSONObject body = readJson(req);
+            sendJson(context, req, out, 200, ImportExportService.applyConfigImport(context, projectId, body));
+            return;
+        }
         if (parts.size() == 4) {
             if (method.equals("GET")) {
                 requirePermission(auth, TokenPolicy.BACKUPS_READ);
@@ -1085,7 +1115,16 @@ public final class DataApi {
                 Map<String, String> manifest = BackupManager.validate(context, projectId, backupId, pw);
                 JSONObject json = new JSONObject();
                 json.put("valid", true);
-                for (Map.Entry<String, String> e : manifest.entrySet()) json.put(e.getKey(), e.getValue());
+                for (Map.Entry<String, String> e : manifest.entrySet()) {
+                    String key = e.getKey();
+                    if (key == null) continue;
+                    String lower = key.toLowerCase(Locale.US);
+                    if (lower.contains("password") || lower.contains("secret") || lower.contains("token")
+                            || lower.contains("apikey") || lower.contains("api_key") || lower.contains("credential")) {
+                        continue;
+                    }
+                    json.put(key, e.getValue());
+                }
                 sendJson(context, req, out, 200, json);
             } finally {
                 if (pw != null) java.util.Arrays.fill(pw, '\0');
@@ -1138,6 +1177,25 @@ public final class DataApi {
             sendJson(context, req, out, 200, ok());
         } finally {
             //noinspection ResultOfMethodCallIgnored
+            temp.delete();
+        }
+    }
+
+    private static void previewBackupImport(Context context, SimpleHttpServer.Request req, OutputStream out,
+                                            String projectId) throws Exception {
+        String password = req.headers.get("x-backup-password");
+        File temp = ContentStore.getStorageLayout(context).newTempFile("restore-preview");
+        try {
+            long written = storeBody(context, req, temp);
+            if (written == 0) throw new DataException("no backup content was uploaded", 400);
+            char[] pw = password != null && !password.isEmpty() ? password.toCharArray() : null;
+            try {
+                com.yadaventerprise.phoneserver.data.storage.BackupPreview preview = BackupManager.inspectArchive(context, projectId, temp, pw);
+                sendJson(context, req, out, preview.valid ? 200 : 422, preview.toJson());
+            } finally {
+                if (pw != null) java.util.Arrays.fill(pw, '\0');
+            }
+        } finally {
             temp.delete();
         }
     }
