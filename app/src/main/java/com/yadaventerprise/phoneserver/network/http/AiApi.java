@@ -180,6 +180,7 @@ public final class AiApi {
     private static void handleHistory(Context context, SimpleHttpServer.Request req, OutputStream out, DataApi.Auth auth, String method) throws Exception {
         DataApi.requirePermission(auth, TokenPolicy.AI_USE);
         if (method.equals("DELETE")) {
+            DataApi.requireWrite(auth, TokenPolicy.AI_SETTINGS_WRITE);
             AiConversationStore.get(context).clear();
             DataApi.sendJson(context, req, out, 200, DataApi.ok().put("cleared", true));
             return;

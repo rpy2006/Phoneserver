@@ -68,11 +68,12 @@ public final class ApiUsageStore {
             Map<String, Integer> byStatus = new HashMap<>();
             for (ApiUsageEntry e : cached) {
                 if (e.time < since) continue;
+                if ("/__quota__/reserve".equals(e.path)) continue;
                 total++;
                 if (e.status >= 200 && e.status < 400) success++; else failed++;
                 if (e.rateLimited || e.status == 429) rateLimited++;
                 duration += Math.max(0, e.durationMs);
-                String key = e.tokenName == null || e.tokenName.isEmpty() ? e.keyPrefix : e.tokenName;
+                String key = e.tokenId == null || e.tokenId.isEmpty() ? (e.tokenName == null || e.tokenName.isEmpty() ? e.keyPrefix : e.tokenName) : e.tokenId;
                 if (key == null || key.isEmpty()) key = "unknown";
                 byKey.put(key, byKey.getOrDefault(key, 0) + 1);
                 String endpoint = (e.method == null ? "" : e.method) + " " + normalizePath(e.path);
@@ -94,6 +95,114 @@ public final class ApiUsageStore {
             } catch (Exception ignored) {}
             return json;
         }
+    }
+
+    public long countForTokenSince(String tokenId, long sinceMs) {
+        if (tokenId == null || tokenId.isEmpty()) return 0;
+        synchronized (lock) {
+            ensureLoaded();
+            long count = 0;
+            for (ApiUsageEntry e : cached) {
+                if (e.time >= sinceMs && tokenId.equals(e.tokenId)) count++;
+            }
+            return count;
+        }
+    }
+
+    public long countForTokenInUtcDay(String tokenId, long nowMs) {
+        return countForTokenSince(tokenId, utcDayStart(nowMs));
+    }
+
+    public long countForTokenInUtcMonth(String tokenId, long nowMs) {
+        return countForTokenSince(tokenId, utcMonthStart(nowMs));
+    }
+
+    public boolean tryConsumeQuota(String tokenId, long nowMs, long dailyLimit, long monthlyLimit) {
+        if (tokenId == null || tokenId.isEmpty()) return false;
+        synchronized (lock) {
+            ensureLoaded();
+            cleanupStaleReservations(nowMs);
+            long dayStart = utcDayStart(nowMs);
+            long monthStart = utcMonthStart(nowMs);
+            long day = 0, month = 0;
+            for (ApiUsageEntry e : cached) {
+                if (!tokenId.equals(e.tokenId)) continue;
+                if (e.time >= dayStart) day++;
+                if (e.time >= monthStart) month++;
+            }
+            if (day >= dailyLimit || month >= monthlyLimit) return false;
+            ApiUsageEntry reservation = new ApiUsageEntry();
+            reservation.time = nowMs;
+            reservation.tokenId = tokenId;
+            reservation.method = "QUOTA";
+            reservation.path = "/__quota__/reserve";
+            reservation.status = 0;
+            reservation.rateLimited = false;
+            cached.add(0, reservation);
+            while (cached.size() > MAX_ENTRIES) cached.remove(cached.size() - 1);
+            persist();
+            return true;
+        }
+    }
+
+    public void replaceReservation(String tokenId, ApiUsageEntry actual) {
+        if (actual == null) return;
+        synchronized (lock) {
+            ensureLoaded();
+            cleanupStaleReservations(actual.time > 0 ? actual.time : System.currentTimeMillis());
+            boolean replaced = false;
+            for (int i = 0; i < cached.size(); i++) {
+                ApiUsageEntry e = cached.get(i);
+                if (tokenId != null && tokenId.equals(e.tokenId) && "/__quota__/reserve".equals(e.path)) {
+                    cached.set(i, actual);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                cached.add(0, actual);
+                while (cached.size() > MAX_ENTRIES) cached.remove(cached.size() - 1);
+            }
+            persist();
+        }
+    }
+
+    public int cleanupStaleReservations(long nowMs) {
+        synchronized (lock) {
+            ensureLoaded();
+            long cutoff = nowMs - 5L * 60L * 1000L;
+            int removed = 0;
+            for (int i = cached.size() - 1; i >= 0; i--) {
+                ApiUsageEntry e = cached.get(i);
+                if ("/__quota__/reserve".equals(e.path) && e.time < cutoff) {
+                    cached.remove(i);
+                    removed++;
+                }
+            }
+            if (removed > 0) persist();
+            return removed;
+        }
+    }
+
+    public static long utcDayStart(long nowMs) {
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(nowMs);
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        cal.set(java.util.Calendar.MINUTE, 0);
+        cal.set(java.util.Calendar.SECOND, 0);
+        cal.set(java.util.Calendar.MILLISECOND, 0);
+        return cal.getTimeInMillis();
+    }
+
+    public static long utcMonthStart(long nowMs) {
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(nowMs);
+        cal.set(java.util.Calendar.DAY_OF_MONTH, 1);
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        cal.set(java.util.Calendar.MINUTE, 0);
+        cal.set(java.util.Calendar.SECOND, 0);
+        cal.set(java.util.Calendar.MILLISECOND, 0);
+        return cal.getTimeInMillis();
     }
 
     private static JSONArray toArray(Map<String, Integer> map, String k, String v) throws Exception {

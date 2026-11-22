@@ -1,0 +1,135 @@
+package com.yadaventerprise.phoneserver.network.http;
+
+import static org.junit.Assert.*;
+
+import android.content.Context;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSettings;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSettingsStore;
+import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.testing.DataTestSupport;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.json.JSONObject;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
+import org.robolectric.annotation.ConscryptMode;
+
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = 34)
+@ConscryptMode(ConscryptMode.Mode.OFF)
+public class RemoteApiAuthTest {
+    @Rule public TemporaryFolder tmp = new TemporaryFolder();
+    private Context context;
+    private final AtomicInteger ipCounter = new AtomicInteger();
+
+    @Before public void setUp() throws Exception {
+        DataTestSupport.assumeRobolectricRuntimeSupported();
+        context = RuntimeEnvironment.getApplication();
+        DataTestSupport.freshDataRoot(context, tmp.getRoot());
+        ContentStore.setPassword(context, "admin");
+        ContentStore.setApiRateLimitPerMinute(context, 5000);
+        RemoteSettings s = RemoteSettingsStore.get(context).get();
+        s.enabled = true; s.allowPairing = true; s.requireHttps = false;
+        RemoteSettingsStore.get(context).save(s);
+    }
+
+    private static final class Resp { int status; String body; Resp(int s,String b){status=s;body=b;} }
+    private Resp call(String method, String path, Map<String,String> headers, String body, String ip) {
+        SimpleHttpServer.Request req = new SimpleHttpServer.Request();
+        req.method = method; req.path = path; req.remoteIp = ip == null ? "10.42.0." + ipCounter.incrementAndGet() : ip;
+        if (headers != null) req.headers.putAll(headers);
+        if (body != null) req.body = body.getBytes(StandardCharsets.UTF_8);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try { DataApi.handle(context, req, out); } catch (Exception e) { throw new AssertionError(e); }
+        String text = new String(out.toByteArray(), StandardCharsets.UTF_8);
+        int status = Integer.parseInt(text.split("\r\n")[0].split(" ")[1]);
+        int idx = text.indexOf("\r\n\r\n");
+        return new Resp(status, idx >= 0 ? text.substring(idx + 4) : "");
+    }
+    private static Map<String,String> bearer(String token) { Map<String,String> h=new HashMap<>(); h.put("authorization","Bearer "+token); return h; }
+    private static Map<String,String> admin() { Map<String,String> h=new HashMap<>(); h.put("x-auth-password","admin"); return h; }
+
+    @Test public void remoteProtectedEndpointsRequireCredential() {
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", null, null, null).status);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/devices", bearer("pst_invalid"), null, null).status);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/users", bearer("pst_invalid"), null, null).status);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/settings", bearer("pst_invalid"), null, null).status);
+    }
+
+    @Test public void adminPasswordCanAccessRemoteDashboard() {
+        Resp resp = call("GET", DataApi.BASE + "/remote/dashboard", admin(), null, null);
+        assertEquals(200, resp.status);
+        assertTrue(resp.body.contains("serverRunning"));
+    }
+
+    @Test public void remoteAccessDisabledBlocksPublicAndProtectedRemote() throws Exception {
+        RemoteSettings s = RemoteSettingsStore.get(context).get();
+        s.enabled = false; RemoteSettingsStore.get(context).save(s);
+        Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
+                new JSONObject().put("username","u").put("password","p").toString(), null);
+        assertEquals(403, login.status);
+        Resp dash = call("GET", DataApi.BASE + "/remote/dashboard", admin(), null, null);
+        assertEquals(403, dash.status);
+    }
+
+    @Test public void requireHttpsBlocksNonLoopbackRemote() {
+        RemoteSettings s = RemoteSettingsStore.get(context).get();
+        s.requireHttps = true; RemoteSettingsStore.get(context).save(s);
+        Resp resp = call("GET", DataApi.BASE + "/remote/dashboard", admin(), null, "203.0.113.5");
+        assertEquals(403, resp.status);
+    }
+
+    @Test public void pairingCodeIsOneTimeConsumable() throws Exception {
+        Resp reqResp = call("POST", DataApi.BASE + "/remote/pairing/request", null,
+                new JSONObject().put("deviceName","Pixel").toString(), null);
+        assertEquals(200, reqResp.status);
+        String code = new JSONObject(reqResp.body).getString("code");
+        String id = new JSONObject(reqResp.body).getString("id");
+        Resp approve = call("POST", DataApi.BASE + "/remote/pairing/" + id + "/approve", admin(),
+                new JSONObject().put("deviceName","Pixel").toString(), null);
+        assertEquals(200, approve.status);
+        Resp first = call("POST", DataApi.BASE + "/remote/pairing/status", null,
+                new JSONObject().put("code", code).toString(), null);
+        assertEquals(200, first.status);
+        assertTrue(first.body.contains("token"));
+        Resp second = call("POST", DataApi.BASE + "/remote/pairing/status", null,
+                new JSONObject().put("code", code).toString(), null);
+        assertNotEquals(200, second.status);
+    }
+
+    @Test public void revokedRemoteUserSessionIsRejected() throws Exception {
+        com.yadaventerprise.phoneserver.data.remote.RemoteUserStore us = com.yadaventerprise.phoneserver.data.remote.RemoteUserStore.get(context);
+        com.yadaventerprise.phoneserver.data.remote.RemoteUser u = new com.yadaventerprise.phoneserver.data.remote.RemoteUser();
+        u.username = "alice"; u.displayName = "Alice"; u.role = com.yadaventerprise.phoneserver.data.remote.RemoteRole.VIEWER; u.status = com.yadaventerprise.phoneserver.data.remote.RemoteUser.STATUS_ACTIVE;
+        us.create(u, "password12345");
+        Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
+                new JSONObject().put("username","alice").put("password","password12345").toString(), null);
+        assertEquals(200, login.status);
+        String token = new JSONObject(login.body).getJSONObject("session").getString("token");
+        Resp ok = call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null);
+        assertEquals(200, ok.status);
+        Resp logout = call("POST", DataApi.BASE + "/remote/auth/logout", bearer(token), "{}", null);
+        assertEquals(200, logout.status);
+        Resp denied = call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null);
+        assertEquals(403, denied.status);
+    }
+
+    @Test public void suspendedRemoteUserCannotLogin() throws Exception {
+        com.yadaventerprise.phoneserver.data.remote.RemoteUserStore us = com.yadaventerprise.phoneserver.data.remote.RemoteUserStore.get(context);
+        com.yadaventerprise.phoneserver.data.remote.RemoteUser u = new com.yadaventerprise.phoneserver.data.remote.RemoteUser();
+        u.username = "bob"; u.displayName = "Bob"; u.role = com.yadaventerprise.phoneserver.data.remote.RemoteRole.VIEWER; u.status = com.yadaventerprise.phoneserver.data.remote.RemoteUser.STATUS_SUSPENDED;
+        us.create(u, "password12345");
+        Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
+                new JSONObject().put("username","bob").put("password","password12345").toString(), null);
+        assertEquals(403, login.status);
+    }
+}

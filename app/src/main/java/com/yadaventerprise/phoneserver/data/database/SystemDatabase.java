@@ -16,7 +16,7 @@ import java.io.File;
 public class SystemDatabase extends SQLiteOpenHelper {
 
     public static final String DB_NAME = "system.db";
-    public static final int SCHEMA_VERSION = 3;
+    public static final int SCHEMA_VERSION = 4;
 
     private static volatile SystemDatabase instance;
 
@@ -104,7 +104,10 @@ public class SystemDatabase extends SQLiteOpenHelper {
                 + "suspended INTEGER NOT NULL DEFAULT 0,"
                 + "expires_at INTEGER NOT NULL DEFAULT 0,"
                 + "key_prefix TEXT NOT NULL DEFAULT '',"
-                + "last_used_ip TEXT NOT NULL DEFAULT '')");
+                + "last_used_ip TEXT NOT NULL DEFAULT '',"
+                + "daily_quota INTEGER NOT NULL DEFAULT 0,"
+                + "monthly_quota INTEGER NOT NULL DEFAULT 0,"
+                + "concurrent_limit INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE UNIQUE INDEX idx_tokens_hash ON api_tokens(token_hash)");
 
         db.execSQL("CREATE TABLE backups ("
@@ -147,6 +150,11 @@ public class SystemDatabase extends SQLiteOpenHelper {
             addColumn(db, "api_tokens", "expires_at", "INTEGER NOT NULL DEFAULT 0");
             addColumn(db, "api_tokens", "key_prefix", "TEXT NOT NULL DEFAULT ''");
             addColumn(db, "api_tokens", "last_used_ip", "TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 4) {
+            addColumn(db, "api_tokens", "daily_quota", "INTEGER NOT NULL DEFAULT 0");
+            addColumn(db, "api_tokens", "monthly_quota", "INTEGER NOT NULL DEFAULT 0");
+            addColumn(db, "api_tokens", "concurrent_limit", "INTEGER NOT NULL DEFAULT 0");
         }
     }
 

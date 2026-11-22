@@ -68,10 +68,17 @@ public final class DataApi {
     public static final String API_VERSION = "1";
 
     private static final long API_TOKEN_WINDOW_MS = 60_000L;
+    private static final int DEFAULT_DAILY_QUOTA = 100000;
+    private static final int DEFAULT_MONTHLY_QUOTA = 3000000;
+    private static final int DEFAULT_CONCURRENT_LIMIT = 32;
 
     private static volatile RateLimiter limiter;
     private static volatile int limiterMax;
     private static final java.util.concurrent.ConcurrentHashMap<String, TokenLimiter> tokenLimiters =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> concurrentCounts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Object> quotaLocks =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final class TokenLimiter {
@@ -114,13 +121,14 @@ public final class DataApi {
     // ---- entry point ----
 
     public static void handle(Context context, SimpleHttpServer.Request req, OutputStream out) {
+        String concurrentTokenId = null;
         try {
             if (req.bodyTooLarge) {
                 sendError(context, req, out, 413, "request body is too large for a buffered request; "
                         + "upload large files as a raw body (non-multipart)");
                 return;
             }
-            dispatch(context, req, out);
+            concurrentTokenId = dispatch(context, req, out);
         } catch (DataException e) {
             try {
                 sendError(context, req, out, e.httpStatus(), e.getMessage());
@@ -140,49 +148,56 @@ public final class DataApi {
             } catch (IOException ignored) {
             }
         } finally {
+            if (concurrentTokenId != null) releaseConcurrent(concurrentTokenId);
             recordApiUsage(context, req);
         }
     }
 
-    private static void dispatch(Context context, SimpleHttpServer.Request req, OutputStream out)
+    private static String dispatch(Context context, SimpleHttpServer.Request req, OutputStream out)
             throws Exception {
         String method = req.method == null ? "GET" : req.method.toUpperCase(Locale.US);
 
         // CORS preflight is answered before auth so browsers can negotiate.
         if (method.equals("OPTIONS")) {
             sendPreflight(context, req, out);
-            return;
+            return null;
         }
 
         List<String> parts = segments(req.path);
         String head = parts.isEmpty() ? "" : parts.get(0);
 
         if (head.equals("remote") && RemoteApi.isPublicPath(parts)) {
-            if (!enforceRateLimit(context, req, out)) return;
+            if (!enforceRateLimit(context, req, out)) return null;
             RemoteApi.handlePublic(context, req, out, parts);
-            return;
+            return null;
         }
 
         // Public, non-sensitive liveness probe.
         if (head.equals("health")) {
             requireMethod(method, "GET");
             sendHealth(context, req, out);
-            return;
+            return null;
         }
 
         // Everything past here is authenticated.
-        if (!enforceRateLimit(context, req, out)) return;
+        if (!enforceRateLimit(context, req, out)) return null;
         Auth auth = authenticate(context, req);
         if (auth == null) {
             sendUnauthorized(req, out, context);
-            return;
+            return null;
         }
-        if (auth.tokenId != null && !enforceTokenRateLimit(context, req, out, auth)) return;
+        if (auth.tokenId != null && !enforceTokenRateLimit(context, req, out, auth)) return null;
+        String concurrentTokenId = null;
+        if (auth.tokenId != null) {
+            if (!acquireConcurrent(context, req, out, auth)) return null;
+            concurrentTokenId = auth.tokenId;
+            if (!enforceQuota(context, req, out, auth)) { releaseConcurrent(concurrentTokenId); return null; }
+        }
 
         if (head.isEmpty()) {
             requireMethod(method, "GET");
             sendIndex(req, out);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("system")) {
             if (parts.size() == 1) {
@@ -191,31 +206,31 @@ public final class DataApi {
             } else {
                 SystemApi.handle(context, req, out, auth, parts);
             }
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("remote")) {
             RemoteApi.handle(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("tokens")) {
             handleTokens(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("developer")) {
             DeveloperApi.handle(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("ai")) {
             AiApi.handle(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("projects")) {
             handleProjects(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         if (head.equals("mail")) {
             MailApi.handle(context, req, out, auth, parts);
-            return;
+            return concurrentTokenId;
         }
         throw DataException.notFound("endpoint");
     }
@@ -231,6 +246,12 @@ public final class DataApi {
         String tokenId;
         TokenPolicy policy;
         RemoteSession remoteSession;
+
+        String ownerId() {
+            if (remoteSession != null) return remoteSession.subjectType + ":" + remoteSession.subjectId;
+            if (tokenId != null && !tokenId.isEmpty()) return "token:" + tokenId;
+            return admin ? "admin:local" : "";
+        }
     }
 
     private static Auth authenticate(Context context, SimpleHttpServer.Request req) {
@@ -302,10 +323,90 @@ public final class DataApi {
         }
         if (tokenLimiter.limiter.tryAcquire(auth.tokenId)) return true;
         IntrusionDetector.recordRateLimit(context, req.remoteIp, req.method, req.path);
-        String body = "{\"error\":\"token rate limit exceeded, slow down\"}";
-        writeRaw(out, 429, "Too Many Requests", "application/json",
-                body.getBytes(StandardCharsets.UTF_8), context, req, "Retry-After: 60");
+        sendRateLimited(out, context, req, "token rate limit exceeded, slow down", 60);
         return false;
+    }
+
+    private static boolean acquireConcurrent(Context context, SimpleHttpServer.Request req, OutputStream out, Auth auth) throws IOException {
+        Records.ApiTokenRecord token = TokenStore.findById(context, auth.tokenId);
+        int limit = token == null ? DEFAULT_CONCURRENT_LIMIT : token.concurrentLimit;
+        if (limit <= 0) limit = DEFAULT_CONCURRENT_LIMIT;
+        java.util.concurrent.atomic.AtomicInteger counter = concurrentCounts.computeIfAbsent(auth.tokenId, k -> new java.util.concurrent.atomic.AtomicInteger(0));
+        while (true) {
+            int current = counter.get();
+            if (current < 0) {
+                counter.compareAndSet(current, 0);
+                continue;
+            }
+            if (current >= limit) {
+                sendRateLimited(out, context, req, "concurrent request limit exceeded", 1);
+                return false;
+            }
+            if (counter.compareAndSet(current, current + 1)) return true;
+        }
+    }
+
+    private static void releaseConcurrent(String tokenId) {
+        if (tokenId == null) return;
+        java.util.concurrent.atomic.AtomicInteger counter = concurrentCounts.get(tokenId);
+        if (counter == null) return;
+        int prev = counter.getAndUpdate(v -> v > 0 ? v - 1 : 0);
+        if (prev <= 0) counter.set(0);
+    }
+
+    private static boolean enforceQuota(Context context, SimpleHttpServer.Request req, OutputStream out, Auth auth) throws IOException {
+        Records.ApiTokenRecord token = TokenStore.findById(context, auth.tokenId);
+        long daily = token == null ? 0 : token.dailyQuota;
+        long monthly = token == null ? 0 : token.monthlyQuota;
+        if (daily <= 0) daily = DEFAULT_DAILY_QUOTA;
+        if (monthly <= 0) monthly = DEFAULT_MONTHLY_QUOTA;
+        long now = System.currentTimeMillis();
+        com.yadaventerprise.phoneserver.data.developer.ApiUsageStore usage = com.yadaventerprise.phoneserver.data.developer.ApiUsageStore.get(context);
+        if (!usage.tryConsumeQuota(auth.tokenId, now, daily, monthly)) {
+            long dayCount = usage.countForTokenInUtcDay(auth.tokenId, now);
+            if (dayCount >= daily) sendRateLimited(out, context, req, "daily API quota exceeded", retryAfterSeconds(now, true));
+            else sendRateLimited(out, context, req, "monthly API quota exceeded", retryAfterSeconds(now, false));
+            return false;
+        }
+        req.quotaReserved = true;
+        return true;
+    }
+
+    private static int retryAfterSeconds(long nowMs, boolean daily) {
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(nowMs);
+        if (daily) {
+            cal.add(java.util.Calendar.DAY_OF_MONTH, 1);
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cal.set(java.util.Calendar.MINUTE, 0);
+            cal.set(java.util.Calendar.SECOND, 0);
+            cal.set(java.util.Calendar.MILLISECOND, 0);
+        } else {
+            cal.add(java.util.Calendar.MONTH, 1);
+            cal.set(java.util.Calendar.DAY_OF_MONTH, 1);
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cal.set(java.util.Calendar.MINUTE, 0);
+            cal.set(java.util.Calendar.SECOND, 0);
+            cal.set(java.util.Calendar.MILLISECOND, 0);
+        }
+        long diff = (cal.getTimeInMillis() - nowMs) / 1000L;
+        if (diff < 1) diff = 1;
+        if (diff > Integer.MAX_VALUE) diff = 3600;
+        return (int) diff;
+    }
+
+    private static void sendRateLimited(OutputStream out, Context context, SimpleHttpServer.Request req, String message, int retryAfterSeconds) throws IOException {
+        IntrusionDetector.recordRateLimit(context, req.remoteIp, req.method, req.path);
+        try {
+            JSONObject body = new JSONObject();
+            body.put("error", message);
+            body.put("status", 429);
+            writeRaw(out, 429, "Too Many Requests", "application/json; charset=utf-8",
+                    body.toString().getBytes(StandardCharsets.UTF_8), context, req, "Retry-After: " + Math.max(1, retryAfterSeconds));
+        } catch (Exception e) {
+            writeRaw(out, 429, "Too Many Requests", "application/json; charset=utf-8",
+                    ("{\"error\":\"" + message + "\",\"status\":429}").getBytes(StandardCharsets.UTF_8), context, req, "Retry-After: " + Math.max(1, retryAfterSeconds));
+        }
     }
 
     private static String bearerToken(SimpleHttpServer.Request req) {
@@ -1249,7 +1350,7 @@ public final class DataApi {
                 if (expiresAt <= 0) expiresAt = body.optLong("expiresAt", 0);
                 boolean canWrite = policy.canWrite();
                 TokenStore.Created created = TokenStore.create(context, body.optString("name", null),
-                        projectId, canWrite, expiresAt);
+                        projectId, canWrite, expiresAt, Math.max(0, body.optLong("dailyQuota", 0)), Math.max(0, body.optLong("monthlyQuota", 0)), Math.max(0, body.optInt("concurrentLimit", 0)));
                 policy.tokenId = created.record.id;
                 policy.expiresAt = expiresAt;
                 policyStore.save(policy);
@@ -1262,6 +1363,19 @@ public final class DataApi {
             throw new DataException("method not allowed", 405);
         }
         String id = decode(parts.get(1));
+        if (parts.size() == 3 && "regenerate".equals(parts.get(2))) {
+            requireMethod(method, "POST");
+            Records.ApiTokenRecord record = TokenStore.findById(context, id);
+            if (record == null) throw DataException.notFound("token");
+            TokenStore.Created created = TokenStore.regenerate(context, id);
+            TokenPolicy policy = policyStore.get(id, created.record);
+            JSONObject json = tokenJson(created.record, policy);
+            json.put("token", created.token);
+            json.put("warning", "store this token now; it cannot be shown again");
+            sendJson(context, req, out, 200, json);
+            return;
+        }
+        if (parts.size() != 2) throw DataException.notFound("token endpoint");
         if (method.equals("DELETE")) {
             TokenStore.revoke(context, id);
             policyStore.delete(id);
@@ -1273,9 +1387,13 @@ public final class DataApi {
             if (record == null) throw DataException.notFound("token");
             JSONObject body = readJson(req);
             TokenPolicy policy = policyStore.get(id, record);
+            if (body.has("name")) TokenStore.rename(context, id, body.optString("name", record.name));
             if (body.has("suspended")) TokenStore.setSuspended(context, id, body.optBoolean("suspended", false));
             if (body.has("expiresAt")) TokenStore.setExpiresAt(context, id, Math.max(0, body.optLong("expiresAt", 0)));
             if (body.has("revoked") && body.optBoolean("revoked", false)) TokenStore.revoke(context, id);
+            if (body.has("dailyQuota") || body.has("monthlyQuota") || body.has("concurrentLimit")) {
+                TokenStore.updateQuotas(context, id, Math.max(0, body.optLong("dailyQuota", record.dailyQuota)), Math.max(0, body.optLong("monthlyQuota", record.monthlyQuota)), Math.max(0, body.optInt("concurrentLimit", record.concurrentLimit)));
+            }
             applyPolicyBody(policy, body);
             if (body.has("expiresAt")) policy.expiresAt = Math.max(0, body.optLong("expiresAt", 0));
             policyStore.save(policy);
@@ -1297,6 +1415,9 @@ public final class DataApi {
         for (String permission : policy.permissions) permissions.put(permission);
         json.put("permissions", permissions);
         json.put("rateLimitPerMinute", policy.rateLimitPerMinute);
+        json.put("dailyQuota", token.dailyQuota);
+        json.put("monthlyQuota", token.monthlyQuota);
+        json.put("concurrentLimit", token.concurrentLimit);
         json.put("expiresAt", token.expiresAt > 0 ? token.expiresAt : policy.expiresAt);
         json.put("createdAt", token.createdAt);
         json.put("lastUsedAt", token.lastUsedAt);
@@ -1304,6 +1425,7 @@ public final class DataApi {
         json.put("keyPrefix", token.keyPrefix == null ? "" : token.keyPrefix);
         json.put("suspended", token.suspended);
         json.put("revoked", token.revoked);
+        json.put("status", token.revoked ? "revoked" : (token.suspended ? "suspended" : "active"));
         return json;
     }
 
@@ -1438,7 +1560,9 @@ public final class DataApi {
                     entry.keyPrefix = token.keyPrefix == null ? "" : token.keyPrefix;
                 }
             }
-            com.yadaventerprise.phoneserver.data.developer.ApiUsageStore.get(context).append(entry);
+            com.yadaventerprise.phoneserver.data.developer.ApiUsageStore store = com.yadaventerprise.phoneserver.data.developer.ApiUsageStore.get(context);
+            if (req.quotaReserved) store.replaceReservation(entry.tokenId, entry);
+            else store.append(entry);
         } catch (Exception ignored) {
         }
     }

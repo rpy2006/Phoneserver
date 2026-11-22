@@ -39,7 +39,7 @@ public final class MailApi {
             if (method.equals("GET")) {
                 DataApi.requirePermission(auth, TokenPolicy.MAIL_READ);
                 JSONArray array = new JSONArray();
-                for (MailAccount account : service.accounts()) array.put(account.toPublicJson());
+                for (MailAccount account : service.accounts()) { if (canAccessAccount(auth, account)) array.put(account.toPublicJson()); }
                 DataApi.sendJson(context, req, out, 200, new JSONObject().put("accounts", array));
                 return;
             }
@@ -47,7 +47,7 @@ public final class MailApi {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
                 JSONObject body = DataApi.readJson(req);
                 DataApi.requireBody(body);
-                MailAccount account = service.saveAccount(body);
+                MailAccount account = service.saveAccountForOwner(body, true, auth.ownerId());
                 DataApi.sendJson(context, req, out, 201, account.toPublicJson());
                 return;
             }
@@ -60,6 +60,7 @@ public final class MailApi {
                 DataApi.requirePermission(auth, TokenPolicy.MAIL_READ);
                 MailAccount account = service.account(id);
                 if (account == null) throw DataException.notFound("mail account");
+                requireAccountOwner(auth, account);
                 DataApi.sendJson(context, req, out, 200, account.toPublicJson());
                 return;
             }
@@ -67,12 +68,14 @@ public final class MailApi {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
                 JSONObject body = DataApi.readJson(req);
                 DataApi.requireBody(body);
-                MailAccount account = service.saveAccount(body.put("id", id));
+                MailAccount existing = service.account(id); if (existing == null) throw DataException.notFound("mail account"); requireAccountOwner(auth, existing);
+                MailAccount account = service.saveAccountForOwner(body.put("id", id), true, auth.ownerId());
                 DataApi.sendJson(context, req, out, 200, account.toPublicJson());
                 return;
             }
             if (method.equals("DELETE")) {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
+                MailAccount existingDel = service.account(id); if (existingDel == null) throw DataException.notFound("mail account"); requireAccountOwner(auth, existingDel);
                 service.deleteAccount(id);
                 DataApi.sendJson(context, req, out, 200, DataApi.ok());
                 return;
@@ -85,6 +88,7 @@ public final class MailApi {
             String action = parts.get(3);
             if (action.equals("test") && method.equals("POST")) {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
+                MailAccount a=service.account(id); if(a==null) throw DataException.notFound("mail account"); requireAccountOwner(auth,a);
                 service.test(id);
                 DataApi.sendJson(context, req, out, 200, DataApi.ok());
                 return;
@@ -93,6 +97,7 @@ public final class MailApi {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
                 JSONObject body = DataApi.readJson(req);
                 int limit = body.optInt("limit", 50);
+                MailAccount a2=service.account(id); if(a2==null) throw DataException.notFound("mail account"); requireAccountOwner(auth,a2);
                 int count = service.sync(id, limit);
                 JSONObject result = new JSONObject();
                 result.put("status", "ok");
@@ -102,6 +107,7 @@ public final class MailApi {
             }
             if (action.equals("send") && method.equals("POST")) {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
+                MailAccount a3=service.account(id); if(a3==null) throw DataException.notFound("mail account"); requireAccountOwner(auth,a3);
                 MailCompose compose = compose(DataApi.readJson(req));
                 MailMessage sent = service.send(id, compose);
                 DataApi.sendJson(context, req, out, 201, sent.toJson(true));
@@ -109,6 +115,7 @@ public final class MailApi {
             }
             if (action.equals("drafts") && method.equals("POST")) {
                 DataApi.requireWrite(auth, TokenPolicy.MAIL_WRITE);
+                MailAccount a4=service.account(id); if(a4==null) throw DataException.notFound("mail account"); requireAccountOwner(auth,a4);
                 MailCompose compose = compose(DataApi.readJson(req));
                 MailMessage draft = service.saveDraft(id, compose);
                 DataApi.sendJson(context, req, out, 201, draft.toJson(true));
@@ -116,6 +123,7 @@ public final class MailApi {
             }
             if (action.equals("messages") && method.equals("GET")) {
                 DataApi.requirePermission(auth, TokenPolicy.MAIL_READ);
+                MailAccount a5=service.account(id); if(a5==null) throw DataException.notFound("mail account"); requireAccountOwner(auth,a5);
                 String folder = req.query.get("folder");
                 String query = req.query.get("q");
                 JSONArray array = new JSONArray();
@@ -130,11 +138,14 @@ public final class MailApi {
 
         if (parts.size() >= 3 && parts.get(1).equals("messages")) {
             String id = parts.get(2);
+            MailMessage existing = service.message(id);
+            if (existing == null) throw DataException.notFound("message");
+            MailAccount owner = service.account(existing.accountId);
+            if (owner == null) throw DataException.notFound("mail account");
+            requireAccountOwner(auth, owner);
             if (parts.size() == 3 && method.equals("GET")) {
                 DataApi.requirePermission(auth, TokenPolicy.MAIL_READ);
-                MailMessage message = service.message(id);
-                if (message == null) throw DataException.notFound("message");
-                DataApi.sendJson(context, req, out, 200, message.toJson(true));
+                DataApi.sendJson(context, req, out, 200, existing.toJson(true));
                 return;
             }
             if (parts.size() == 3 && method.equals("DELETE")) {
@@ -168,6 +179,17 @@ public final class MailApi {
         throw DataException.notFound("endpoint");
     }
 
+
+    private static boolean canAccessAccount(DataApi.Auth auth, MailAccount account) {
+        if (auth == null || auth.admin) return true;
+        if (account == null) return false;
+        String owner = account.ownerId == null ? "" : account.ownerId;
+        return owner.isEmpty() || owner.equals(auth.ownerId());
+    }
+
+    private static void requireAccountOwner(DataApi.Auth auth, MailAccount account) throws DataException {
+        if (!canAccessAccount(auth, account)) throw DataException.forbidden("mail account is not accessible");
+    }
     private static MailCompose compose(JSONObject body) throws Exception {
         DataApi.requireBody(body);
         MailCompose compose = new MailCompose();

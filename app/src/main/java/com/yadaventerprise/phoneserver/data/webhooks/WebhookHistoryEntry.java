@@ -23,7 +23,7 @@ public class WebhookHistoryEntry {
         json.put("success", success);
         json.put("attempts", attempts);
         json.put("responseCode", responseCode);
-        json.put("error", error);
+        json.put("error", com.yadaventerprise.phoneserver.data.system.SystemLogSanitizer.sanitize(error));
         json.put("createdAt", createdAt);
         json.put("durationMs", durationMs);
         return json;

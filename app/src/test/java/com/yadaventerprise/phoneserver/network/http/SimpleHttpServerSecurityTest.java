@@ -71,4 +71,29 @@ public class SimpleHttpServerSecurityTest {
         assertTrue("the public website must keep working", route(request("GET", "/status")).startsWith("HTTP/1.1 200"));
     }
 
+    @Test
+    public void legacyFileApisRequireAuthWhenPasswordSet() {
+        ContentStore.setPassword(context, "secret");
+        assertTrue(route(request("GET", "/api/browse")).startsWith("HTTP/1.1 401"));
+        assertTrue(route(request("GET", "/api/stats")).startsWith("HTTP/1.1 401"));
+        SimpleHttpServer.Request mkdir = request("POST", "/api/mkdir");
+        mkdir.body = "{\"path\":\"\",\"name\":\"x\"}".getBytes(StandardCharsets.UTF_8);
+        assertTrue(route(mkdir).startsWith("HTTP/1.1 401"));
+        SimpleHttpServer.Request del = request("POST", "/api/delete");
+        del.body = "{\"path\":\"x\"}".getBytes(StandardCharsets.UTF_8);
+        assertTrue(route(del).startsWith("HTTP/1.1 401"));
+        SimpleHttpServer.Request ren = request("POST", "/api/rename");
+        ren.body = "{\"path\":\"x\",\"newName\":\"y\"}".getBytes(StandardCharsets.UTF_8);
+        assertTrue(route(ren).startsWith("HTTP/1.1 401"));
+    }
+
+    @Test
+    public void webDavRequiresAuthAndRemoteAccess() {
+        ContentStore.setPassword(context, "secret");
+        ContentStore.setAllowRemoteAccess(context, true);
+        assertTrue(route(request("PROPFIND", "/dav/")).startsWith("HTTP/1.1 401"));
+        ContentStore.setAllowRemoteAccess(context, false);
+        ContentStore.setPassword(context, "");
+        assertTrue(route(request("PROPFIND", "/dav/")).startsWith("HTTP/1.1 403"));
+    }
 }

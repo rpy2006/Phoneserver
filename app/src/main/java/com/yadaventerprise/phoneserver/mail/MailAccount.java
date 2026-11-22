@@ -18,6 +18,7 @@ public final class MailAccount {
     public String fromName = "";
     public String sentFolder = "Sent";
     public String draftsFolder = "Drafts";
+    public String ownerId = "";
     public long updatedAt;
 
     public boolean hasPassword() {
@@ -40,6 +41,7 @@ public final class MailAccount {
         json.put("sentFolder", sentFolder);
         json.put("draftsFolder", draftsFolder);
         json.put("passwordSet", hasPassword());
+        json.put("ownerId", ownerId);
         json.put("updatedAt", updatedAt);
         return json;
     }
@@ -67,6 +69,7 @@ public final class MailAccount {
         account.fromName = json.optString("fromName", "");
         account.sentFolder = json.optString("sentFolder", "Sent");
         account.draftsFolder = json.optString("draftsFolder", "Drafts");
+        account.ownerId = json.optString("ownerId", "");
         account.updatedAt = json.optLong("updatedAt", 0L);
         return account;
     }

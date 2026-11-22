@@ -1,6 +1,7 @@
 package com.yadaventerprise.phoneserver.data.webhooks;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -36,6 +37,7 @@ public class WebhookDispatcherTest {
     private final AtomicReference<String> body = new AtomicReference<>();
     private final AtomicReference<String> signature = new AtomicReference<>();
     private final AtomicReference<String> event = new AtomicReference<>();
+    private final java.util.concurrent.ConcurrentHashMap<String,String> capturedHeaders = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Before
     public void setUp() throws Exception {
@@ -64,12 +66,11 @@ public class WebhookDispatcherTest {
                     if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase("Content-Length")) {
                         length = Integer.parseInt(line.substring(colon + 1).trim());
                     }
-                    if (line.toLowerCase().startsWith("x-phoneserver-signature:")) {
-                        signature.set(line.substring(line.indexOf(':') + 1).trim());
-                    }
-                    if (line.toLowerCase().startsWith("x-phoneserver-event:")) {
-                        event.set(line.substring(line.indexOf(':') + 1).trim());
-                    }
+                    String lower = line.toLowerCase();
+                    if (lower.startsWith("x-phoneserver-signature:")) signature.set(line.substring(colon + 1).trim());
+                    if (lower.startsWith("x-phoneserver-event:")) event.set(line.substring(colon + 1).trim());
+                    if (lower.startsWith("x-phoneserver-timestamp:")) capturedHeaders.put("x-phoneserver-timestamp", line.substring(colon + 1).trim());
+                    if (lower.startsWith("x-phoneserver-delivery-id:")) capturedHeaders.put("x-phoneserver-delivery-id", line.substring(colon + 1).trim());
                 }
                 byte[] payload = new byte[length];
                 int read = 0;
@@ -116,8 +117,61 @@ public class WebhookDispatcherTest {
         assertTrue(entry.success);
         assertEquals("test", event.get());
         assertTrue(body.get().contains("\"message\":\"hello\""));
-        assertEquals("sha256=" + hmac(body.get(), "secret"), signature.get());
+        String ts = capturedHeaders.get("x-phoneserver-timestamp");
+        String delivery = capturedHeaders.get("x-phoneserver-delivery-id");
+        assertNotNull(ts);
+        assertNotNull(delivery);
+        assertEquals("sha256=" + hmac(ts + "." + delivery + "." + body.get(), "secret"), signature.get());
         assertEquals(1, WebhookHistoryStore.get(context).list().size());
+    }
+
+    @Test
+    public void verifiesSignatureAndRejectsReplay() {
+        String secret = "secret";
+        String ts = String.valueOf(System.currentTimeMillis());
+        String delivery = "delivery-1";
+        String body = "{\"ok\":true}";
+        String sig = "sha256=" + hmacUnchecked(ts + "." + delivery + "." + body, secret);
+        assertTrue(WebhookDispatcher.verifyIncoming(context, secret, ts, delivery, body, sig, System.currentTimeMillis()));
+        assertFalse(WebhookDispatcher.verifyIncoming(context, secret, ts, delivery, body, sig, System.currentTimeMillis()));
+    }
+
+    @Test
+    public void rejectsInvalidSignatureAndOldTimestamp() {
+        String secret = "secret";
+        String body = "{\"ok\":true}";
+        String oldTs = String.valueOf(System.currentTimeMillis() - 10L * 60L * 1000L);
+        String sig = "sha256=" + hmacUnchecked(oldTs + ".d1." + body, secret);
+        assertFalse(WebhookDispatcher.verifyIncoming(context, secret, oldTs, "d1", body, sig, System.currentTimeMillis()));
+        String ts = String.valueOf(System.currentTimeMillis());
+        assertFalse(WebhookDispatcher.verifyIncoming(context, secret, ts, "d2", body, "sha256=bad", System.currentTimeMillis()));
+    }
+
+    @Test
+    public void failedDeliveryIsRecorded() throws Exception {
+        WebhookConfig config = new WebhookConfig();
+        config.id = "hook-fail";
+        config.name = "Fail";
+        config.url = "http://127.0.0.1:1/hook";
+        config.secret = "secret";
+        config.maxAttempts = 1;
+        config.timeoutSeconds = 1;
+        WebhookHistoryEntry entry = WebhookDispatcher.deliverNow(context, config, "test", new JSONObject());
+        assertNotNull(entry);
+        assertFalse(entry.success);
+        assertTrue(entry.error == null || !entry.error.contains("secret"));
+    }
+
+    @Test
+    public void replayProtectionPersistsAcrossStoreReset() {
+        String secret = "secret";
+        String ts = String.valueOf(System.currentTimeMillis());
+        String delivery = "delivery-persist";
+        String body = "{\"ok\":true}";
+        String sig = "sha256=" + hmacUnchecked(ts + "." + delivery + "." + body, secret);
+        assertTrue(WebhookDispatcher.verifyIncoming(context, secret, ts, delivery, body, sig, System.currentTimeMillis()));
+        WebhookReplayStore.reset();
+        assertFalse(WebhookDispatcher.verifyIncoming(context, secret, ts, delivery, body, sig, System.currentTimeMillis()));
     }
 
     private static String hmac(String value, String secret) throws Exception {
@@ -127,5 +181,9 @@ public class WebhookDispatcherTest {
         StringBuilder out = new StringBuilder();
         for (byte b : bytes) out.append(String.format("%02x", b & 0xff));
         return out.toString();
+    }
+
+    private static String hmacUnchecked(String value, String secret) {
+        try { return hmac(value, secret); } catch (Exception e) { throw new RuntimeException(e); }
     }
 }

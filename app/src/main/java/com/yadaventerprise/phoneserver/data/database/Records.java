@@ -85,6 +85,9 @@ public final class Records {
         public long expiresAt;
         public String keyPrefix = "";
         public String lastUsedIp = "";
+        public long dailyQuota;
+        public long monthlyQuota;
+        public int concurrentLimit;
     }
 
     public static class ColumnInfo {

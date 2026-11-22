@@ -219,4 +219,112 @@ public class DataApiTest {
         assertEquals(404, get(DataApi.BASE + "/does-not-exist", auth).status);
         assertEquals(405, call("DELETE", DataApi.BASE + "/health", auth, null, null).status);
     }
+
+    @Test
+    public void invalidRevokedExpiredAndRegeneratedTokensAreRejected() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "web", null, true);
+        assertEquals(200, get(DataApi.BASE + "/projects", header("authorization", "Bearer " + token.token)).status);
+        assertEquals(401, get(DataApi.BASE + "/projects", header("authorization", "Bearer pst_invalid")).status);
+
+        TokenStore.revoke(context, token.record.id);
+        assertEquals(401, get(DataApi.BASE + "/projects", header("authorization", "Bearer " + token.token)).status);
+
+        TokenStore.Created expired = TokenStore.create(context, "exp", null, true, System.currentTimeMillis() - 1000);
+        assertEquals(401, get(DataApi.BASE + "/projects", header("authorization", "Bearer " + expired.token)).status);
+
+        TokenStore.Created regen = TokenStore.create(context, "regen", null, true);
+        TokenStore.Created regenerated = TokenStore.regenerate(context, regen.record.id);
+        assertEquals(401, get(DataApi.BASE + "/projects", header("authorization", "Bearer " + regen.token)).status);
+        assertEquals(200, get(DataApi.BASE + "/projects", header("authorization", "Bearer " + regenerated.token)).status);
+    }
+
+    @Test
+    public void readOnlyTokenCannotModifyAndDirectEndpointIsEnforced() throws Exception {
+        String alpha = ProjectStore.create(context, "Alpha", "", 0, 0).id;
+        TokenStore.Created readOnly = TokenStore.create(context, "ro", null, false);
+        Map<String, String> auth = header("authorization", "Bearer " + readOnly.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        Response write = call("POST", DataApi.BASE + "/projects", auth, null, "{\"name\":\"Beta\"}");
+        assertEquals(403, write.status);
+        Response patch = call("PATCH", DataApi.BASE + "/projects/" + alpha, auth, null, "{\"name\":\"Nope\"}");
+        assertEquals(403, patch.status);
+    }
+
+    @Test
+    public void revokedPermissionTakesEffectForNewRequests() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "web", null, true);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        TokenStore.revoke(context, token.record.id);
+        assertEquals(401, get(DataApi.BASE + "/projects", auth).status);
+    }
+
+    @Test
+    public void dailyQuotaReturns429WithRetryAfter() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "quota", null, true, 0, 1, 100, 10);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        Response limited = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, limited.status);
+        assertTrue(limited.text.toLowerCase().contains("retry-after:"));
+        assertTrue(limited.text.contains("daily"));
+    }
+
+    @Test
+    public void monthlyQuotaReturns429() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "quota", null, true, 0, 100, 1, 10);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        Response limited = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, limited.status);
+        assertTrue(limited.text.contains("monthly"));
+    }
+
+    @Test
+    public void concurrentLimitReturns429AndSlotReleasedAfterFailure() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "c", null, true, 0, 1000, 1000, 1);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        java.lang.reflect.Field f = DataApi.class.getDeclaredField("concurrentCounts");
+        f.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> counts =
+                (java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>) f.get(null);
+        counts.put(token.record.id, new java.util.concurrent.atomic.AtomicInteger(1));
+        Response limited = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, limited.status);
+        assertTrue(limited.text.contains("concurrent"));
+        counts.put(token.record.id, new java.util.concurrent.atomic.AtomicInteger(0));
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+    }
+
+    @Test
+    public void quotaFailureReleasesConcurrentSlot() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "q", null, true, 0, 1, 100, 1);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        Response limited = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, limited.status);
+        assertTrue(limited.text.contains("daily"));
+        Response again = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, again.status);
+        assertTrue("slot should be released so quota, not concurrent, is reported", again.text.contains("daily"));
+    }
+
+    @Test
+    public void quotaPersistsAcrossUsageStoreReset() throws Exception {
+        ProjectStore.create(context, "Alpha", "", 0, 0);
+        TokenStore.Created token = TokenStore.create(context, "qp", null, true, 0, 1, 100, 10);
+        Map<String, String> auth = header("authorization", "Bearer " + token.token);
+        assertEquals(200, get(DataApi.BASE + "/projects", auth).status);
+        com.yadaventerprise.phoneserver.data.developer.ApiUsageStore.reset();
+        Response limited = get(DataApi.BASE + "/projects", auth);
+        assertEquals(429, limited.status);
+        assertTrue(limited.text.contains("daily"));
+    }
 }

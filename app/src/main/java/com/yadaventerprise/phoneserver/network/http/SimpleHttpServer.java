@@ -224,6 +224,7 @@ public class SimpleHttpServer {
         String actor = "anonymous";
         String tokenId = "";
         boolean blocked;
+        boolean quotaReserved;
     }
 
     private static final ThreadLocal<Request> CURRENT_REQUEST = new ThreadLocal<>();
@@ -620,6 +621,17 @@ public class SimpleHttpServer {
         } else if (path.startsWith("/files/")) {
             serveFile(out, req, path.substring("/files/".length()));
         } else if (path.startsWith("/api/")) {
+            if (!ContentStore.getAllowRemoteAccess(appContext)) {
+                writeResponse(out, 403, "application/json",
+                        "{\"error\":\"remote file access is disabled on this device\"}".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+            boolean write = req.method != null && (req.method.equals("POST") || req.method.equals("PUT")
+                    || req.method.equals("PATCH") || req.method.equals("DELETE"));
+            if (!isAuthorizedForFiles(req, write)) {
+                writeUnauthorized(out);
+                return;
+            }
             serveCustomApi(out, req.path, req.method);
         } else if (!serveWebsiteAsset(out, path)) {
             writeResponse(out, 404, "text/plain", "404 Not Found".getBytes(StandardCharsets.UTF_8));

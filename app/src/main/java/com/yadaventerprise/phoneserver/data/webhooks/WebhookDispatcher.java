@@ -58,6 +58,7 @@ public final class WebhookDispatcher {
         thread.setDaemon(true);
         return thread;
     });
+    private static final long REPLAY_SKEW_MS = 5L * 60L * 1000L;
 
     private WebhookDispatcher() {
     }
@@ -106,8 +107,6 @@ public final class WebhookDispatcher {
         String method = config.method == null ? "POST" : config.method.trim().toUpperCase(Locale.US);
         boolean sendBody = method.equals("POST") || method.equals("PUT") || method.equals("PATCH");
         String body = payload.toString();
-        String signedBody = sendBody ? body : "";
-        String signature = sign(signedBody, config.secret);
         long started = System.currentTimeMillis();
         String lastError = "";
         int lastCode = 0;
@@ -123,13 +122,17 @@ public final class WebhookDispatcher {
                 if (!isAllowedMethod(method)) {
                     throw new IllegalArgumentException("unsupported webhook method");
                 }
+                String deliveryId = java.util.UUID.randomUUID().toString();
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                String signedBody = sendBody ? body : "";
+                String signature = sign(timestamp + "." + deliveryId + "." + signedBody, config.secret);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setConnectTimeout(Math.max(1, config.timeoutSeconds) * 1000);
                 connection.setReadTimeout(Math.max(1, config.timeoutSeconds) * 1000);
                 connection.setRequestMethod(method);
                 connection.setRequestProperty("User-Agent", USER_AGENT);
                 connection.setRequestProperty("Accept", "application/json");
-                applyHeaders(connection, config.headersJson, event, signature);
+                applyHeaders(connection, config.headersJson, event, signature, timestamp, deliveryId);
                 if (sendBody) {
                     connection.setDoOutput(true);
                     connection.setRequestProperty("Content-Type", "application/json");
@@ -163,7 +166,7 @@ public final class WebhookDispatcher {
             }
         }
         entry.success = false;
-        entry.error = lastError;
+        entry.error = SystemLogSanitizer.sanitize(lastError);
         entry.durationMs = System.currentTimeMillis() - started;
         finish(context, config, entry);
         return entry;
@@ -175,8 +178,10 @@ public final class WebhookDispatcher {
     }
 
     private static void applyHeaders(HttpURLConnection connection, String headersJson,
-                                     String event, String signature) throws Exception {
+                                     String event, String signature, String timestamp, String deliveryId) throws Exception {
         connection.setRequestProperty("X-PhoneServer-Event", event);
+        if (timestamp != null) connection.setRequestProperty("X-PhoneServer-Timestamp", timestamp);
+        if (deliveryId != null) connection.setRequestProperty("X-PhoneServer-Delivery-Id", deliveryId);
         if (!signature.isEmpty()) {
             connection.setRequestProperty("X-PhoneServer-Signature", "sha256=" + signature);
         }
@@ -189,9 +194,38 @@ public final class WebhookDispatcher {
             String lower = name.toLowerCase(Locale.US);
             if (lower.equals("authorization") || lower.equals("cookie")
                     || lower.equals("x-auth-password") || lower.equals("x-phoneserver-signature")
+                    || lower.equals("x-phoneserver-timestamp") || lower.equals("x-phoneserver-delivery-id")
                     || lower.equals("host") || lower.equals("content-length")) continue;
             connection.setRequestProperty(name, String.valueOf(headers.opt(name)));
         }
+    }
+
+    public static boolean verifySignature(String secret, String timestamp, String deliveryId, String body, String signatureHeader) {
+        if (secret == null || secret.isEmpty() || timestamp == null || deliveryId == null || body == null || signatureHeader == null) return false;
+        String expected = sign(timestamp + "." + deliveryId + "." + body, secret);
+        if (expected.isEmpty()) return false;
+        String provided = signatureHeader.startsWith("sha256=") ? signatureHeader.substring("sha256=".length()) : signatureHeader;
+        return constantTimeEquals(expected, provided);
+    }
+
+    public static boolean isReplay(Context context, String deliveryId, long timestampMs, long nowMs) {
+        if (context == null) return true;
+        return !WebhookReplayStore.get(context.getApplicationContext()).checkAndRecord(deliveryId, timestampMs, nowMs);
+    }
+
+    public static boolean verifyIncoming(Context context, String secret, String timestamp, String deliveryId, String body, String signatureHeader, long nowMs) {
+        long ts;
+        try { ts = Long.parseLong(timestamp == null ? "" : timestamp.trim()); } catch (Exception e) { return false; }
+        if (Math.abs(nowMs - ts) > REPLAY_SKEW_MS) return false;
+        if (!verifySignature(secret, timestamp, deliveryId, body, signatureHeader)) return false;
+        return !isReplay(context, deliveryId, ts, nowMs);
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null || a.length() != b.length()) return false;
+        int result = 0;
+        for (int i = 0; i < a.length(); i++) result |= a.charAt(i) ^ b.charAt(i);
+        return result == 0;
     }
 
     private static void finish(Context context, WebhookConfig config, WebhookHistoryEntry entry) {

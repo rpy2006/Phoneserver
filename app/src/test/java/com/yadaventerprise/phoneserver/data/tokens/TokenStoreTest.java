@@ -119,4 +119,43 @@ public class TokenStoreTest {
                 () -> TokenStore.create(context, longName.toString(), null, true));
         assertEquals(400, tooLong.httpStatus());
     }
+
+    @Test
+    public void expiredTokenIsRejected() throws Exception {
+        TokenStore.Created created = TokenStore.create(context, "expiring", null, true, System.currentTimeMillis() - 1000);
+        assertNull(TokenStore.verify(context, created.token));
+    }
+
+    @Test
+    public void renamePreservesPermissionsAndRegenerateInvalidatesOldKey() throws Exception {
+        TokenStore.Created created = TokenStore.create(context, "old", projectId, false, 0, 10, 20, 2);
+        TokenStore.rename(context, created.record.id, "renamed");
+        Records.ApiTokenRecord renamed = TokenStore.findById(context, created.record.id);
+        assertEquals("renamed", renamed.name);
+        assertEquals(projectId, renamed.projectId);
+        assertFalse(renamed.canWrite);
+        assertEquals(10, renamed.dailyQuota);
+        assertEquals(20, renamed.monthlyQuota);
+        assertEquals(2, renamed.concurrentLimit);
+
+        TokenStore.Created regenerated = TokenStore.regenerate(context, created.record.id);
+        assertNotNull(regenerated.token);
+        assertFalse(regenerated.token.equals(created.token));
+        assertNull(TokenStore.verify(context, created.token));
+        Records.ApiTokenRecord verified = TokenStore.verify(context, regenerated.token);
+        assertNotNull(verified);
+        assertEquals(created.record.id, verified.id);
+        assertEquals("renamed", verified.name);
+        assertFalse(verified.canWrite);
+    }
+
+    @Test
+    public void quotaUpdatesPersist() throws Exception {
+        TokenStore.Created created = TokenStore.create(context, "quota", null, true);
+        TokenStore.updateQuotas(context, created.record.id, 11, 22, 3);
+        Records.ApiTokenRecord updated = TokenStore.findById(context, created.record.id);
+        assertEquals(11, updated.dailyQuota);
+        assertEquals(22, updated.monthlyQuota);
+        assertEquals(3, updated.concurrentLimit);
+    }
 }

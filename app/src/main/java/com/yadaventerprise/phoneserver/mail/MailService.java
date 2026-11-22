@@ -50,6 +50,10 @@ public final class MailService {
     }
 
     public MailAccount saveAccount(JSONObject input, boolean verify) throws MailException {
+        return saveAccountForOwner(input, verify, "");
+    }
+
+    public MailAccount saveAccountForOwner(JSONObject input, boolean verify, String ownerId) throws MailException {
         if (input == null) throw new MailException("mail account details are required");
         MailAccount account = new MailAccount();
         String id = input.optString("id", "");
@@ -59,6 +63,7 @@ public final class MailService {
             account = existing;
         } else {
             account.id = MailStore.newId();
+            account.ownerId = ownerId == null ? "" : ownerId;
         }
         if (input.has("name")) account.name = input.optString("name", "").trim();
         if (input.has("email")) account.email = input.optString("email", "").trim().toLowerCase(Locale.US);
@@ -72,6 +77,7 @@ public final class MailService {
         if (input.has("fromName")) account.fromName = input.optString("fromName", "").trim();
         if (input.has("sentFolder")) account.sentFolder = input.optString("sentFolder", account.sentFolder).trim();
         if (input.has("draftsFolder")) account.draftsFolder = input.optString("draftsFolder", account.draftsFolder).trim();
+        if ((account.ownerId == null || account.ownerId.isEmpty()) && ownerId != null && !ownerId.isEmpty()) account.ownerId = ownerId;
         if (input.has("password") && !input.optString("password", "").isEmpty()) {
             account.passwordCipher = MailSecretStore.encrypt(context, account.id, input.optString("password"));
         }

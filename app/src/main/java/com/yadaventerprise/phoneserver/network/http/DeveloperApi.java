@@ -101,8 +101,9 @@ public final class DeveloperApi {
 
     private static void handleApiKeys(Context context, SimpleHttpServer.Request req, OutputStream out,
                                       DataApi.Auth auth, String method, List<String> parts) throws Exception {
-        DataApi.requirePermission(auth, TokenPolicy.TOKENS_MANAGE);
         TokenPolicyStore policyStore = TokenPolicyStore.get(context);
+        if (method.equals("GET")) DataApi.requirePermission(auth, TokenPolicy.TOKENS_MANAGE);
+        else DataApi.requireWrite(auth, TokenPolicy.TOKENS_MANAGE);
         if (parts.size() == 2) {
             if (method.equals("GET")) {
                 JSONArray arr = new JSONArray();
@@ -118,7 +119,10 @@ public final class DeveloperApi {
                 TokenPolicy policy = TokenPolicy.preset(role);
                 DataApi.applyPolicyBody(policy, body);
                 long expiresAt = body.optLong("expiresAt", policy.expiresAt);
-                TokenStore.Created created = TokenStore.create(context, body.optString("name", null), projectId, policy.canWrite(), expiresAt);
+                long dailyQuota = Math.max(0, body.optLong("dailyQuota", 0));
+                long monthlyQuota = Math.max(0, body.optLong("monthlyQuota", 0));
+                int concurrentLimit = Math.max(0, body.optInt("concurrentLimit", 0));
+                TokenStore.Created created = TokenStore.create(context, body.optString("name", null), projectId, policy.canWrite(), expiresAt, dailyQuota, monthlyQuota, concurrentLimit);
                 policy.tokenId = created.record.id;
                 policy.expiresAt = expiresAt;
                 policyStore.save(policy);
@@ -133,12 +137,26 @@ public final class DeveloperApi {
         String id = parts.get(2);
         Records.ApiTokenRecord record = TokenStore.findById(context, id);
         if (record == null) throw DataException.notFound("token");
+        if (parts.size() == 4 && parts.get(3).equals("regenerate")) {
+            DataApi.requireMethod(method, "POST");
+            TokenStore.Created created = TokenStore.regenerate(context, id);
+            TokenPolicy policy = policyStore.get(id, created.record);
+            JSONObject json = tokenJson(created.record, policy);
+            json.put("token", created.token);
+            json.put("warning", "store this token now; it cannot be shown again");
+            DataApi.sendJson(context, req, out, 200, json);
+            return;
+        }
         if (method.equals("PATCH") || method.equals("PUT")) {
             JSONObject body = DataApi.readJson(req);
             TokenPolicy policy = policyStore.get(id, record);
+            if (body.has("name")) TokenStore.rename(context, id, body.optString("name", record.name));
             if (body.has("suspended")) TokenStore.setSuspended(context, id, body.optBoolean("suspended", false));
             if (body.has("revoked") && body.optBoolean("revoked", false)) TokenStore.revoke(context, id);
             if (body.has("expiresAt")) TokenStore.setExpiresAt(context, id, Math.max(0, body.optLong("expiresAt", 0)));
+            if (body.has("dailyQuota") || body.has("monthlyQuota") || body.has("concurrentLimit")) {
+                TokenStore.updateQuotas(context, id, Math.max(0, body.optLong("dailyQuota", record.dailyQuota)), Math.max(0, body.optLong("monthlyQuota", record.monthlyQuota)), Math.max(0, body.optInt("concurrentLimit", record.concurrentLimit)));
+            }
             DataApi.applyPolicyBody(policy, body);
             if (body.has("expiresAt")) policy.expiresAt = Math.max(0, body.optLong("expiresAt", 0));
             policyStore.save(policy);
@@ -169,6 +187,9 @@ public final class DeveloperApi {
         for (String permission : policy.permissions) permissions.put(permission);
         json.put("permissions", permissions);
         json.put("rateLimitPerMinute", policy.rateLimitPerMinute);
+        json.put("dailyQuota", token.dailyQuota);
+        json.put("monthlyQuota", token.monthlyQuota);
+        json.put("concurrentLimit", token.concurrentLimit);
         json.put("expiresAt", token.expiresAt > 0 ? token.expiresAt : policy.expiresAt);
         json.put("createdAt", token.createdAt);
         json.put("lastUsedAt", token.lastUsedAt);
@@ -176,13 +197,14 @@ public final class DeveloperApi {
         json.put("keyPrefix", token.keyPrefix == null ? "" : token.keyPrefix);
         json.put("suspended", token.suspended);
         json.put("revoked", token.revoked);
+        json.put("status", token.revoked ? "revoked" : (token.suspended ? "suspended" : "active"));
         return json;
     }
 
     private static void handleWebhooks(Context context, SimpleHttpServer.Request req, OutputStream out,
                                        DataApi.Auth auth, String method, List<String> parts) throws Exception {
         if (method.equals("GET")) DataApi.requirePermission(auth, TokenPolicy.WEBHOOKS_READ);
-        else DataApi.requirePermission(auth, TokenPolicy.WEBHOOKS_WRITE);
+        else DataApi.requireWrite(auth, TokenPolicy.WEBHOOKS_WRITE);
         WebhookStore store = WebhookStore.get(context);
         if (parts.size() == 2) {
             if (method.equals("GET")) {
@@ -210,6 +232,21 @@ public final class DeveloperApi {
             DataApi.sendJson(context, req, out, 200, DataApi.wrap("history", arr));
             return;
         }
+        if (parts.size() == 3 && parts.get(2).equals("verify")) {
+            DataApi.requireMethod(method, "POST");
+            JSONObject body = DataApi.readJson(req);
+            String id = body.optString("webhookId", "");
+            WebhookConfig hook = store.get(id);
+            if (hook == null) throw DataException.notFound("webhook");
+            String ts = body.optString("timestamp", req.headers.get("x-phoneserver-timestamp"));
+            String delivery = body.optString("deliveryId", req.headers.get("x-phoneserver-delivery-id"));
+            String sig = body.optString("signature", req.headers.get("x-phoneserver-signature"));
+            String payload = body.has("body") ? body.optString("body", "") : body.optString("payload", "");
+            boolean ok = WebhookDispatcher.verifyIncoming(context, hook.secret, ts, delivery, payload, sig, System.currentTimeMillis());
+            if (!ok) throw DataException.forbidden("invalid webhook signature, timestamp, or replayed delivery");
+            DataApi.sendJson(context, req, out, 200, DataApi.ok());
+            return;
+        }
         String id = parts.get(2);
         WebhookConfig hook = store.get(id);
         if (hook == null) throw DataException.notFound("webhook");
@@ -220,7 +257,8 @@ public final class DeveloperApi {
             JSONObject json = DataApi.ok();
             json.put("success", result != null && result.success);
             json.put("responseCode", result == null ? 0 : result.responseCode);
-            if (result != null && !result.error.isEmpty()) json.put("error", result.error);
+            json.put("attempts", result == null ? 0 : result.attempts);
+            if (result != null && !result.error.isEmpty()) json.put("error", com.yadaventerprise.phoneserver.data.system.SystemLogSanitizer.sanitize(result.error));
             DataApi.sendJson(context, req, out, 200, json);
             return;
         }
@@ -283,7 +321,7 @@ public final class DeveloperApi {
     private static void handleExtensions(Context context, SimpleHttpServer.Request req, OutputStream out,
                                          DataApi.Auth auth, String method, List<String> parts) throws Exception {
         if (method.equals("GET")) DataApi.requirePermission(auth, TokenPolicy.DEVELOPER_READ);
-        else DataApi.requirePermission(auth, TokenPolicy.DEVELOPER_WRITE);
+        else DataApi.requireWrite(auth, TokenPolicy.DEVELOPER_WRITE);
         ExtensionStore store = ExtensionStore.get(context);
         if (parts.size() == 2) {
             if (method.equals("GET")) {
@@ -331,8 +369,8 @@ public final class DeveloperApi {
 
     private static void handleSandbox(Context context, SimpleHttpServer.Request req, OutputStream out,
                                       DataApi.Auth auth, String method) throws Exception {
-        DataApi.requirePermission(auth, TokenPolicy.DEVELOPER_READ);
         if (method.equals("GET")) {
+            DataApi.requirePermission(auth, TokenPolicy.DEVELOPER_READ);
             JSONObject json = DataApi.ok();
             json.put("mode", "sandbox");
             json.put("isolated", true);
@@ -342,6 +380,7 @@ public final class DeveloperApi {
             return;
         }
         DataApi.requireMethod(method, "POST");
+        DataApi.requirePermission(auth, TokenPolicy.DEVELOPER_WRITE);
         JSONObject body = DataApi.readJson(req);
         String action = body.optString("action", "echo").trim().toLowerCase(Locale.US);
         JSONObject result = new JSONObject();
