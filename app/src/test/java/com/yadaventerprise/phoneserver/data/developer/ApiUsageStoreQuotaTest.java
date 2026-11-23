@@ -55,4 +55,22 @@ public class ApiUsageStoreQuotaTest {
         ApiUsageStore store2 = ApiUsageStore.get(context);
         assertTrue(store2.tryConsumeQuota("tok3", now, 1, 100));
     }
+
+    @Test public void dailyQuotaUsesUtcDayBoundary() {
+        ApiUsageStore store = ApiUsageStore.get(context);
+        long endOfDayUtc = 1_700_006_399_000L; // 2023-11-15T23:59:59Z
+        long nextDayUtc = 1_700_006_400_000L;   // 2023-11-16T00:00:00Z
+        assertTrue(store.tryConsumeQuota("tokDay", endOfDayUtc, 1, 100));
+        assertFalse(store.tryConsumeQuota("tokDay", endOfDayUtc + 1000, 1, 100));
+        assertTrue(store.tryConsumeQuota("tokDay", nextDayUtc, 1, 100));
+    }
+
+    @Test public void monthlyQuotaUsesUtcMonthBoundary() {
+        ApiUsageStore store = ApiUsageStore.get(context);
+        long endOfMonthUtc = 1_698_796_799_000L; // 2023-10-31T23:59:59Z
+        long nextMonthUtc = 1_698_796_800_000L;  // 2023-11-01T00:00:00Z
+        assertTrue(store.tryConsumeQuota("tokMonth", endOfMonthUtc, 100, 1));
+        assertFalse(store.tryConsumeQuota("tokMonth", endOfMonthUtc + 1000, 100, 1));
+        assertTrue(store.tryConsumeQuota("tokMonth", nextMonthUtc, 100, 1));
+    }
 }
