@@ -6,6 +6,10 @@ import android.content.Context;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSettings;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSettingsStore;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSession;
+import com.yadaventerprise.phoneserver.data.remote.RemoteSessionStore;
+import com.yadaventerprise.phoneserver.data.remote.RemoteUser;
+import com.yadaventerprise.phoneserver.data.remote.RemoteUserStore;
 import com.yadaventerprise.phoneserver.testing.DataTestSupport;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -188,5 +192,20 @@ public class RemoteApiAuthTest {
         Resp hb = call("POST", DataApi.BASE + "/remote/devices/" + dev2 + "/heartbeat", bearer(token1), new JSONObject().put("uptimeMillis",1).toString(), null);
         assertEquals(403, hb.status);
         assertEquals(200, call("POST", DataApi.BASE + "/remote/devices/" + dev1 + "/heartbeat", bearer(token1), new JSONObject().put("uptimeMillis",1).toString(), null).status);
+    }
+
+    @Test public void logoutRequiresSessionCredential() throws Exception {
+        assertEquals(403, call("POST", DataApi.BASE + "/remote/auth/logout", admin(), null, null).status);
+    }
+
+    @Test public void userSessionRevocationRejectsOldToken() throws Exception {
+        RemoteUserStore users = RemoteUserStore.get(context);
+        RemoteUser draft = new RemoteUser();
+        draft.username = "viewer1"; draft.displayName = "Viewer"; draft.role = "viewer";
+        RemoteUser user = users.create(draft, "password12345");
+        RemoteSessionStore.Created created = RemoteSessionStore.get(context).create(RemoteSession.SUBJECT_USER, user.id, 60000, "127.0.0.1", null, null);
+        assertEquals(200, call("GET", DataApi.BASE + "/remote/dashboard", bearer(created.token), null, null).status);
+        assertEquals(200, call("DELETE", DataApi.BASE + "/remote/users/" + user.id + "/sessions", admin(), null, null).status);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", bearer(created.token), null, null).status);
     }
 }

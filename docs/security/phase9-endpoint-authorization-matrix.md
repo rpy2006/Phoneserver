@@ -13,6 +13,10 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiAuthTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.SystemApiAuthTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.RemoteApiAuthTest --offline` | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.PublicRouteSecurityTest --offline` | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiOwnershipTest --offline` | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest assembleDebug --offline` (`ed538a2`) | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew lintDebug --offline` | BUILD FAILED (offline missing deps: androidx.core:core-ktx:1.2.0, androidx.arch.core:core-runtime:2.0.0) |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew compileDebugJavaWithJavac testDebugUnitTest assembleDebug --offline` | **Not rerun after final matrix/test additions in this message**; previous session run was BUILD SUCCESSFUL before these added auth tests. Must rerun for final claim. |
 | `lintDebug --offline` | Not run; previously blocked by missing cached `androidx.arch.core:core-runtime:2.0.0`. |
 
@@ -119,15 +123,15 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | Endpoint | Methods | AuthN | AuthZ | Implementation | Test evidence | Status |
 |---|---|---:|---|---|---|---|
 | `/api/v1/mail/accounts` | GET/POST | Required | GET `MAIL_READ`; POST `requireWrite(MAIL_WRITE)` | `MailApi.route` | `MailApiAuthTest`, `AuthorizationMatrixTest` | Verified |
-| `/api/v1/mail/accounts/{id}` | GET/PATCH/DELETE | Required | read/write as above; account ownership is store-scoped by id | `MailApi.route` | `MailApiAuthTest` permission checks; no cross-account ownership test | Partial |
+| `/api/v1/mail/accounts/{id}` | GET/PATCH/DELETE | Required | read/write as above; account owner/token-admin enforced | `MailApi.requireAccountOwner` | `MailApiOwnershipTest.tokenCannotAccessAnotherTokensMailAccount` | Partial |
 | `/api/v1/mail/accounts/{id}/test` | POST | Required | `requireWrite(MAIL_WRITE)` | `MailApi.route` | `MailApiAuthTest` | Verified (authz) |
 | `/api/v1/mail/accounts/{id}/sync` | POST | Required | `requireWrite(MAIL_WRITE)` | `MailApi.route` | `MailApiAuthTest` | Verified (authz) |
 | `/api/v1/mail/accounts/{id}/send` | POST | Required | `requireWrite(MAIL_WRITE)` | `MailApi.route` | not dedicated | Inspected |
 | `/api/v1/mail/accounts/{id}/drafts` | POST | Required | `requireWrite(MAIL_WRITE)` | `MailApi.route` | not dedicated | Inspected |
 | `/api/v1/mail/accounts/{id}/messages` | GET | Required | `MAIL_READ` | `MailApi.route` | not dedicated | Inspected |
-| `/api/v1/mail/messages/{id}` | GET/DELETE | Required | GET `MAIL_READ`; DELETE `requireWrite(MAIL_WRITE)` | `MailApi.route` | `MailApiAuthTest` | Partial |
+| `/api/v1/mail/messages/{id}` | GET/DELETE | Required | GET `MAIL_READ`; DELETE `requireWrite(MAIL_WRITE)`; owner enforced via message->account | `MailApi.route` | `MailApiAuthTest`, `MailApiOwnershipTest` | Partial |
 | `/api/v1/mail/messages/{id}/read` | POST | Required | `requireWrite(MAIL_WRITE)` | `MailApi.route` | `MailApiAuthTest` | Verified (authz) |
-| `/api/v1/mail/messages/{id}/attachments/{index}` | GET | Required | `MAIL_READ` | `MailApi.route` | not dedicated | Inspected |
+| `/api/v1/mail/messages/{id}/attachments/{index}` | GET | Required | `MAIL_READ`; owner enforced; attachment cache path sanitized | `MailApi.route`, `MailService.attachment` | `MailApiOwnershipTest.tokenCannotAccessAnotherOwnersMessageOrAttachment` | Partial |
 
 ## RemoteApi `/api/v1/remote/*`
 
@@ -137,17 +141,17 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/remote/pairing/request` | POST | Public | remote+pairing enabled; code required | `handlePublic/requestPairing` | not dedicated | Inspected |
 | `/api/v1/remote/pairing/status` | POST | Public | remote+pairing enabled; code/request checks | `handlePublic/pairingStatus` | not dedicated | Inspected |
 | `/api/v1/remote/dashboard` | GET | Remote session/admin credential | `DASHBOARD`; remote enabled/HTTPS | `handle/dashboard` | `RemoteApiAuthTest` | Verified |
-| `/api/v1/remote/auth/logout` | POST | Remote session | session credential required | `handle/logout` | not dedicated | Inspected |
+| `/api/v1/remote/auth/logout` | POST | Remote session | session credential required; revokes session | `logout` | `RemoteApiAuthTest.logoutRequiresSessionCredential` | Partial |
 | `/api/v1/remote/pairing` | GET/POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
 | `/api/v1/remote/pairing/{id}/approve` | POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
 | `/api/v1/remote/pairing/{id}/reject` | POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
 | `/api/v1/remote/devices` | GET | Remote session/admin | `DEVICES_READ` | `handleDevices` | not dedicated | Inspected |
-| `/api/v1/remote/devices/{id}` | GET/PATCH/DELETE | Remote session/admin | read/write perms; device ownership for heartbeat only | `handleDevices` | not dedicated | Inspected |
-| `/api/v1/remote/devices/{id}/heartbeat` | POST | Remote session/admin | `DEVICES_READ`; device session can only heartbeat itself | `handleDevices` | inspected; dedicated test attempted but pairing flow not fully wired in test harness | Partial |
+| `/api/v1/remote/devices/{id}` | GET/PATCH/DELETE | Remote session/admin | read/write perms; device revocation clears sessions; revoked device session rejected | `handleDevices`, `RemoteSessionStore.clearDeviceSessions` | `RemoteApiAuthTest.revokedDeviceSessionIsRejected` | Partial |
+| `/api/v1/remote/devices/{id}/heartbeat` | POST | Remote session/admin | `DEVICES_READ`; device session can only heartbeat itself | `handleDevices` | `RemoteApiAuthTest.deviceCannotHeartbeatAnotherDevice` | Verified |
 | `/api/v1/remote/devices/{id}/disconnect` | POST | Remote session/admin | `DEVICES_WRITE` | `handleDevices` | not dedicated | Inspected |
 | `/api/v1/remote/users` | GET/POST | Remote session/admin | `USERS_READ/WRITE` | `handleUsers` | `RemoteApiAuthTest` viewer denied | Partial |
 | `/api/v1/remote/users/{id}` | GET/PATCH/DELETE | Remote session/admin | `USERS_READ/WRITE`; owner protections | `handleUsers` | not dedicated | Inspected |
-| `/api/v1/remote/users/{id}/sessions` | DELETE | Remote session/admin | `USERS_WRITE` | `handleUsers` | not dedicated | Inspected |
+| `/api/v1/remote/users/{id}/sessions` | DELETE | Remote session/admin | `USERS_WRITE`; revokes user sessions | `handleUsers` | `RemoteApiAuthTest.userSessionRevocationRejectsOldToken` | Partial |
 | `/api/v1/remote/roles` | GET | Remote session/admin | `ROLES_READ` | `handle` | not dedicated | Inspected |
 | `/api/v1/remote/audit` | GET | Remote session/admin | `AUDIT_READ` | `handle` | not dedicated | Inspected |
 | `/api/v1/remote/settings` | GET/PATCH | Remote session/admin | `SETTINGS_READ/WRITE` | `handleSettings` | `RemoteApiAuthTest` | Partial |
@@ -172,7 +176,7 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 |---|---|---|---|
 | V-001 | DeveloperApi mutation authz | Mutating developer API key/webhook/extension/sandbox endpoints previously allowed any authenticated token with read permission; fixed to require write/manage permissions. | Fixed in this pass; core tests added |
 | G-001 | Exhaustive endpoint verification | Most endpoints are inspected only; no dedicated negative auth tests for every protected endpoint/method/action. | Open |
-| G-002 | RemoteApi ownership/session isolation | Device heartbeat self-only rule inspected; pairing/device/user/session revocation and cross-subject access need dedicated tests. | Open |
+| G-002 | RemoteApi ownership/session isolation | Heartbeat cross-device and revoked device session covered; pairing approval/rejection edge cases, user session revocation, expiry, and file path ownership still need dedicated negative tests. | Open |
 | G-003 | Mail ownership isolation | Mail routes enforce permission checks but cross-account/message/attachment ID manipulation tests are missing. | Open |
 | G-004 | Legacy file/WebDAV/custom API | Authorization relies on `isAuthorizedForFiles` and remote-access flag; no dedicated negative tests for unauth, read-only write, disabled remote access, traversal/bypass. | Open |
 | G-005 | Webhook replay scope | Replay/signature verification exists in `WebhookDispatcher.verifyIncoming` and Developer verify endpoint; no general inbound receiver enforcement. | Open |
