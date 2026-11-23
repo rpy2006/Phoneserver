@@ -220,4 +220,24 @@ public class RemoteApiAuthTest {
         Resp resp = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code","INVALID").toString(), null);
         assertEquals(401, resp.status);
     }
+
+    @Test public void pairingRejectAndUnknownActionsAreHandled() throws Exception {
+        Resp reqResp = call("POST", DataApi.BASE + "/remote/pairing/request", null, new JSONObject().put("deviceName","X").toString(), null);
+        String id = new JSONObject(reqResp.body).getString("id");
+        assertEquals(200, call("POST", DataApi.BASE + "/remote/pairing/" + id + "/reject", admin(), null, null).status);
+        assertEquals(404, call("POST", DataApi.BASE + "/remote/pairing/unknown/approve", admin(), new JSONObject().toString(), null).status);
+        assertEquals(404, call("POST", DataApi.BASE + "/remote/pairing/unknown/reject", admin(), null, null).status);
+    }
+
+    @Test public void consumedPairingCodeCannotBeReused() throws Exception {
+        Resp reqResp = call("POST", DataApi.BASE + "/remote/pairing/request", null, new JSONObject().put("deviceName","Reuse").toString(), null);
+        String code = new JSONObject(reqResp.body).getString("code");
+        String id = new JSONObject(reqResp.body).getString("id");
+        assertEquals(200, call("POST", DataApi.BASE + "/remote/pairing/" + id + "/approve", admin(), new JSONObject().put("deviceName","Reuse").toString(), null).status);
+        Resp first = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code", code).toString(), null);
+        assertEquals(200, first.status);
+        assertTrue(new JSONObject(first.body).has("token"));
+        Resp second = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code", code).toString(), null);
+        assertTrue(second.status == 401 || second.status == 409);
+    }
 }
