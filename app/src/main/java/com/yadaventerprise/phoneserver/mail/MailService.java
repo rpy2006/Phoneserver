@@ -229,9 +229,17 @@ public final class MailService {
         File source = store.getAttachmentFile(message.accountId, message.uid, ref.storageKey);
         File folder = new File(context.getCacheDir(), "mail-attachments");
         if (!folder.exists() && !folder.mkdirs()) throw new MailException("attachment cache is unavailable", 500);
-        File target = new File(folder, ref.storageKey + "/" + ref.name);
+        String safeStorage = ref.storageKey == null ? "" : ref.storageKey.replaceAll("[^A-Za-z0-9._-]", "_");
+        String safeName = ref.name == null ? "attachment" : new File(ref.name).getName();
+        if (safeName.isEmpty() || ".".equals(safeName) || "..".equals(safeName)) safeName = "attachment";
+        File target = new File(new File(folder, safeStorage), safeName);
         File parent = target.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) throw new MailException("attachment cache is unavailable", 500);
+        try {
+            if (!target.getCanonicalPath().startsWith(folder.getCanonicalPath() + File.separator)) throw new MailException("attachment path is invalid", 400);
+        } catch (IOException e) {
+            throw new MailException("attachment path is invalid", 400);
+        }
         try (java.io.FileInputStream in = new java.io.FileInputStream(source);
              FileOutputStream out = new FileOutputStream(target)) {
             byte[] buffer = new byte[8192];
