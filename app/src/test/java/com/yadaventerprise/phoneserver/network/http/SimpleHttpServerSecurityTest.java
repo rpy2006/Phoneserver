@@ -105,4 +105,13 @@ public class SimpleHttpServerSecurityTest {
         ContentStore.setPassword(context, "secret");
         assertTrue(route(request("GET", "/api/custom/status")).startsWith("HTTP/1.1 401"));
     }
+
+    @Test
+    public void webDavWriteMethodsRequireAuth() {
+        ContentStore.setPassword(context, "secret");
+        ContentStore.setAllowRemoteAccess(context, true);
+        assertTrue(route(request("PUT", "/dav/x.txt")).startsWith("HTTP/1.1 401"));
+        assertTrue(route(request("MKCOL", "/dav/newdir")).startsWith("HTTP/1.1 401"));
+        assertTrue(route(request("DELETE", "/dav/x.txt")).startsWith("HTTP/1.1 401"));
+    }
 }
