@@ -96,4 +96,13 @@ public class SimpleHttpServerSecurityTest {
         ContentStore.setPassword(context, "");
         assertTrue(route(request("PROPFIND", "/dav/")).startsWith("HTTP/1.1 403"));
     }
+
+    @Test
+    public void customApiBlockedWhenRemoteAccessOffOrUnauthorized() {
+        ContentStore.setAllowRemoteAccess(context, false);
+        assertTrue(route(request("GET", "/api/custom/status")).startsWith("HTTP/1.1 403"));
+        ContentStore.setAllowRemoteAccess(context, true);
+        ContentStore.setPassword(context, "secret");
+        assertTrue(route(request("GET", "/api/custom/status")).startsWith("HTTP/1.1 401"));
+    }
 }
