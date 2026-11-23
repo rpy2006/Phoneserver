@@ -137,4 +137,18 @@ public class RemoteApiAuthTest {
         Resp resp = call("GET", DataApi.BASE + "/remote/files/list?path=../../..", admin(), null, null);
         assertTrue(resp.status == 400 || resp.status == 403 || resp.status == 404);
     }
+
+    @Test public void remoteFilesDeleteRequiresWritePermission() throws Exception {
+        com.yadaventerprise.phoneserver.data.remote.RemoteUserStore us = com.yadaventerprise.phoneserver.data.remote.RemoteUserStore.get(context);
+        com.yadaventerprise.phoneserver.data.remote.RemoteUser u = new com.yadaventerprise.phoneserver.data.remote.RemoteUser();
+        u.username = "viewer"; u.displayName = "Viewer"; u.role = com.yadaventerprise.phoneserver.data.remote.RemoteRole.VIEWER; u.status = com.yadaventerprise.phoneserver.data.remote.RemoteUser.STATUS_ACTIVE;
+        us.create(u, "password12345");
+        Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
+                new JSONObject().put("username","viewer").put("password","password12345").toString(), null);
+        assertEquals(200, login.status);
+        String token = new JSONObject(login.body).getJSONObject("session").getString("token");
+        Resp del = call("POST", DataApi.BASE + "/remote/files/delete", bearer(token),
+                new JSONObject().put("path","nope.txt").toString(), null);
+        assertEquals(403, del.status);
+    }
 }

@@ -71,4 +71,14 @@ public class PublicRouteSecurityTest {
         String text = out.toString("UTF-8");
         assertTrue(text.startsWith("HTTP/1.1 200"));
     }
+
+    @Test
+    public void shareWriteMethodsAreRejected() throws Exception {
+        SimpleHttpServer.Request req = new SimpleHttpServer.Request();
+        req.method = "POST"; req.path = "/s/pss_" + "1".repeat(64); req.remoteIp = "10.1.2.6";
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ShareHandler.handle(context, req, out, false);
+        String text = out.toString("UTF-8");
+        assertTrue(text.contains("401") || text.contains("404") || text.contains("405") || text.toLowerCase().contains("password"));
+    }
 }
