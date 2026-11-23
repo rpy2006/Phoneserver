@@ -132,4 +132,9 @@ public class RemoteApiAuthTest {
                 new JSONObject().put("username","bob").put("password","password12345").toString(), null);
         assertEquals(403, login.status);
     }
+
+    @Test public void remoteFilesRejectUnsafePath() {
+        Resp resp = call("GET", DataApi.BASE + "/remote/files/list?path=../../..", admin(), null, null);
+        assertTrue(resp.status == 400 || resp.status == 403 || resp.status == 404);
+    }
 }

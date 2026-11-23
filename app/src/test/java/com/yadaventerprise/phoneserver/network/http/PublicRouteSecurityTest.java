@@ -60,4 +60,15 @@ public class PublicRouteSecurityTest {
         String text = out.toString("UTF-8");
         assertTrue(text.contains("404") || text.toLowerCase().contains("not found"));
     }
+
+    @Test
+    public void statusEndpointIsPublic() throws Exception {
+        SimpleHttpServer server = new SimpleHttpServer(context, 0);
+        SimpleHttpServer.Request req = new SimpleHttpServer.Request();
+        req.method = "GET"; req.path = "/status"; req.remoteIp = "10.1.2.5";
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        server.route(req, out);
+        String text = out.toString("UTF-8");
+        assertTrue(text.startsWith("HTTP/1.1 200"));
+    }
 }
