@@ -151,4 +151,24 @@ public class RemoteApiAuthTest {
                 new JSONObject().put("path","nope.txt").toString(), null);
         assertEquals(403, del.status);
     }
+
+    @Test public void revokedDeviceSessionIsRejected() throws Exception {
+        Resp reqResp = call("POST", DataApi.BASE + "/remote/pairing/request", null,
+                new JSONObject().put("deviceName","Tablet").toString(), null);
+        assertEquals(200, reqResp.status);
+        String code = new JSONObject(reqResp.body).getString("code");
+        String id = new JSONObject(reqResp.body).getString("id");
+        Resp approve = call("POST", DataApi.BASE + "/remote/pairing/" + id + "/approve", admin(),
+                new JSONObject().put("deviceName","Tablet").toString(), null);
+        assertEquals(200, approve.status);
+        Resp status = call("POST", DataApi.BASE + "/remote/pairing/status", null,
+                new JSONObject().put("code", code).toString(), null);
+        assertEquals(200, status.status);
+        String token = new JSONObject(status.body).getString("token");
+        String deviceId = new JSONObject(status.body).getString("deviceId");
+        assertEquals(200, call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null).status);
+        Resp revoke = call("DELETE", DataApi.BASE + "/remote/devices/" + deviceId, admin(), null, null);
+        assertEquals(200, revoke.status);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null).status);
+    }
 }

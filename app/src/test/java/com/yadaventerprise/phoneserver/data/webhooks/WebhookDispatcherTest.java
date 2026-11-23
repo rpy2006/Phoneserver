@@ -174,6 +174,19 @@ public class WebhookDispatcherTest {
         assertFalse(WebhookDispatcher.verifyIncoming(context, secret, ts, delivery, body, sig, System.currentTimeMillis()));
     }
 
+    @Test
+    public void webhookConfigToJsonRedactsSecretAndSensitiveHeaders() throws Exception {
+        WebhookConfig config = new WebhookConfig();
+        config.id = "w1"; config.name="n"; config.url="https://example.com"; config.secret="topsecret";
+        config.headersJson = new org.json.JSONObject().put("Authorization","Bearer abc").put("X-Test","1").toString();
+        org.json.JSONObject json = config.toJson();
+        assertFalse(json.has("secret"));
+        assertTrue(json.optBoolean("hasSecret"));
+        org.json.JSONObject headers = new org.json.JSONObject(json.optString("headersJson","{}"));
+        assertEquals("[redacted]", headers.optString("Authorization"));
+        assertEquals("1", headers.optString("X-Test"));
+    }
+
     private static String hmac(String value, String secret) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

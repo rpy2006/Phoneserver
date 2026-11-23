@@ -46,4 +46,13 @@ public class ApiUsageStoreQuotaTest {
         store.replaceReservation("tok2", actual);
         assertFalse(store.tryConsumeQuota("tok2", now, 1, 100));
     }
+
+    @Test public void staleReservationIsIgnoredAfterRestartLoad() {
+        ApiUsageStore store = ApiUsageStore.get(context);
+        long now = System.currentTimeMillis();
+        assertTrue(store.tryConsumeQuota("tok3", now - 10 * 60 * 1000L, 10, 100));
+        ApiUsageStore.reset();
+        ApiUsageStore store2 = ApiUsageStore.get(context);
+        assertTrue(store2.tryConsumeQuota("tok3", now, 1, 100));
+    }
 }

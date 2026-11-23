@@ -29,14 +29,19 @@ public class WebhookConfig {
     }
 
     public JSONObject toJson() throws Exception {
+        return toJson(false);
+    }
+
+    public JSONObject toJson(boolean includeSecret) throws Exception {
         JSONObject json = new JSONObject();
         json.put("id", id);
         json.put("name", name);
         json.put("url", url);
-        json.put("secret", secret);
+        if (includeSecret) json.put("secret", secret);
+        json.put("hasSecret", secret != null && !secret.isEmpty());
         json.put("enabled", enabled);
         json.put("method", method);
-        json.put("headersJson", headersJson);
+        json.put("headersJson", sanitizeHeadersJson(headersJson));
         json.put("timeoutSeconds", timeoutSeconds);
         json.put("maxAttempts", maxAttempts);
         JSONArray array = new JSONArray();
@@ -50,6 +55,28 @@ public class WebhookConfig {
         return json;
     }
 
+
+    private static String sanitizeHeadersJson(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return "";
+        try {
+            JSONObject in = new JSONObject(raw);
+            JSONObject out = new JSONObject();
+            java.util.Iterator<String> keys = in.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                String v = in.optString(k, "");
+                String lk = k.toLowerCase();
+                if (lk.contains("authorization") || lk.contains("secret") || lk.contains("token") || lk.contains("cookie") || lk.contains("api-key") || lk.contains("apikey")) {
+                    out.put(k, "[redacted]");
+                } else {
+                    out.put(k, v);
+                }
+            }
+            return out.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
     public static WebhookConfig fromJson(JSONObject json) {
         WebhookConfig config = new WebhookConfig();
         config.id = json.optString("id", "");

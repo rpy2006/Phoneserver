@@ -816,6 +816,7 @@ public final class RemoteApi {
 
     private static JSONObject deviceJson(RemoteDevice device, RemoteSettings settings) throws Exception {
         JSONObject json = device.toJson();
+        json.remove("sessionId");
         long now = System.currentTimeMillis();
         boolean online = device.isOnline(now, settings.offlineThresholdSeconds * 1000L);
         json.put("online", online);

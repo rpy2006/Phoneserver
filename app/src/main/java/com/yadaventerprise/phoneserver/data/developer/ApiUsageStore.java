@@ -246,6 +246,19 @@ public final class ApiUsageStore {
                 if (o != null) cached.add(ApiUsageEntry.fromJson(o));
             }
         } catch (Exception ignored) {}
+        long now = System.currentTimeMillis();
+        long cutoff = now - 5L * 60L * 1000L;
+        boolean changed = false;
+        for (int i = cached.size() - 1; i >= 0; i--) {
+            ApiUsageEntry e = cached.get(i);
+            if ("/__quota__/reserve".equals(e.path) && e.time < cutoff) {
+                cached.remove(i);
+                changed = true;
+            }
+        }
+        if (changed) {
+            try { persist(); } catch (Exception ignored) {}
+        }
     }
 
     private void persist() {
