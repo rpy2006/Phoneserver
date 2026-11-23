@@ -8,8 +8,12 @@ import com.yadaventerprise.phoneserver.data.security.TokenPolicyStore;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.data.tokens.TokenStore;
 import com.yadaventerprise.phoneserver.mail.MailAccount;
+import com.yadaventerprise.phoneserver.mail.MailAttachmentRef;
 import com.yadaventerprise.phoneserver.mail.MailMessage;
 import com.yadaventerprise.phoneserver.mail.MailService;
+import com.yadaventerprise.phoneserver.mail.MailStore;
+import java.io.File;
+import java.io.FileOutputStream;
 import com.yadaventerprise.phoneserver.testing.DataTestSupport;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -80,27 +84,15 @@ public class MailApiOwnershipTest {
     }
 
     @Test public void messageIdManipulationDoesNotGrantAccessWithoutPermission() throws Exception {
-        // create account/message directly in store
-        MailService svc = new MailService(context);
-        MailAccount saved = new MailAccount();
-        saved.id = "acc1";
-        try {
-            org.json.JSONObject body = new org.json.JSONObject();
-            body.put("name","A"); body.put("email","a@example.com"); body.put("username","a");
-            body.put("smtpHost","127.0.0.1"); body.put("imapHost","127.0.0.1");
-            body.put("smtpPort",1); body.put("imapPort",1);
-            body.put("smtpSecurity","none"); body.put("imapSecurity","none");
-            body.put("password","password123");
-            saved = svc.saveAccount(body);
-        } catch (Exception e) {
-            saved = new MailAccount(); saved.id = "acc1";
-        }
+        TokenStore.Created owner = TokenStore.create(context, "mail-owner", null, true);
+        MailStore store = new MailStore(context);
+        MailAccount account = new MailAccount();
+        account.id = "acc1"; account.ownerId = "token:" + owner.record.id; account.email="a@example.com"; account.name="A";
+        store.saveAccount(account);
         MailMessage msg = new MailMessage();
-        msg.id = "msg-owned"; msg.accountId = saved.id == null ? "acc1" : saved.id; msg.folder="INBOX"; msg.subject="s";
-        try {
-            java.util.List<MailMessage> list = new java.util.ArrayList<>(); list.add(msg);
-            new com.yadaventerprise.phoneserver.mail.MailStore(context).upsertMessages(list);
-        } catch (Exception ignore) {}
+        msg.id = "msg-owned"; msg.accountId = account.id; msg.folder="INBOX"; msg.subject="s";
+        java.util.List<MailMessage> list = new java.util.ArrayList<>(); list.add(msg);
+        store.upsertMessages(list);
 
         TokenStore.Created noMail = TokenStore.create(context, "nomail2", null, false);
         TokenPolicy p = TokenPolicy.preset(TokenPolicy.ROLE_VIEWER);
@@ -111,5 +103,32 @@ public class MailApiOwnershipTest {
         assertEquals(403, status("GET", DataApi.BASE + "/mail/messages/msg-owned", auth, null));
         assertEquals(403, status("DELETE", DataApi.BASE + "/mail/messages/msg-owned", auth, null));
         assertEquals(403, status("GET", DataApi.BASE + "/mail/messages/msg-owned/attachments/0", auth, null));
+    }
+
+    @Test public void tokenCannotAccessAnotherOwnersMessageOrAttachment() throws Exception {
+        TokenStore.Created ownerA = TokenStore.create(context, "mail-owner-a", null, true);
+        TokenStore.Created ownerB = TokenStore.create(context, "mail-owner-b", null, true);
+        MailStore store = new MailStore(context);
+        MailAccount account = new MailAccount();
+        account.id = "acc-owner-a"; account.ownerId = "token:" + ownerA.record.id; account.email="a@example.com"; account.name="A";
+        store.saveAccount(account);
+
+        File dir = new File(context.getFilesDir(), "mail/accounts/" + account.id + "/attachments/uid1");
+        assertTrue(dir.mkdirs() || dir.exists());
+        File att = new File(dir, "key1");
+        try (FileOutputStream f = new FileOutputStream(att)) { f.write("secret".getBytes(StandardCharsets.UTF_8)); }
+
+        MailAttachmentRef ref = new MailAttachmentRef();
+        ref.index = 0; ref.name = "secret.txt"; ref.contentType = "text/plain"; ref.storageKey = "key1"; ref.size = 6;
+        MailMessage msg = new MailMessage();
+        msg.id = "msg-owner-a"; msg.accountId = account.id; msg.folder="INBOX"; msg.uid="uid1"; msg.subject="s";
+        msg.attachments.add(ref);
+        java.util.List<MailMessage> list = new java.util.ArrayList<>(); list.add(msg);
+        store.upsertMessages(list);
+
+        assertEquals(403, status("GET", DataApi.BASE + "/mail/messages/msg-owner-a", bearer(ownerB.token), null));
+        assertEquals(403, status("GET", DataApi.BASE + "/mail/messages/msg-owner-a/attachments/0", bearer(ownerB.token), null));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/mail/messages/msg-owner-a", bearer(ownerB.token), null));
+        assertEquals(200, status("GET", DataApi.BASE + "/mail/messages/msg-owner-a", bearer(ownerA.token), null));
     }
 }
