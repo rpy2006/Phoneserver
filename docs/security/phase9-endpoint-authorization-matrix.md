@@ -10,10 +10,12 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.AuthorizationMatrixTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.PublicRouteSecurityTest --offline` | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiAuthTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.SystemApiAuthTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.RemoteApiAuthTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.PublicRouteSecurityTest --offline` | BUILD SUCCESSFUL |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiOwnershipTest --offline` | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest assembleDebug --offline` (`ed538a2`) | BUILD SUCCESSFUL |
 | `ANDROID_HOME=/tmp/android-sdk sh gradlew lintDebug --offline` | BUILD FAILED (offline missing deps: androidx.core:core-ktx:1.2.0, androidx.arch.core:core-runtime:2.0.0) |
@@ -143,8 +145,8 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/remote/dashboard` | GET | Remote session/admin credential | `DASHBOARD`; remote enabled/HTTPS | `handle/dashboard` | `RemoteApiAuthTest` | Verified |
 | `/api/v1/remote/auth/logout` | POST | Remote session | session credential required; revokes session | `logout` | `RemoteApiAuthTest.logoutRequiresSessionCredential` | Partial |
 | `/api/v1/remote/pairing` | GET/POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
-| `/api/v1/remote/pairing/{id}/approve` | POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
-| `/api/v1/remote/pairing/{id}/reject` | POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
+| `/api/v1/remote/pairing/{id}/approve` | POST | Remote session/admin | `PAIRING` | `handlePairing` | `RemoteApiAuthTest.pairingRejectAndUnknownActionsAreHandled`, `consumedPairingCodeCannotBeReused` | Partial |
+| `/api/v1/remote/pairing/{id}/reject` | POST | Remote session/admin | `PAIRING` | `handlePairing` | `RemoteApiAuthTest.pairingRejectAndUnknownActionsAreHandled` | Partial |
 | `/api/v1/remote/devices` | GET | Remote session/admin | `DEVICES_READ` | `handleDevices` | not dedicated | Inspected |
 | `/api/v1/remote/devices/{id}` | GET/PATCH/DELETE | Remote session/admin | read/write perms; device revocation clears sessions; revoked device session rejected | `handleDevices`, `RemoteSessionStore.clearDeviceSessions` | `RemoteApiAuthTest.revokedDeviceSessionIsRejected` | Partial |
 | `/api/v1/remote/devices/{id}/heartbeat` | POST | Remote session/admin | `DEVICES_READ`; device session can only heartbeat itself | `handleDevices` | `RemoteApiAuthTest.deviceCannotHeartbeatAnotherDevice` | Verified |
