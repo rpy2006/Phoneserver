@@ -43,7 +43,7 @@ public class DeveloperExtensionsActivity extends AppCompatActivity {
                     String text = input.getText().toString();
                     new Thread(() -> {
                         try {
-                            ExtensionStore.get(this).install(new JSONObject(text));
+                            ExtensionStore.get(this).install(new JSONObject(text), "ui:admin");
                             runOnUiThread(() -> { Toast.makeText(this,"Extension installed",Toast.LENGTH_SHORT).show(); refresh(); });
                         } catch (Exception e) {
                             runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show());

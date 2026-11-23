@@ -82,6 +82,10 @@ public class AuthorizationMatrixTest {
         return h;
     }
 
+    private int status(String method, String path, Map<String, String> headers, String body) {
+        return call(method, path, headers, body).status;
+    }
+
     private TokenStore.Created tokenWithPolicy(String name, String role, String projectId, boolean canWrite) throws Exception {
         TokenStore.Created created = TokenStore.create(context, name, projectId, canWrite);
         TokenPolicy policy = TokenPolicy.preset(role);
@@ -285,5 +289,26 @@ public class AuthorizationMatrixTest {
         assertEquals(403, call("POST", DataApi.BASE + "/system/tasks", auth, "{\"name\":\"t\",\"type\":\"cleanup\",\"scheduleType\":\"manual\"}").status);
         assertEquals(403, call("POST", DataApi.BASE + "/system/webhooks", auth, "{\"name\":\"w\",\"url\":\"http://127.0.0.1/\",\"events\":[\"test\"]}").status);
         assertEquals(403, call("PATCH", DataApi.BASE + "/system/automation", auth, "{\"tasksEnabled\":false}").status);
+    }
+
+    @Test public void extensionMutationsRequireDeveloperWriteAndApproval() throws Exception {
+        TokenStore.Created devViewer = TokenStore.create(context, "dev-viewer2", null, false);
+        TokenPolicy pol = TokenPolicy.defaultFor(devViewer.record);
+        pol.tokenId = devViewer.record.id;
+        pol.permissions.remove(TokenPolicy.DEVELOPER_WRITE);
+        TokenPolicyStore.get(context).save(pol);
+        Map<String,String> authH = bearer(devViewer.token);
+        assertEquals(403, status("POST", DataApi.BASE + "/developer/extensions", authH, new JSONObject().put("id","com.test.x").put("name","X").put("version","1.0.0").toString()));
+
+        Map<String,String> adminH = admin();
+        String manifest = new JSONObject().put("id","com.test.approval").put("name","Approval").put("version","1.0.0").toString();
+        Response created = call("POST", DataApi.BASE + "/developer/extensions", adminH, manifest);
+        assertEquals(201, created.status);
+        Response denied = call("POST", DataApi.BASE + "/developer/extensions/com.test.approval/enable", adminH, "{}");
+        assertEquals(400, denied.status);
+        Response approved = call("POST", DataApi.BASE + "/developer/extensions/com.test.approval/approve", adminH, "{}");
+        assertEquals(200, approved.status);
+        Response enabled = call("POST", DataApi.BASE + "/developer/extensions/com.test.approval/enable", adminH, "{}");
+        assertEquals(200, enabled.status);
     }
 }

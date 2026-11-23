@@ -15,16 +15,20 @@ import org.json.JSONObject;
 public final class ExtensionStore {
     private static volatile ExtensionStore instance;
     private final File file;
+    private final File activityFile;
     private final Object lock = new Object();
     private List<ExtensionRecord> cached;
 
-    private ExtensionStore(File file) { this.file = file; }
+    private ExtensionStore(Context context) {
+        this.file = new File(DeveloperPaths.developerDir(context), "extensions.json");
+        this.activityFile = new File(DeveloperPaths.developerDir(context), "extension-activity.json");
+    }
 
     public static ExtensionStore get(Context context) {
         if (instance == null) {
             synchronized (ExtensionStore.class) {
                 if (instance == null) {
-                    instance = new ExtensionStore(new File(DeveloperPaths.developerDir(context), "extensions.json"));
+                    instance = new ExtensionStore(context.getApplicationContext());
                 }
             }
         }
@@ -32,6 +36,45 @@ public final class ExtensionStore {
     }
 
     public static synchronized void reset() { instance = null; }
+
+    public List<JSONObject> activity(int limit) {
+        synchronized (lock) {
+            List<JSONObject> all = readActivity();
+            int max = Math.max(1, Math.min(limit, 200));
+            if (all.size() <= max) return all;
+            return new ArrayList<>(all.subList(0, max));
+        }
+    }
+
+    private void record(String action, String extensionId, String actor, String detail) {
+        try {
+            List<JSONObject> all = readActivity();
+            JSONObject row = new JSONObject();
+            row.put("time", System.currentTimeMillis());
+            row.put("action", action == null ? "" : action);
+            row.put("extensionId", extensionId == null ? "" : extensionId);
+            row.put("actor", actor == null ? "" : actor);
+            row.put("detail", detail == null ? "" : detail);
+            all.add(0, row);
+            while (all.size() > 500) all.remove(all.size() - 1);
+            JSONArray arr = new JSONArray();
+            for (JSONObject o : all) arr.put(o);
+            JsonStorage.writeJsonArrayAtomic(activityFile, arr, true);
+            SecurityPaths.restrict(activityFile);
+        } catch (Exception ignored) {}
+    }
+
+    private List<JSONObject> readActivity() {
+        List<JSONObject> out = new ArrayList<>();
+        try {
+            JSONArray arr = JsonStorage.readJsonArray(activityFile);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o != null) out.add(o);
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
 
     public List<ExtensionRecord> list() {
         synchronized (lock) { ensureLoaded(); return new ArrayList<>(cached); }
@@ -45,7 +88,7 @@ public final class ExtensionStore {
         }
     }
 
-    public ExtensionRecord install(JSONObject manifest) throws Exception {
+    public ExtensionRecord install(JSONObject manifest, String actor) throws Exception {
         ExtensionRecord r = parseManifest(manifest);
         synchronized (lock) {
             ensureLoaded();
@@ -55,40 +98,68 @@ public final class ExtensionStore {
             validateDependencies(r, cached);
             r.installedAt = System.currentTimeMillis();
             r.updatedAt = r.installedAt;
+            r.enabled = false;
+            r.approved = false;
             r.status = "installed";
             cached.add(r);
             persist();
+            record("install", r.id, actor, "manifest installed; disabled pending admin approval");
             return r;
         }
     }
 
-    public ExtensionRecord setEnabled(String id, boolean enabled, boolean approved) throws Exception {
+    public ExtensionRecord approve(String id, boolean approved, String actor) throws Exception {
         synchronized (lock) {
             ensureLoaded();
             for (ExtensionRecord r : cached) {
                 if (!r.id.equals(id)) continue;
-                if (enabled) {
-                    if (!approved && !r.approved) throw new IllegalArgumentException("admin approval required before enabling extension");
-                    r.approved = true;
+                if (!approved) {
+                    r.approved = false;
+                    r.enabled = false;
+                    r.status = "revoked";
+                } else {
                     validateDependencies(r, cached);
+                    r.approved = true;
+                    if (!r.enabled) r.status = "approved";
                 }
-                r.enabled = enabled;
                 r.updatedAt = System.currentTimeMillis();
-                r.status = enabled ? "enabled" : "disabled";
                 persist();
+                record(approved ? "approve" : "revoke", r.id, actor, approved ? "extension approved" : "extension approval revoked");
                 return r;
             }
             return null;
         }
     }
 
-    public boolean remove(String id) {
+    public ExtensionRecord setEnabled(String id, boolean enabled, boolean approved, String actor) throws Exception {
+        synchronized (lock) {
+            ensureLoaded();
+            for (ExtensionRecord r : cached) {
+                if (!r.id.equals(id)) continue;
+                if (enabled) {
+                    if (approved) r.approved = true;
+                    if (!r.approved) throw new IllegalArgumentException("admin approval required before enabling extension");
+                    validateDependencies(r, cached);
+                }
+                r.enabled = enabled;
+                r.updatedAt = System.currentTimeMillis();
+                r.status = enabled ? "enabled" : (r.approved ? "approved" : "installed");
+                persist();
+                record(enabled ? "enable" : "disable", r.id, actor, enabled ? "extension enabled" : "extension disabled");
+                return r;
+            }
+            return null;
+        }
+    }
+
+    public boolean remove(String id, String actor) {
         synchronized (lock) {
             ensureLoaded();
             for (int i = 0; i < cached.size(); i++) {
                 if (cached.get(i).id.equals(id)) {
                     cached.remove(i);
                     persist();
+                    record("remove", id, actor, "extension removed");
                     return true;
                 }
             }
@@ -127,6 +198,7 @@ public final class ExtensionStore {
                 String d = deps.optString(i, "").trim();
                 if (d.isEmpty()) continue;
                 if (!d.matches("[a-zA-Z0-9._-]{3,64}")) throw new IllegalArgumentException("invalid dependency: " + d);
+                if (d.equals(r.id)) throw new IllegalArgumentException("extension cannot depend on itself");
                 if (!r.dependencies.contains(d)) r.dependencies.add(d);
             }
         }
@@ -134,9 +206,9 @@ public final class ExtensionStore {
         if (!type.equals("manifest") && !type.equals("ui") && !type.equals("integration")) {
             throw new IllegalArgumentException("unsupported extension type");
         }
-        if (manifest.has("code") || manifest.has("script") || manifest.has("exec") || manifest.has("command")) {
-            throw new IllegalArgumentException("executable extension code is not allowed");
-        }
+        String[] blocked = {"code","script","exec","command","binary","class","dex","jar","native","shell"};
+        for (String k : blocked) if (manifest.has(k)) throw new IllegalArgumentException("executable extension code is not allowed");
+        if (manifest.toString().length() > 32_768) throw new IllegalArgumentException("manifest too large");
         return r;
     }
 

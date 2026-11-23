@@ -334,11 +334,18 @@ public final class DeveloperApi {
                 JSONObject body = DataApi.readJson(req);
                 JSONObject manifest = body.optJSONObject("manifest");
                 if (manifest == null) manifest = body;
-                ExtensionRecord r = store.install(manifest);
+                ExtensionRecord r = store.install(manifest, auth.ownerId());
                 DataApi.sendJson(context, req, out, 201, r.toJson());
                 return;
             }
             throw new DataException("method not allowed", 405);
+        }
+        if (parts.size() == 3 && parts.get(2).equals("activity")) {
+            DataApi.requireMethod(method, "GET");
+            JSONArray arr = new JSONArray();
+            for (JSONObject row : store.activity(200)) arr.put(row);
+            DataApi.sendJson(context, req, out, 200, DataApi.wrap("activity", arr));
+            return;
         }
         String id = parts.get(2);
         if (parts.size() == 4) {
@@ -346,11 +353,34 @@ public final class DeveloperApi {
             if (action.equals("enable") || action.equals("disable")) {
                 DataApi.requireMethod(method, "POST");
                 boolean approved = DataApi.readJson(req).optBoolean("approved", false);
-                ExtensionRecord r = store.setEnabled(id, action.equals("enable"), approved);
+                ExtensionRecord r = store.setEnabled(id, action.equals("enable"), approved, auth.ownerId());
                 if (r == null) throw DataException.notFound("extension");
                 DataApi.sendJson(context, req, out, 200, r.toJson());
                 return;
             }
+            if (action.equals("approve") || action.equals("revoke")) {
+                DataApi.requireMethod(method, "POST");
+                ExtensionRecord r = store.approve(id, action.equals("approve"), auth.ownerId());
+                if (r == null) throw DataException.notFound("extension");
+                DataApi.sendJson(context, req, out, 200, r.toJson());
+                return;
+            }
+            if (action.equals("activity")) {
+                DataApi.requireMethod(method, "GET");
+                JSONArray arr = new JSONArray();
+                for (JSONObject row : store.activity(200)) {
+                    if (id.equals(row.optString("extensionId"))) arr.put(row);
+                }
+                DataApi.sendJson(context, req, out, 200, DataApi.wrap("activity", arr));
+                return;
+            }
+        }
+        if (parts.size() == 3 && parts.get(2).equals("activity")) {
+            DataApi.requireMethod(method, "GET");
+            JSONArray arr = new JSONArray();
+            for (JSONObject row : store.activity(200)) arr.put(row);
+            DataApi.sendJson(context, req, out, 200, DataApi.wrap("activity", arr));
+            return;
         }
         if (parts.size() != 3) throw DataException.notFound("endpoint");
         if (method.equals("GET")) {
@@ -360,7 +390,7 @@ public final class DeveloperApi {
             return;
         }
         if (method.equals("DELETE")) {
-            if (!store.remove(id)) throw DataException.notFound("extension");
+            if (!store.remove(id, auth.ownerId())) throw DataException.notFound("extension");
             DataApi.sendJson(context, req, out, 200, DataApi.ok());
             return;
         }
