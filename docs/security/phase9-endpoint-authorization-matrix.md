@@ -166,7 +166,7 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | SimpleHttpServer | `/s/*` share routes | Share token (+ optional password) | share expiry/revoked/password/rate limit; no admin token | `ShareHandler.handle` | `PublicRouteSecurityTest` invalid token rejected | Partial |
 | SimpleHttpServer | `/status` | Public | no sensitive admin data by design (inspect) | `SimpleHttpServer.route` | not dedicated | Inspected |
 | SimpleHttpServer | `/`, `/index.html`, website assets | Public website content | website files only; safe path resolution | `SimpleHttpServer` | not dedicated | Inspected |
-| SimpleHttpServer | `/api/browse`, `/api/stats`, `/api/mkdir`, `/api/delete`, `/api/rename`, `/api/upload`, `/files*` | Password/file auth | `ContentStore.getAllowRemoteAccess`; `isAuthorizedForFiles`; write requires write-capable auth | `SimpleHttpServer.route` | not dedicated | Inspected / high risk |
+| SimpleHttpServer | `/api/browse`, `/api/stats`, `/api/mkdir`, `/api/delete`, `/api/rename`, `/api/upload`, `/files*` | Password/file auth | `ContentStore.getAllowRemoteAccess`; `isAuthorizedForFiles`; write requires write-capable auth | `SimpleHttpServer.route` | `SimpleHttpServerSecurityTest` | Partial |
 | SimpleHttpServer | `/api/*` custom API | depends | delegated through custom API/auth handling | `serveCustomApi` | not dedicated | Inspected |
 | WebDAV | `/dav/*` | Password/file auth | remote access enabled + `isAuthorizedForFiles` + write method check | `WebDavHandler.handle` | not dedicated | Inspected / high risk |
 
@@ -176,7 +176,7 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 |---|---|---|---|
 | V-001 | DeveloperApi mutation authz | Mutating developer API key/webhook/extension/sandbox endpoints previously allowed any authenticated token with read permission; fixed to require write/manage permissions. | Fixed in this pass; core tests added |
 | G-001 | Exhaustive endpoint verification | Most endpoints are inspected only; no dedicated negative auth tests for every protected endpoint/method/action. | Open |
-| G-002 | RemoteApi ownership/session isolation | Heartbeat cross-device and revoked device session covered; pairing approval/rejection edge cases, user session revocation, expiry, and file path ownership still need dedicated negative tests. | Open |
+| G-002 | RemoteApi ownership/session isolation | Covered: heartbeat cross-device, revoked device session rejection, logout session requirement, user session revocation, invalid pairing code, file traversal/root delete rejected. Gaps: pairing approval/rejection/expiry edge cases, session expiry, full file ownership/permission matrix, device/user cross-subject read boundaries. | Open |
 | G-003 | Mail ownership isolation | Mail routes enforce permission checks but cross-account/message/attachment ID manipulation tests are missing. | Open |
 | G-004 | Legacy file/WebDAV/custom API | Authorization relies on `isAuthorizedForFiles` and remote-access flag; no dedicated negative tests for unauth, read-only write, disabled remote access, traversal/bypass. | Open |
 | G-005 | Webhook replay scope | Replay/signature verification exists in `WebhookDispatcher.verifyIncoming` and Developer verify endpoint; no general inbound receiver enforcement. | Open |
