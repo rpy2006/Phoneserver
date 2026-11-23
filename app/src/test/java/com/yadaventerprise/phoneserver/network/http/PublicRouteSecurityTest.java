@@ -81,4 +81,26 @@ public class PublicRouteSecurityTest {
         String text = out.toString("UTF-8");
         assertTrue(text.contains("401") || text.contains("404") || text.contains("405") || text.toLowerCase().contains("password"));
     }
+
+    @Test
+    public void sharePutDeleteMethodsAreRejectedForInvalidToken() throws Exception {
+        for (String m : new String[]{"PUT","DELETE","PATCH"}) {
+            SimpleHttpServer.Request req = new SimpleHttpServer.Request();
+            req.method = m; req.path = "/s/pss_" + "2".repeat(64); req.remoteIp = "10.1.2.7";
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ShareHandler.handle(context, req, out, false);
+            String text = out.toString("UTF-8");
+            assertTrue(text.contains("404") || text.contains("405"));
+        }
+    }
+
+    @Test
+    public void pairingGetMethodRejected() throws Exception {
+        SimpleHttpServer.Request req = new SimpleHttpServer.Request();
+        req.method = "GET"; req.path = PairingApi.PATH; req.remoteIp = "10.1.2.8";
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PairingApi.handle(context, req, out);
+        String text = out.toString("UTF-8");
+        assertTrue(text.startsWith("HTTP/1.1 405"));
+    }
 }

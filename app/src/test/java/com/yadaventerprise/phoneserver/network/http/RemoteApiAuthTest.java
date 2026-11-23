@@ -171,4 +171,22 @@ public class RemoteApiAuthTest {
         assertEquals(200, revoke.status);
         assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null).status);
     }
+
+    @Test public void deviceCannotHeartbeatAnotherDevice() throws Exception {
+        Resp r1 = call("POST", DataApi.BASE + "/remote/pairing/request", null, new JSONObject().put("deviceName","A").toString(), null);
+        String code1 = new JSONObject(r1.body).getString("code"); String id1 = new JSONObject(r1.body).getString("id");
+        assertEquals(200, call("POST", DataApi.BASE + "/remote/pairing/" + id1 + "/approve", admin(), new JSONObject().put("deviceName","A").toString(), null).status);
+        Resp s1 = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code",code1).toString(), null);
+        String token1 = new JSONObject(s1.body).getString("token"); String dev1 = new JSONObject(s1.body).getString("deviceId");
+
+        Resp r2 = call("POST", DataApi.BASE + "/remote/pairing/request", null, new JSONObject().put("deviceName","B").toString(), null);
+        String code2 = new JSONObject(r2.body).getString("code"); String id2 = new JSONObject(r2.body).getString("id");
+        assertEquals(200, call("POST", DataApi.BASE + "/remote/pairing/" + id2 + "/approve", admin(), new JSONObject().put("deviceName","B").toString(), null).status);
+        Resp s2 = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code",code2).toString(), null);
+        String dev2 = new JSONObject(s2.body).getString("deviceId");
+
+        Resp hb = call("POST", DataApi.BASE + "/remote/devices/" + dev2 + "/heartbeat", bearer(token1), new JSONObject().put("uptimeMillis",1).toString(), null);
+        assertEquals(403, hb.status);
+        assertEquals(200, call("POST", DataApi.BASE + "/remote/devices/" + dev1 + "/heartbeat", bearer(token1), new JSONObject().put("uptimeMillis",1).toString(), null).status);
+    }
 }
