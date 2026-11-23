@@ -208,4 +208,16 @@ public class RemoteApiAuthTest {
         assertEquals(200, call("DELETE", DataApi.BASE + "/remote/users/" + user.id + "/sessions", admin(), null, null).status);
         assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", bearer(created.token), null, null).status);
     }
+
+    @Test public void remoteFilesRejectTraversalAndRootDelete() throws Exception {
+        Resp list = call("GET", DataApi.BASE + "/remote/files/list?path=..%2F..%2Fetc", admin(), null, null);
+        assertTrue(list.status == 400 || list.status == 403 || list.status == 404);
+        Resp delRoot = call("POST", DataApi.BASE + "/remote/files/delete", admin(), new JSONObject().put("path","").toString(), null);
+        assertTrue(delRoot.status == 400 || delRoot.status == 403);
+    }
+
+    @Test public void pairingStatusRejectsInvalidCode() throws Exception {
+        Resp resp = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code","INVALID").toString(), null);
+        assertEquals(401, resp.status);
+    }
 }
