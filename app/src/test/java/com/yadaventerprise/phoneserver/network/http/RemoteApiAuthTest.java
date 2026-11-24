@@ -6,6 +6,8 @@ import android.content.Context;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSettings;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSettingsStore;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
+import com.yadaventerprise.phoneserver.data.remote.RemotePairingRequest;
+import com.yadaventerprise.phoneserver.data.remote.RemotePairingStore;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSession;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSessionStore;
 import com.yadaventerprise.phoneserver.data.remote.RemoteUser;
@@ -239,5 +241,26 @@ public class RemoteApiAuthTest {
         assertTrue(new JSONObject(first.body).has("token"));
         Resp second = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code", code).toString(), null);
         assertTrue(second.status == 401 || second.status == 409);
+    }
+
+    @Test public void expiredPairingCodeCannotBeApprovedOrUsed() throws Exception {
+        RemotePairingStore.Created created = RemotePairingStore.get(context).create("Expired", 1000);
+        RemotePairingRequest req = RemotePairingStore.get(context).get(created.request.id);
+        req.expiresAt = System.currentTimeMillis() - 1000;
+        java.io.File f = new java.io.File(context.getFilesDir(), "remote/pairing.json");
+        org.json.JSONObject root = new org.json.JSONObject();
+        if (f.exists()) root = com.yadaventerprise.phoneserver.data.database.JsonStorage.readJson(f);
+        org.json.JSONArray arr = root.optJSONArray("requests");
+        for (int i=0; arr!=null && i<arr.length(); i++) {
+            org.json.JSONObject o = arr.optJSONObject(i);
+            if (o != null && created.request.id.equals(o.optString("id"))) o.put("expiresAt", req.expiresAt);
+        }
+        com.yadaventerprise.phoneserver.data.database.JsonStorage.writeJsonAtomic(f, root);
+        RemotePairingStore.reset();
+
+        Resp approve = call("POST", DataApi.BASE + "/remote/pairing/" + created.request.id + "/approve", admin(), new JSONObject().put("deviceName","Expired").toString(), null);
+        assertTrue(approve.status == 400 || approve.status == 404 || approve.status == 409);
+        Resp status = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code", created.code).toString(), null);
+        assertTrue(status.status == 401 || status.status == 404 || status.status == 410);
     }
 }
