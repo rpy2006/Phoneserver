@@ -145,7 +145,7 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/remote/dashboard` | GET | Remote session/admin credential | `DASHBOARD`; remote enabled/HTTPS | `handle/dashboard` | `RemoteApiAuthTest` | Verified |
 | `/api/v1/remote/auth/logout` | POST | Remote session | session credential required; revokes session | `logout` | `RemoteApiAuthTest.logoutRequiresSessionCredential` | Partial |
 | `/api/v1/remote/pairing` | GET/POST | Remote session/admin | `PAIRING` | `handlePairing` | not dedicated | Inspected |
-| `/api/v1/remote/pairing/{id}/approve` | POST | Remote session/admin | `PAIRING` | `handlePairing` | `RemoteApiAuthTest.pairingRejectAndUnknownActionsAreHandled`, `consumedPairingCodeCannotBeReused` | Partial |
+| `/api/v1/remote/pairing/{id}/approve` | POST | Remote session/admin | `PAIRING`; expired/unknown rejected | `handlePairing` | `RemoteApiAuthTest.pairingRejectAndUnknownActionsAreHandled`, `consumedPairingCodeCannotBeReused`, `expiredPairingCodeCannotBeApprovedOrUsed` | Partial |
 | `/api/v1/remote/pairing/{id}/reject` | POST | Remote session/admin | `PAIRING` | `handlePairing` | `RemoteApiAuthTest.pairingRejectAndUnknownActionsAreHandled` | Partial |
 | `/api/v1/remote/devices` | GET | Remote session/admin | `DEVICES_READ` | `handleDevices` | not dedicated | Inspected |
 | `/api/v1/remote/devices/{id}` | GET/PATCH/DELETE | Remote session/admin | read/write perms; device revocation clears sessions; revoked device session rejected | `handleDevices`, `RemoteSessionStore.clearDeviceSessions` | `RemoteApiAuthTest.revokedDeviceSessionIsRejected` | Partial |
