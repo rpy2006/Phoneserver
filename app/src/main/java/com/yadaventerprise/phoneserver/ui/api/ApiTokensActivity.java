@@ -56,6 +56,16 @@ public class ApiTokensActivity extends AppCompatActivity {
             public void onEdit(Records.ApiTokenRecord token) {
                 editPolicy(token);
             }
+
+            @Override
+            public void onRegenerate(Records.ApiTokenRecord token) {
+                confirmRegenerate(token);
+            }
+
+            @Override
+            public void onToggleSuspend(Records.ApiTokenRecord token) {
+                toggleSuspend(token);
+            }
         });
         recyclerView.setAdapter(adapter);
 
@@ -140,6 +150,24 @@ public class ApiTokensActivity extends AppCompatActivity {
         expiryInput.setSingleLine(true);
         form.addView(expiryInput);
 
+        EditText dailyQuotaInput = new EditText(this);
+        dailyQuotaInput.setHint("Daily requests (0 = unlimited)");
+        dailyQuotaInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        dailyQuotaInput.setSingleLine(true);
+        form.addView(dailyQuotaInput);
+
+        EditText monthlyQuotaInput = new EditText(this);
+        monthlyQuotaInput.setHint("Monthly requests (0 = unlimited)");
+        monthlyQuotaInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        monthlyQuotaInput.setSingleLine(true);
+        form.addView(monthlyQuotaInput);
+
+        EditText concurrentInput = new EditText(this);
+        concurrentInput.setHint("Concurrent requests (0 = default)");
+        concurrentInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        concurrentInput.setSingleLine(true);
+        form.addView(concurrentInput);
+
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("New API token")
                 .setView(form)
@@ -160,13 +188,17 @@ public class ApiTokensActivity extends AppCompatActivity {
             String role = roleForPosition(roleSpinner.getSelectedItemPosition());
             int rate = parseNonNegative(rateInput);
             int days = Math.min(parseNonNegative(expiryInput), 36500);
+            long dailyQuota = parseNonNegativeLong(dailyQuotaInput);
+            long monthlyQuota = parseNonNegativeLong(monthlyQuotaInput);
+            int concurrent = parseNonNegative(concurrentInput);
             dialog.dismiss();
-            createToken(name, projectId, role, rate, days);
+            createToken(name, projectId, role, rate, days, dailyQuota, monthlyQuota, concurrent);
         }));
         dialog.show();
     }
 
-    private void createToken(String name, String projectId, String role, int rate, int days) {
+    private void createToken(String name, String projectId, String role, int rate, int days,
+                             long dailyQuota, long monthlyQuota, int concurrent) {
         new Thread(() -> {
             String error = null;
             TokenStore.Created created = null;
@@ -175,7 +207,8 @@ public class ApiTokensActivity extends AppCompatActivity {
                 policy.rateLimitPerMinute = Math.max(0, Math.min(6000, rate));
                 policy.expiresAt = days > 0
                         ? System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L : 0;
-                created = TokenStore.create(this, name, projectId, policy.canWrite());
+                created = TokenStore.create(this, name, projectId, policy.canWrite(),
+                        policy.expiresAt, dailyQuota, monthlyQuota, concurrent);
                 policy.tokenId = created.record.id;
                 TokenPolicyStore.get(this).save(policy);
             } catch (DataException e) {
@@ -230,6 +263,24 @@ public class ApiTokensActivity extends AppCompatActivity {
         expiryInput.setText(String.valueOf(remainingDays));
         form.addView(expiryInput);
 
+        EditText dailyQuotaInput = new EditText(this);
+        dailyQuotaInput.setHint("Daily requests (0 = unlimited)");
+        dailyQuotaInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        dailyQuotaInput.setText(String.valueOf(token.dailyQuota));
+        form.addView(dailyQuotaInput);
+
+        EditText monthlyQuotaInput = new EditText(this);
+        monthlyQuotaInput.setHint("Monthly requests (0 = unlimited)");
+        monthlyQuotaInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        monthlyQuotaInput.setText(String.valueOf(token.monthlyQuota));
+        form.addView(monthlyQuotaInput);
+
+        EditText concurrentInput = new EditText(this);
+        concurrentInput.setHint("Concurrent requests (0 = default)");
+        concurrentInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        concurrentInput.setText(String.valueOf(token.concurrentLimit));
+        form.addView(concurrentInput);
+
         new AlertDialog.Builder(this)
                 .setTitle("Token policy · " + token.name)
                 .setView(form)
@@ -238,15 +289,27 @@ public class ApiTokensActivity extends AppCompatActivity {
                     String role = roleForPosition(roleSpinner.getSelectedItemPosition());
                     int rate = Math.max(0, Math.min(6000, parseNonNegative(rateInput)));
                     int days = Math.min(parseNonNegative(expiryInput), 36500);
+                    long dailyQuota = parseNonNegativeLong(dailyQuotaInput);
+                    long monthlyQuota = parseNonNegativeLong(monthlyQuotaInput);
+                    int concurrent = parseNonNegative(concurrentInput);
                     new Thread(() -> {
-                        TokenPolicy updated = TokenPolicy.preset(role);
-                        updated.tokenId = token.id;
-                        updated.rateLimitPerMinute = rate;
-                        updated.expiresAt = days > 0
-                                ? System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L : 0;
-                        TokenPolicyStore.get(this).save(updated);
+                        String failure = null;
+                        try {
+                            TokenStore.updateQuotas(this, token.id, dailyQuota, monthlyQuota, concurrent);
+                            TokenPolicy updated = TokenPolicy.preset(role);
+                            updated.tokenId = token.id;
+                            updated.rateLimitPerMinute = rate;
+                            updated.expiresAt = days > 0
+                                    ? System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L : 0;
+                            TokenPolicyStore.get(this).save(updated);
+                            TokenStore.setExpiresAt(this, token.id, updated.expiresAt);
+                        } catch (DataException e) {
+                            failure = e.getMessage();
+                        }
+                        final String error = failure;
                         handler.post(() -> {
-                            Toast.makeText(this, "Token policy updated", Toast.LENGTH_SHORT).show();
+                            if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+                            else Toast.makeText(this, "Token policy updated", Toast.LENGTH_SHORT).show();
                             load();
                         });
                     }).start();
@@ -271,6 +334,14 @@ public class ApiTokensActivity extends AppCompatActivity {
             return Math.max(0, Integer.parseInt(input.getText().toString().trim()));
         } catch (NumberFormatException e) {
             return 0;
+        }
+    }
+
+    private static long parseNonNegativeLong(EditText input) {
+        try {
+            return Math.max(0L, Long.parseLong(input.getText().toString().trim()));
+        } catch (NumberFormatException e) {
+            return 0L;
         }
     }
 
@@ -320,6 +391,48 @@ public class ApiTokensActivity extends AppCompatActivity {
                 .setPositiveButton("Revoke", (d, w) -> revokeToken(token))
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void confirmRegenerate(Records.ApiTokenRecord token) {
+        new AlertDialog.Builder(this)
+                .setTitle("Rotate token '" + token.name + "'?")
+                .setMessage("The current token stops working immediately. Update clients with the new value.")
+                .setPositiveButton("Rotate", (d, w) -> regenerateToken(token))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void regenerateToken(Records.ApiTokenRecord token) {
+        new Thread(() -> {
+            String error = null;
+            TokenStore.Created result = null;
+            try {
+                result = TokenStore.regenerate(this, token.id);
+            } catch (DataException e) {
+                error = e.getMessage();
+            }
+            final TokenStore.Created created = result;
+            final String message = error;
+            handler.post(() -> {
+                if (message != null) {
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                } else {
+                    showTokenDialog(created.token);
+                    load();
+                }
+            });
+        }).start();
+    }
+
+    private void toggleSuspend(Records.ApiTokenRecord token) {
+        boolean suspend = !token.suspended;
+        new Thread(() -> {
+            TokenStore.setSuspended(this, token.id, suspend);
+            handler.post(() -> {
+                Toast.makeText(this, suspend ? "Token suspended" : "Token resumed", Toast.LENGTH_SHORT).show();
+                load();
+            });
+        }).start();
     }
 
     private void revokeToken(Records.ApiTokenRecord token) {

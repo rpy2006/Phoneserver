@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
+    <color name="home_bg">#0D0F14</color>
+    <color name="home_surface">#161923</color>
+    <color name="home_border">#2A3040</color>
+    <color name="home_accent">#66BB6A</color>
+    <color name="home_accent_light">#1B3324</color>
+    <color name="home_text_primary">#F2F4F8</color>
+    <color name="home_text_secondary">#AAB2C0</color>
+    <color name="home_divider">#262B3A</color>
 </resources>

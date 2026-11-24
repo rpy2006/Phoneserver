@@ -1,6 +1,22 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <style name="Base.AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
   </style>
 
   <style name="AppTheme" parent="Base.AppTheme" />
+
+  <style name="Theme.PhoneServer.Home" parent="Theme.MaterialComponents.NoActionBar">
+    <item name="android:colorBackground">@color/home_bg</item>
+    <item name="android:textColorPrimary">@color/home_text_primary</item>
+    <item name="android:textColorSecondary">@color/home_text_secondary</item>
+    <item name="android:statusBarColor">@color/home_bg</item>
+    <item name="android:navigationBarColor">@color/home_surface</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowBackground">@color/home_bg</item>
+    <item name="android:windowSoftInputMode">adjustResize</item>
+    <item name="colorPrimary">@color/home_accent</item>
+    <item name="colorPrimaryDark">@color/home_bg</item>
+    <item name="colorAccent">@color/home_accent</item>
+    <item name="colorOnPrimary">@color/home_surface</item>
+    <item name="colorSurface">@color/home_surface</item>
+  </style>
 </resources>

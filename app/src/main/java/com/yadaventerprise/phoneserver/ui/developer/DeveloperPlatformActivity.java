@@ -37,19 +37,36 @@ public class DeveloperPlatformActivity extends AppCompatActivity {
 
     private void refresh() {
         new Thread(() -> {
-            int keys = 0, revoked = 0, suspended = 0;
+            int keys = 0, revoked = 0, suspended = 0, quotaKeys = 0;
             for (com.yadaventerprise.phoneserver.data.database.Records.ApiTokenRecord t : TokenStore.list(this)) {
-                if (t.revoked) revoked++; else if (t.suspended) suspended++; else keys++;
+                if (t.revoked) revoked++;
+                else if (t.suspended) suspended++;
+                else keys++;
+                if (t.dailyQuota > 0 || t.monthlyQuota > 0 || t.concurrentLimit > 0) quotaKeys++;
             }
-            int hooks = WebhookStore.get(this).all().size();
-            int ext = ExtensionStore.get(this).list().size();
+            int hooks = 0, enabledHooks = 0, failedHooks = 0;
+            for (com.yadaventerprise.phoneserver.data.webhooks.WebhookConfig hook : WebhookStore.get(this).all()) {
+                hooks++;
+                if (hook.enabled) enabledHooks++;
+                failedHooks += hook.failureCount;
+            }
+            int ext = 0, approved = 0;
+            for (com.yadaventerprise.phoneserver.data.developer.ExtensionRecord record : ExtensionStore.get(this).list()) {
+                ext++;
+                if (record.approved) approved++;
+            }
             JSONObject usage = ApiUsageStore.get(this).summary(System.currentTimeMillis() - 24L * 60L * 60L * 1000L);
             int total = usage.optInt("totalRequests", 0);
             int failed = usage.optInt("failedRequests", 0);
             int rl = usage.optInt("rateLimitViolations", 0);
-            final String sub = keys + " active keys · " + hooks + " webhooks · " + ext + " extensions";
-            final String stats = total + " req/24h · " + failed + " failed · " + rl + " rate limited";
+            final String sub = "Keys " + keys + " active · " + suspended + " suspended · " + revoked + " revoked\n"
+                    + "Webhooks " + enabledHooks + "/" + hooks + " enabled · " + failedHooks + " failed deliveries\n"
+                    + "Extensions " + approved + "/" + ext + " approved · " + quotaKeys + " keys with quotas";
+            final String stats = "Requests " + total + " · success " + usage.optInt("successRequests", 0)
+                    + " · failed " + failed + "\nRate limited " + rl
+                    + " · avg response " + usage.optLong("averageResponseMs", 0) + " ms";
             runOnUiThread(() -> {
+                if (isFinishing()) return;
                 ((TextView)findViewById(R.id.overview_subtitle)).setText(sub);
                 ((TextView)findViewById(R.id.usage_subtitle)).setText(stats);
             });

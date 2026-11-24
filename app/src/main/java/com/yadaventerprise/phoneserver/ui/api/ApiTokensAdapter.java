@@ -18,6 +18,8 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
     public interface Listener {
         void onRevoke(Records.ApiTokenRecord token);
         void onEdit(Records.ApiTokenRecord token);
+        void onRegenerate(Records.ApiTokenRecord token);
+        void onToggleSuspend(Records.ApiTokenRecord token);
     }
 
     private final List<Records.ApiTokenRecord> tokens;
@@ -66,6 +68,11 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
             meta.append("\nKey ").append(token.keyPrefix).append("…");
         }
         meta.append('\n').append(rate).append(" · ").append(expiry);
+        String quotas = "daily " + (token.dailyQuota > 0 ? token.dailyQuota : "unlimited")
+                + " · monthly " + (token.monthlyQuota > 0 ? token.monthlyQuota : "unlimited")
+                + " · concurrent " + (token.concurrentLimit > 0 ? token.concurrentLimit : "default");
+        meta.append('\n').append(quotas);
+        meta.append('\n').append("Permissions ").append(policy.permissions.size());
         meta.append('\n').append("Created ").append(TimeFormat.formatTime(token.createdAt));
         if (token.lastUsedAt > 0) {
             meta.append(" · Last used ").append(TimeFormat.formatTime(token.lastUsedAt));
@@ -78,11 +85,18 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
         if (token.revoked) {
             holder.revoke.setVisibility(View.GONE);
             holder.edit.setVisibility(View.GONE);
+            holder.regenerate.setVisibility(View.GONE);
+            holder.suspend.setVisibility(View.GONE);
         } else {
             holder.revoke.setVisibility(View.VISIBLE);
             holder.edit.setVisibility(View.VISIBLE);
+            holder.regenerate.setVisibility(View.VISIBLE);
+            holder.suspend.setVisibility(View.VISIBLE);
+            holder.suspend.setText(token.suspended ? "Resume" : "Suspend");
             holder.revoke.setOnClickListener(v -> listener.onRevoke(token));
             holder.edit.setOnClickListener(v -> listener.onEdit(token));
+            holder.regenerate.setOnClickListener(v -> listener.onRegenerate(token));
+            holder.suspend.setOnClickListener(v -> listener.onToggleSuspend(token));
         }
     }
 
@@ -96,6 +110,8 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
         final TextView meta;
         final TextView revoke;
         final TextView edit;
+        final TextView regenerate;
+        final TextView suspend;
 
         ViewHolder(View itemView) {
             super(itemView);
@@ -103,6 +119,8 @@ public class ApiTokensAdapter extends RecyclerView.Adapter<ApiTokensAdapter.View
             meta = itemView.findViewById(R.id.token_meta);
             revoke = itemView.findViewById(R.id.token_revoke);
             edit = itemView.findViewById(R.id.token_edit);
+            regenerate = itemView.findViewById(R.id.token_regenerate);
+            suspend = itemView.findViewById(R.id.token_suspend);
         }
     }
 }

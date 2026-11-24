@@ -5,5 +5,6 @@
         <ImageView android:id="@+id/back_button" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:src="@drawable/ic_back_arrow"/>
         <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/home_text_primary" android:textSize="22sp" android:textStyle="bold"/>
     </LinearLayout>
-    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent"><TextView android:id="@+id/body" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_home_card" android:padding="16dp" android:textColor="@color/home_text_secondary" android:textIsSelectable="true"/></ScrollView>
+    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingBottom="8dp"><LinearLayout android:id="@+id/action_bar" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"/></HorizontalScrollView>
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"><TextView android:id="@+id/body" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_home_card" android:padding="16dp" android:textColor="@color/home_text_secondary" android:textIsSelectable="true"/></ScrollView>
 </LinearLayout>
