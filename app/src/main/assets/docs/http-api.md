@@ -28,7 +28,7 @@ CA-signed certificate is configured.
 | `/api/v1` data/storage | Access password or bearer token with the required permission/scope |
 | `/api/pair` | Pairing code in the JSON body |
 | `/s/<token>` share links | Unpredictable token, plus optional per-link password |
-| Custom `/api/<name>` | Public by design |
+| Custom `/api/<name>` | Remote access enabled plus `X-Auth-Password`, `?pw=`, HTTP Basic, or a bearer token with `files.read`; write methods also require `files.write` |
 
 Bearer tokens are stored only as SHA-256 hashes. File and WebDAV routes require
 `files.read` or `files.write`; `/api/v1` enforces roles, permissions, project
@@ -41,7 +41,8 @@ scope, expiry and per-token rate limits.
 | `GET` | `/` | Hosted `files/website/index.html` or built-in page |
 | `GET` | `/status` | Reachability JSON |
 | `GET` | `/<asset>` | Other files under `files/website/` |
-| `GET/POST/PUT/DELETE` | `/api/<custom-name>` | User-defined endpoints from the API editor |
+
+Custom `/api/<name>` endpoints are not public; they require the file-API authentication listed above.
 
 ## Files and statistics
 

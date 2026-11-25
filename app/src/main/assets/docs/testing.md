@@ -46,7 +46,7 @@ unavailable, so some Robolectric tests are skipped by design; the rest still
 run. `DataTestSupport.assumeRobolectricRuntimeSupported()` performs the same
 guard for storage tests.
 
-Latest full run after Phase 6: `170 tests, 0 failures, 0 errors, 55 skipped`.
+Latest full run: `315 tests, 0 failures, 0 errors, 171 skipped`.
 The sharing, ad-network storage, mail-core, system-management, docs-assets and
-token-policy tests run in this suite. Some Robolectric tests skip on this
-aarch64 host by design.
+token-policy tests run in this suite. HTTP/Robolectric tests skip on this
+aarch64 host by design and must be run on x86_64 for endpoint assertions.

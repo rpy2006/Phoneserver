@@ -117,6 +117,27 @@ public class LegacyApiAuthTest {
         assertFalse(new File(ContentStore.getPublicFilesDir(context), "test.txt").exists());
     }
 
+    @Test public void readOnlyTokenCannotMutateCustomApiOrDeleteViaWebDav() throws Exception {
+        TokenStore.Created ro = TokenStore.create(context, "legacy-alternate-ro", null, false);
+        TokenPolicy p = TokenPolicy.preset(TokenPolicy.ROLE_VIEWER);
+        p.tokenId = ro.record.id;
+        p.permissions.add(TokenPolicy.FILES_READ);
+        p.permissions.remove(TokenPolicy.FILES_WRITE);
+        TokenPolicyStore.get(context).save(p);
+        String auth = "Bearer " + ro.token;
+
+        SimpleHttpServer.Request custom = req("POST", "/api/custom-missing");
+        custom.headers.put("authorization", auth);
+        custom.body = "{}".getBytes(StandardCharsets.UTF_8);
+        String customResp = route(custom);
+        assertTrue(customResp.startsWith("HTTP/1.1 401") || customResp.startsWith("HTTP/1.1 403"));
+
+        SimpleHttpServer.Request delete = req("DELETE", "/dav/keep.txt");
+        delete.headers.put("authorization", auth);
+        String deleteResp = route(delete);
+        assertTrue(deleteResp.startsWith("HTTP/1.1 401") || deleteResp.startsWith("HTTP/1.1 403"));
+    }
+
     @Test public void pathTraversalRejectedByLegacyApi() throws Exception {
         SimpleHttpServer.Request browse = req("GET", "/api/browse?path=../../..");
         browse.headers.put("x-auth-password", "admin");

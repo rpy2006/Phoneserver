@@ -143,6 +143,13 @@ public class QrFragment extends Fragment {
         handler.removeCallbacks(refreshRunnable);
     }
 
+    @Override
+    public void onDestroyView() {
+        handler.removeCallbacksAndMessages(null);
+        rootView = null;
+        super.onDestroyView();
+    }
+
     private void goToSettingsTab() {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).goToPage(MainPagerAdapter.PAGE_SETTINGS);
@@ -388,12 +395,16 @@ public class QrFragment extends Fragment {
         recentScansContainer.addView(row);
 
         new Thread(() -> {
-            boolean online = RemoteApiClient.isOnline(profile);
-            handler.post(() -> {
-                if (getContext() == null) return;
-                statusPill.setText(online ? "Connected" : "Offline");
-                statusPill.setTextColor(getContext().getColor(online ? R.color.home_accent : R.color.home_text_secondary));
-            });
+            try {
+                boolean online = RemoteApiClient.isOnline(profile);
+                handler.post(() -> {
+                    Context current = getContext();
+                    if (!isAdded() || getView() == null || current == null) return;
+                    statusPill.setText(online ? "Connected" : "Offline");
+                    statusPill.setTextColor(current.getColor(online ? R.color.home_accent : R.color.home_text_secondary));
+                });
+            } catch (Throwable ignored) {
+            }
         }).start();
     }
 

@@ -2,11 +2,13 @@ package com.yadaventerprise.phoneserver.ui.main;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-import androidx.viewpager2.widget.ViewPager2;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentTransaction;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
 import com.yadaventerprise.phoneserver.R;
@@ -24,48 +26,46 @@ import com.yadaventerprise.phoneserver.ui.sharing.SharingOverviewActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AccountSettingsActivity;
 import com.yadaventerprise.phoneserver.ui.servers.ServersListActivity;
 import com.yadaventerprise.phoneserver.ui.system.SystemManagementActivity;
+import com.yadaventerprise.phoneserver.util.StartupTrace;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String STATE_SELECTED_PAGE = "state_selected_page";
+    private static final String PAGE_TAG_PREFIX = "main_page_";
 
-    private ViewPager2 viewPager;
+    private final Fragment[] pages = new Fragment[5];
+    private FrameLayout contentFrame;
     private BottomNavigationView bottomNav;
     private DrawerLayout drawerLayout;
     private NavigationView navDrawer;
-    private MainPagerAdapter pagerAdapter;
+    private ChatFragment chatFragment;
+    private int currentPage = MainPagerAdapter.PAGE_HOME;
     private boolean suppressNavCallback = false;
+    private boolean initialPageSelection = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        StartupTrace.write(this, "MainActivity.onCreate:start");
         setContentView(R.layout.activity_main);
+        StartupTrace.write(this, "MainActivity.onCreate:contentView");
 
-        viewPager = findViewById(R.id.view_pager);
+        contentFrame = findViewById(R.id.view_pager);
         bottomNav = findViewById(R.id.bottom_nav);
         drawerLayout = findViewById(R.id.drawer_layout);
         navDrawer = findViewById(R.id.nav_drawer);
+        StartupTrace.write(this, "MainActivity.onCreate:views");
 
-        pagerAdapter = new MainPagerAdapter(this);
-        viewPager.setAdapter(pagerAdapter);
-        viewPager.setOffscreenPageLimit(4);
-
-        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-            @Override
-            public void onPageSelected(int position) {
-                suppressNavCallback = true;
-                bottomNav.setSelectedItemId(pageToNavId(position));
-                navDrawer.setCheckedItem(pageToDrawerNavId(position));
-                suppressNavCallback = false;
-            }
-        });
+        for (int page = MainPagerAdapter.PAGE_HOME; page <= MainPagerAdapter.PAGE_SETTINGS; page++) {
+            Fragment existing = getSupportFragmentManager().findFragmentByTag(pageTag(page));
+            if (existing instanceof ChatFragment) chatFragment = (ChatFragment) existing;
+            pages[page] = existing;
+        }
 
         bottomNav.setOnItemSelectedListener(item -> {
             if (suppressNavCallback) return true;
             int page = navIdToPage(item.getItemId());
-            if (page >= 0) {
-                viewPager.setCurrentItem(page, true);
-            }
+            if (page >= 0) showPage(page);
             return true;
         });
 
@@ -73,38 +73,84 @@ public class MainActivity extends AppCompatActivity {
             int id = item.getItemId();
             int page = drawerNavIdToPage(id);
             if (page >= 0) {
-                viewPager.setCurrentItem(page, true);
+                showPage(page);
                 item.setChecked(true);
             } else {
                 Intent intent = drawerNavIdToIntent(id);
-                if (intent != null) {
-                    startActivity(intent);
-                }
+                if (intent != null) startActivity(intent);
             }
             drawerLayout.closeDrawer(GravityCompat.START);
             return true;
         });
+        StartupTrace.write(this, "MainActivity.onCreate:listeners");
 
-        // Without this, every activity recreation (rotation, theme/font change, or
-        // the system reclaiming this process while a large model is mapped) started a
-        // fresh adapter at page 0, so the user was dropped back on Home and the tab
-        // they were using looked like it had closed itself.
-        if (savedInstanceState != null) {
-            int restored = savedInstanceState.getInt(STATE_SELECTED_PAGE, MainPagerAdapter.PAGE_HOME);
-            if (restored > MainPagerAdapter.PAGE_HOME && restored < pagerAdapter.getItemCount()) {
-                viewPager.setCurrentItem(restored, false);
+        int restoredPage = savedInstanceState != null
+                ? savedInstanceState.getInt(STATE_SELECTED_PAGE, MainPagerAdapter.PAGE_HOME)
+                : MainPagerAdapter.PAGE_HOME;
+        if (restoredPage < MainPagerAdapter.PAGE_HOME || restoredPage > MainPagerAdapter.PAGE_SETTINGS) {
+            restoredPage = MainPagerAdapter.PAGE_HOME;
+        }
+        showPage(restoredPage);
+        initialPageSelection = false;
+        StartupTrace.write(this, "MainActivity.onCreate:done");
+    }
+
+    private void showPage(int page) {
+        if (page < MainPagerAdapter.PAGE_HOME || page > MainPagerAdapter.PAGE_SETTINGS || contentFrame == null) {
+            return;
+        }
+        StartupTrace.write(this, "MainActivity.showPage:start:" + page);
+
+        if (pages[page] == null) {
+            Fragment fragment = MainPagerAdapter.createFragment(page);
+            pages[page] = fragment;
+            if (fragment instanceof ChatFragment) chatFragment = (ChatFragment) fragment;
+        }
+        currentPage = page;
+
+        suppressNavCallback = true;
+        bottomNav.setSelectedItemId(pageToNavId(page));
+        navDrawer.setCheckedItem(pageToDrawerNavId(page));
+        suppressNavCallback = false;
+
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        for (int index = MainPagerAdapter.PAGE_HOME; index <= MainPagerAdapter.PAGE_SETTINGS; index++) {
+            Fragment fragment = pages[index];
+            if (fragment == null) continue;
+            if (index == page) {
+                if (fragment.isAdded()) {
+                    transaction.show(fragment);
+                } else {
+                    transaction.add(R.id.view_pager, fragment, pageTag(index));
+                }
+            } else if (fragment.isAdded()) {
+                transaction.hide(fragment);
             }
         }
+        transaction.commit();
 
-        navDrawer.setCheckedItem(pageToDrawerNavId(viewPager.getCurrentItem()));
+        if (page == MainPagerAdapter.PAGE_CHAT && !initialPageSelection && chatFragment != null) {
+            chatFragment.activate();
+        }
+        StartupTrace.write(this, "MainActivity.showPage:done:" + page);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        StartupTrace.write(this, "MainActivity.onStart");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        StartupTrace.write(this, "MainActivity.onResume");
     }
 
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (viewPager != null) {
-            outState.putInt(STATE_SELECTED_PAGE, viewPager.getCurrentItem());
-        }
+        outState.putInt(STATE_SELECTED_PAGE, currentPage);
     }
 
     @Override
@@ -117,13 +163,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void goToPage(int page) {
-        viewPager.setCurrentItem(page, true);
+        showPage(page);
     }
 
     public void openDrawer() {
         if (drawerLayout != null) {
             drawerLayout.openDrawer(GravityCompat.START);
         }
+    }
+
+    private String pageTag(int page) {
+        return PAGE_TAG_PREFIX + page;
     }
 
     private int pageToNavId(int page) {
@@ -227,7 +277,6 @@ public class MainActivity extends AppCompatActivity {
         }
         return null;
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

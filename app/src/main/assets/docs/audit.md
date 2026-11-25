@@ -32,7 +32,7 @@ No code was classified as malicious without supporting evidence.
 | R-02 | Low      | `allowBackup="true"` with empty backup rules                   | Noted  |
 | R-03 | Low      | `usesCleartextTraffic="true"` (HTTP by design)                 | Noted  |
 | R-04 | Low      | `file_paths.xml` exposes `root-path "/"` to FileProvider       | Noted  |
-| R-05 | Low      | `/api/<custom>` endpoints are intentionally unauthenticated    | By design |
+| R-05 | Low      | `/api/<custom>` endpoints required no authentication            | Fixed |
 | R-06 | Low      | Legacy buffered bodies up to 64 MB per request                 | Mitigated |
 
 No backdoors, hidden command execution, dynamic code loading, hardcoded
@@ -260,8 +260,8 @@ continues to require either the password or a token.
   `<root-path name="root" path="/" />` (`:3`), exposing the whole filesystem
   to FileProvider grants. Recommendation: narrow to the actual shared
   directories.
-- **R-05 Custom API endpoints.** `/api/<name>` is intentionally unauthenticated
-  (documented in the app). Keep it in mind when sharing the server address.
+- **R-05 Custom API endpoints.** `/api/<name>` now requires remote access to be
+  enabled plus file-API authentication; write methods require `files.write`.
 - **R-06 64 MB buffered legacy bodies.** The cap plus the 64-connection limit
   bounds memory, and `readExactly` no longer pre-allocates, but a determined
   client can still make the device buffer up to 64 MB per active request.
@@ -308,7 +308,7 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
 Latest results on this host (aarch64): compile and `assembleDebug`
-`BUILD SUCCESSFUL`; full unit suite `157 tests, 0 failures, 0 errors, 50 skipped`.
+`BUILD SUCCESSFUL`; full unit suite `315 tests, 0 failures, 0 errors, 171 skipped`.
 The skipped tests are Robolectric/unit cases that depend on runtime support
 unavailable on this host. Mail-core, docs-assets, sharing, token-policy and
 ad-network storage regression tests run in the suite.

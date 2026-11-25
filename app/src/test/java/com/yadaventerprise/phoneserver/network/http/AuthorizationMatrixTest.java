@@ -248,9 +248,18 @@ public class AuthorizationMatrixTest {
         Map<String, String> auth = bearer(ro.token);
         assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/files", auth, null).status);
         assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups", auth, "{\"confirm\":true}").status);
-        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/export-config", auth, "{\"categories\":[]}").status);
-        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/import-config/preview", auth, "{}").status);
-        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/import-config/apply", auth, "{}").status);
+        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/import-preview", auth, "{}").status);
+        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/import-config", auth, "{}").status);
+    }
+
+    @Test public void configImportPreviewRequiresBackupReadPermission() throws Exception {
+        String projectId = ProjectStore.create(context, "A", "", 0, 0).id;
+        TokenStore.Created noPerm = TokenStore.create(context, "config-no-read", null, false);
+        TokenPolicy p = new TokenPolicy();
+        p.tokenId = noPerm.record.id;
+        TokenPolicyStore.get(context).save(p);
+        Map<String, String> auth = bearer(noPerm.token);
+        assertEquals(403, call("POST", DataApi.BASE + "/projects/" + projectId + "/backups/import-config-preview", auth, "{}").status);
     }
 
     @Test
@@ -275,8 +284,9 @@ public class AuthorizationMatrixTest {
         p.permissions.remove(TokenPolicy.MAIL_READ);
         TokenPolicyStore.get(context).save(p);
         Map<String, String> auth = bearer(ro.token);
-        assertEquals(403, call("GET", DataApi.BASE + "/ai/providers", auth, null).status);
+        assertEquals(403, call("GET", DataApi.BASE + "/ai", auth, null).status);
         assertEquals(403, call("GET", DataApi.BASE + "/mail/accounts", auth, null).status);
+        assertEquals(404, call("GET", DataApi.BASE + "/ai/providers", auth, null).status);
     }
 
     @Test
@@ -289,6 +299,42 @@ public class AuthorizationMatrixTest {
         assertEquals(403, call("POST", DataApi.BASE + "/system/tasks", auth, "{\"name\":\"t\",\"type\":\"cleanup\",\"scheduleType\":\"manual\"}").status);
         assertEquals(403, call("POST", DataApi.BASE + "/system/webhooks", auth, "{\"name\":\"w\",\"url\":\"http://127.0.0.1/\",\"events\":[\"test\"]}").status);
         assertEquals(403, call("PATCH", DataApi.BASE + "/system/automation", auth, "{\"tasksEnabled\":false}").status);
+    }
+
+    @Test public void developerSecondaryRoutesRequireSpecificPermissions() throws Exception {
+        TokenStore.Created ro = TokenStore.create(context, "dev-ro", null, false);
+        TokenPolicy p = new TokenPolicy();
+        p.tokenId = ro.record.id;
+        TokenPolicyStore.get(context).save(p);
+        Map<String, String> auth = bearer(ro.token);
+        String[] reads = {
+                "/developer", "/developer/overview", "/developer/usage", "/developer/sdk",
+                "/developer/api-keys", "/developer/api-keys/missing",
+                "/developer/webhooks", "/developer/webhooks/history", "/developer/webhooks/missing",
+                "/developer/webhooks/missing/history", "/developer/extensions",
+                "/developer/extensions/activity", "/developer/extensions/missing",
+                "/developer/extensions/missing/activity", "/developer/sandbox"
+        };
+        for (String path : reads) {
+            assertEquals(path, 403, status("GET", DataApi.BASE + path, auth, null));
+        }
+        String[] writes = {
+                "/developer/api-keys", "/developer/api-keys/missing",
+                "/developer/api-keys/missing/regenerate", "/developer/webhooks",
+                "/developer/webhooks/verify", "/developer/webhooks/missing",
+                "/developer/webhooks/missing/test", "/developer/extensions",
+                "/developer/extensions/missing", "/developer/extensions/missing/enable",
+                "/developer/extensions/missing/approve", "/developer/sandbox"
+        };
+        for (String path : writes) {
+            assertEquals(path, 403, status("POST", DataApi.BASE + path, auth, "{}"));
+        }
+        assertEquals(403, status("PATCH", DataApi.BASE + "/developer/api-keys/missing", auth, "{}"));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/developer/api-keys/missing", auth, null));
+        assertEquals(403, status("PATCH", DataApi.BASE + "/developer/webhooks/missing", auth, "{}"));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/developer/webhooks/missing", auth, null));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/developer/extensions/missing", auth, null));
+        assertEquals(401, status("GET", DataApi.BASE + "/developer/overview", null, null));
     }
 
     @Test public void extensionMutationsRequireDeveloperWriteAndApproval() throws Exception {

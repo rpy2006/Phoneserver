@@ -1,5 +1,6 @@
 package com.yadaventerprise.phoneserver.ui.dashboard;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
@@ -152,6 +153,15 @@ public class DashboardFragment extends Fragment {
     public void onPause() {
         super.onPause();
         handler.removeCallbacks(pollRunnable);
+    }
+
+    @Override
+    public void onDestroyView() {
+        handler.removeCallbacksAndMessages(null);
+        refs = null;
+        cardHolders.clear();
+        rootView = null;
+        super.onDestroyView();
     }
 
     private void buildServerCards() {
@@ -308,9 +318,12 @@ public class DashboardFragment extends Fragment {
             try {
                 StatsSnapshot snap = RemoteApiClient.getStats(profile);
                 handler.post(() -> {
+                    if (!isAdded() || getView() == null || refs == null) return;
+                    Context context = getContext();
+                    if (context == null) return;
                     holder.online = true;
                     holder.statusPill.setText("Running");
-                    holder.statusPill.setTextColor(requireContext().getColor(R.color.home_accent));
+                    holder.statusPill.setTextColor(context.getColor(R.color.home_accent));
                     holder.secondaryButton.setText("Edit");
 
                     holder.snapshotRequestCount = snap.requestCount;
@@ -328,12 +341,16 @@ public class DashboardFragment extends Fragment {
                 });
             } catch (RemoteApiClient.ApiException e) {
                 handler.post(() -> {
+                    if (!isAdded() || getView() == null || refs == null) return;
+                    Context context = getContext();
+                    if (context == null) return;
                     holder.online = false;
                     holder.statusPill.setText("Offline");
-                    holder.statusPill.setTextColor(requireContext().getColor(R.color.offline_red));
+                    holder.statusPill.setTextColor(context.getColor(R.color.offline_red));
                     holder.uptime.setText("");
                     renderAggregates();
                 });
+            } catch (Throwable ignored) {
             }
         }).start();
     }

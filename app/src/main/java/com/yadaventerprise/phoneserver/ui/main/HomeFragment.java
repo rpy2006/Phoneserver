@@ -35,6 +35,7 @@ import com.yadaventerprise.phoneserver.ui.projects.ProjectsActivity;
 import com.yadaventerprise.phoneserver.ui.servers.AddServerActivity;
 import com.yadaventerprise.phoneserver.ui.servers.ServersListActivity;
 import com.yadaventerprise.phoneserver.util.NetworkUtils;
+import com.yadaventerprise.phoneserver.util.StartupTrace;
 import java.io.File;
 import java.util.List;
 import java.util.Locale;
@@ -66,6 +67,7 @@ public class HomeFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        StartupTrace.write(getContext(), "HomeFragment.onViewCreated:start");
 
         statSerersCount = view.findViewById(R.id.stat_servers_count);
         statServersStatus = view.findViewById(R.id.stat_servers_status);
@@ -97,6 +99,7 @@ public class HomeFragment extends Fragment {
         view.findViewById(R.id.quick_settings).setOnClickListener(v -> goToSettingsTab());
 
         view.findViewById(R.id.fab_add).setOnClickListener(v -> showAddServerDialog());
+        StartupTrace.write(getContext(), "HomeFragment.onViewCreated:done");
     }
 
     @Override
@@ -110,6 +113,22 @@ public class HomeFragment extends Fragment {
     public void onPause() {
         super.onPause();
         handler.removeCallbacks(refreshRunnable);
+    }
+
+    @Override
+    public void onDestroyView() {
+        handler.removeCallbacksAndMessages(null);
+        statSerersCount = null;
+        statServersStatus = null;
+        statFilesCount = null;
+        localAddressText = null;
+        localStatusText = null;
+        localUptimeText = null;
+        localStatusDot = null;
+        localToggleButton = null;
+        localManageButton = null;
+        remoteServersContainer = null;
+        super.onDestroyView();
     }
 
     private void openDrawer() {
@@ -236,10 +255,14 @@ public class HomeFragment extends Fragment {
         statServersStatus.setTextColor(context.getColor(running ? R.color.home_accent : R.color.home_text_secondary));
 
         new Thread(() -> {
-            int count = countFilesRecursive(ContentStore.getPublicFilesDir(context), 0);
-            handler.post(() -> {
-                if (statFilesCount != null) statFilesCount.setText(String.valueOf(count));
-            });
+            try {
+                int count = countFilesRecursive(ContentStore.getPublicFilesDir(context), 0);
+                handler.post(() -> {
+                    if (!isAdded() || getView() == null || statFilesCount == null) return;
+                    statFilesCount.setText(String.valueOf(count));
+                });
+            } catch (Throwable ignored) {
+            }
         }).start();
     }
 
@@ -306,13 +329,17 @@ public class HomeFragment extends Fragment {
         remoteServersContainer.addView(card);
 
         new Thread(() -> {
-            boolean online = RemoteApiClient.isOnline(profile);
-            handler.post(() -> {
-                if (getContext() == null) return;
-                statusDot.setBackgroundTintList(getContext().getColorStateList(online ? R.color.online_green : R.color.offline_red));
-                statusText.setText(online ? "Online" : "Offline");
-                statusText.setTextColor(getContext().getColor(online ? R.color.home_accent : R.color.home_text_secondary));
-            });
+            try {
+                boolean online = RemoteApiClient.isOnline(profile);
+                handler.post(() -> {
+                    Context current = getContext();
+                    if (!isAdded() || getView() == null || current == null) return;
+                    statusDot.setBackgroundTintList(current.getColorStateList(online ? R.color.online_green : R.color.offline_red));
+                    statusText.setText(online ? "Online" : "Offline");
+                    statusText.setTextColor(current.getColor(online ? R.color.home_accent : R.color.home_text_secondary));
+                });
+            } catch (Throwable ignored) {
+            }
         }).start();
     }
 

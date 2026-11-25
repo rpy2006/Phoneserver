@@ -43,7 +43,7 @@ Use an Android SDK and a JDK supported by the Gradle wrapper. The test environme
 ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest assembleDebug --offline
 ```
 
-Latest documented result: `157` tests, `0` failures, `0` errors, `50` skipped. The build emits a non-fatal warning that `libllama_bridge.so` cannot be stripped and is packaged as-is.
+Latest documented result: `314` tests, `0` failures, `0` errors, `170` skipped. The skipped HTTP/Robolectric tests require a supported x86_64 host. The build emits a non-fatal warning that `libllama_bridge.so` cannot be stripped and is packaged as-is.
 
 See [testing](docs/development/testing.md).
 

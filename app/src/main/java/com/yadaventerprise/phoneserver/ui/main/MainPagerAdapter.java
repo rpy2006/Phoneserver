@@ -2,12 +2,10 @@ package com.yadaventerprise.phoneserver.ui.main;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
-import androidx.viewpager2.adapter.FragmentStateAdapter;
 import com.yadaventerprise.phoneserver.ui.dashboard.DashboardFragment;
 import com.yadaventerprise.phoneserver.ui.qr.QrFragment;
 
-public class MainPagerAdapter extends FragmentStateAdapter {
+public final class MainPagerAdapter {
 
     public static final int PAGE_HOME = 0;
     public static final int PAGE_DASHBOARD = 1;
@@ -15,13 +13,11 @@ public class MainPagerAdapter extends FragmentStateAdapter {
     public static final int PAGE_CHAT = 3;
     public static final int PAGE_SETTINGS = 4;
 
-    public MainPagerAdapter(@NonNull FragmentActivity activity) {
-        super(activity);
+    private MainPagerAdapter() {
     }
 
     @NonNull
-    @Override
-    public Fragment createFragment(int position) {
+    public static Fragment createFragment(int position) {
         switch (position) {
             case PAGE_DASHBOARD:
                 return new DashboardFragment();
@@ -35,10 +31,5 @@ public class MainPagerAdapter extends FragmentStateAdapter {
             default:
                 return new HomeFragment();
         }
-    }
-
-    @Override
-    public int getItemCount() {
-        return 5;
     }
 }

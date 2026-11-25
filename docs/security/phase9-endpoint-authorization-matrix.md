@@ -1,26 +1,16 @@
 # Phase 9 Endpoint Authorization Matrix
 
-Status: **partial, evidence-based**. "Verified" means a dedicated automated test or existing automated test was executed in this workspace. "Inspected" means code was reviewed but no dedicated negative/positive auth test was executed for that exact endpoint. Do not treat inspected rows as complete security coverage.
+Status: **partial, evidence-based**. "Verified" means a dedicated automated test was executed with assertions in this workspace. "Covered (host-skipped)" means a dedicated test exists and compiles but self-skips on this Linux/aarch64 host. "Inspected" means code was reviewed but no dedicated negative/positive auth test was executed for that exact endpoint. Do not treat inspected rows as complete security coverage.
 
-## Verification Evidence (this session)
+## Verification Evidence
 
 | Command | Result |
 |---|---|
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.data.tokens.TokenStoreTest --tests com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcherTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.AuthorizationMatrixTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.PublicRouteSecurityTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiAuthTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.SystemApiAuthTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.RemoteApiAuthTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.PublicRouteSecurityTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.DataApiTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew :app:testDebugUnitTest --tests com.yadaventerprise.phoneserver.network.http.MailApiOwnershipTest --offline` | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest assembleDebug --offline` (`ed538a2`) | BUILD SUCCESSFUL |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew lintDebug --offline` | BUILD FAILED (offline missing deps: androidx.core:core-ktx:1.2.0, androidx.arch.core:core-runtime:2.0.0) |
-| `ANDROID_HOME=/tmp/android-sdk sh gradlew compileDebugJavaWithJavac testDebugUnitTest assembleDebug --offline` | **Not rerun after final matrix/test additions in this message**; previous session run was BUILD SUCCESSFUL before these added auth tests. Must rerun for final claim. |
-| `lintDebug --offline` | Not run; previously blocked by missing cached `androidx.arch.core:core-runtime:2.0.0`. |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew compileDebugUnitTestJavaWithJavac --offline` | BUILD SUCCESSFUL after adding the regressions below |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew compileDebugJavaWithJavac testDebugUnitTest assembleDebug --offline` | BUILD SUCCESSFUL after adding the regressions below |
+| JUnit XML from that run | 315 tests, 0 failures, 0 errors, 171 skipped |
+| Host limitation | `DataTestSupport.assumeRobolectricRuntimeSupported()` skips HTTP/Robolectric tests on Linux/aarch64; those tests compile here but their assertions run only on supported x86_64 hosts |
+| `ANDROID_HOME=/tmp/android-sdk sh gradlew lintDebug --offline` | Previously BUILD FAILED because offline cache lacks `androidx.core:core-ktx:1.2.0` and `androidx.arch.core:core-runtime:2.0.0`; not rerun in this pass |
 
 ## Global DataApi Controls
 
@@ -77,8 +67,10 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/projects/{id}/backups/{backupId}/restore` | POST | Required | project access + backup write/admin constraints | `handleBackups` | not dedicated | Inspected |
 | `/api/v1/projects/{id}/backups/{backupId}/download` | GET | Required | project access + `BACKUPS_READ` | `handleBackups` | not dedicated | Inspected |
 | `/api/v1/projects/{id}/backups/export-config` | POST | Required | project access + backup/config permission | `handleBackups` | `AuthorizationMatrixTest` cross-project/write denied | Partial |
-| `/api/v1/projects/{id}/backups/import-config/preview` | POST | Required | project access + backup/config permission | `handleBackups` | `AuthorizationMatrixTest` write denied | Partial |
-| `/api/v1/projects/{id}/backups/import-config/apply` | POST | Required | project access + backup/config permission | `handleBackups` | `AuthorizationMatrixTest` write denied | Partial |
+| `/api/v1/projects/{id}/backups/import-config-preview` | POST | Required | project access + `BACKUPS_READ` | `handleBackups` | `AuthorizationMatrixTest.configImportPreviewRequiresBackupReadPermission` | Covered (host-skipped) |
+| `/api/v1/projects/{id}/backups/import-config` | POST | Required | project access + `BACKUPS_WRITE` | `handleBackups` | `AuthorizationMatrixTest` write denied | Covered (host-skipped) |
+| `/api/v1/projects/{id}/backups/import` | POST | Required | project access + `BACKUPS_WRITE` | `handleBackups` | `AuthorizationMatrixTest` write denied | Covered (host-skipped) |
+| `/api/v1/projects/{id}/backups/import-preview` | POST | Required | project access + `BACKUPS_WRITE` | `handleBackups` | `AuthorizationMatrixTest` write denied | Covered (host-skipped) |
 | `/api/v1/projects/{id}/backups/import-ad-network/preview` | POST | Required | project access + admin/permission as implemented | `handleBackups` | not dedicated | Inspected |
 | `/api/v1/projects/{id}/backups/import-ad-network/apply` | POST | Required | project access + admin/permission as implemented | `handleBackups` | not dedicated | Inspected |
 | `/api/v1/tokens` | GET/POST/DELETE | Required | admin | `handleTokens` | `AuthorizationMatrixTest` | Verified |
@@ -101,8 +93,8 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/developer/usage` | GET | Required | `ANALYTICS_READ` | `ApiUsageStore.summary` | not dedicated | Inspected |
 | `/api/v1/developer/extensions` | GET/POST | Required | GET `DEVELOPER_READ`; POST `requireWrite(DEVELOPER_WRITE)` | `handleExtensions` | not dedicated | Inspected |
 | `/api/v1/developer/extensions/{id}` | GET/PATCH/DELETE | Required | GET read; mutating write | `handleExtensions` | not dedicated | Inspected |
-| `/api/v1/developer/sandbox` | POST | Required | `DEVELOPER_READ` + `requireWrite(DEVELOPER_WRITE)` | `handleSandbox` | `AuthorizationMatrixTest` denied for viewer | Partial |
-| `/api/v1/developer/sdk` | GET | Required | `DEVELOPER_READ` | `sdkInfo` | not dedicated | Inspected |
+| `/api/v1/developer/sandbox` | GET/POST | Required | GET `DEVELOPER_READ`; POST `DEVELOPER_WRITE` | `handleSandbox` | `AuthorizationMatrixTest` denied for viewer | Covered (host-skipped) |
+| `/api/v1/developer/sdk` | GET | Required | `DEVELOPER_READ` | `sdkInfo` | `AuthorizationMatrixTest` | Covered (host-skipped) |
 
 ## AiApi `/api/v1/ai/*`
 
@@ -116,9 +108,9 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 | `/api/v1/ai/security` | GET | Required | `SYSTEM_READ` | `handle` | not dedicated | Inspected |
 | `/api/v1/ai/automation` | GET/POST | Required | GET `AI_USE`; POST `TASKS_WRITE` + confirmation | `handleAutomation` | not dedicated | Inspected |
 | `/api/v1/ai/actions` | GET/POST | Required | GET `AI_USE`; POST `AI_ACTIONS` + per-action permission + confirmation where required | `handleActions` | not dedicated | Inspected |
-| `/api/v1/ai/history` | GET/DELETE | Required | GET `AI_USE`; DELETE `AI_USE` (read-level; should be reviewed for write intent) | `handleHistory` | not dedicated | Inspected / review |
-| `/api/v1/ai/action-catalog` | GET | Required | `AI_USE` | `handle` | not dedicated | Inspected |
-| `/api/v1/ai/providers` | GET | Required | `AI_USE` | via settings/provider info path in DataApi/Ai? **needs confirmation** | `AuthorizationMatrixTest` checks denial when `AI_USE` removed | Partial / verify route mapping |
+| `/api/v1/ai/history` | GET/DELETE | Required | GET `AI_USE`; DELETE `AI_USE` plus `requireWrite(AI_SETTINGS_WRITE)` | `handleHistory` | `AiApiAuthTest` | Covered (host-skipped) |
+| `/api/v1/ai/action-catalog` | GET | Required | `AI_USE` | `handle` | `AiApiAuthTest` | Covered (host-skipped) |
+| `/api/v1/ai/providers` | GET | Required | no route | `AiApi.handle` default branch returns 404 | `AuthorizationMatrixTest`, `AiApiAuthTest` expect 404 | Not an endpoint |
 
 ## MailApi `/api/v1/mail/*`
 
@@ -176,20 +168,20 @@ Status: **partial, evidence-based**. "Verified" means a dedicated automated test
 
 | ID | Area | Description | Status |
 |---|---|---|---|
-| V-001 | DeveloperApi mutation authz | Mutating developer API key/webhook/extension/sandbox endpoints previously allowed any authenticated token with read permission; fixed to require write/manage permissions. | Fixed in this pass; core tests added |
-| G-001 | Exhaustive endpoint verification | Most endpoints are inspected only; no dedicated negative auth tests for every protected endpoint/method/action. | Open |
-| G-002 | RemoteApi ownership/session isolation | Covered: heartbeat cross-device, revoked device session rejection, logout session requirement, user session revocation, invalid pairing code, file traversal/root delete rejected. Gaps: pairing approval/rejection/expiry edge cases, session expiry, full file ownership/permission matrix, device/user cross-subject read boundaries. | Open |
-| G-003 | Mail ownership isolation | Mail routes enforce permission checks but cross-account/message/attachment ID manipulation tests are missing. | Open |
-| G-004 | Legacy file/WebDAV/custom API | Authorization relies on `isAuthorizedForFiles` and remote-access flag; no dedicated negative tests for unauth, read-only write, disabled remote access, traversal/bypass. | Open |
+| V-001 | DeveloperApi mutation authz | Mutating developer API key/webhook/extension/sandbox endpoints previously allowed any authenticated token with read permission; fixed to require write/manage permissions. | Fixed |
+| G-001 | Exhaustive endpoint verification | Dedicated auth regressions now cover AI, developer secondary/id/action routes, system notifications/id/action routes, remote pairing gates/permission revocation, mail ownership, public routes, legacy/WebDAV/custom API, and core DataApi routes. Full endpoint-family proof on a supported host remains open. | Partial |
+| G-002 | RemoteApi ownership/session isolation | Covered: heartbeat cross-device, revoked device session rejection, logout session requirement, user session revocation, invalid/consumed/expired pairing codes, disabled pairing, immediate permission revocation, file traversal/root delete rejected. Remaining: complete cross-subject read/write matrix and expired-session case. | Partial |
+| G-003 | Mail ownership isolation | Covered: cross-account/message/attachment ID manipulation, read/write permission denial, unauth rejection. Remaining: owner reassignment attempts and full route matrix. | Partial |
+| G-004 | Legacy file/WebDAV/custom API | Covered: unauth, read-only writes, disabled remote access, traversal, WebDAV write methods, custom API writes. Remaining: complete alias-route coverage and file ownership matrix. | Partial |
 | G-005 | Webhook replay scope | Replay/signature verification exists in `WebhookDispatcher.verifyIncoming` and Developer verify endpoint; no general inbound receiver enforcement. | Open |
-| G-006 | Quota stale reservation | Process death before `replaceReservation` may leave quota reserve counted until window expires. | Open |
-| G-007 | AI history delete authz | `DELETE /api/v1/ai/history` requires `AI_USE`; may need write-level permission review. | Review |
+| G-006 | Quota stale reservation | Stale reservations are cleaned at 5 minutes and when `ApiUsageStore.ensureLoaded()` runs; process death before cleanup still leaves the reserve counted until cleanup. | Mitigated |
+| G-007 | AI history delete authz | `DELETE /api/v1/ai/history` requires `AI_USE` plus `requireWrite(AI_SETTINGS_WRITE)`. | Resolved |
 
 ## Summary
 
 - **Endpoints inspected (inventory, approximate):** 73 DataApi index routes + Developer/Ai/Remote/Mail subroutes + legacy/public handlers (`/api/pair`, `/s/*`, `/dav/*`, `/status`, `/`, website assets, `/api/browse|stats|mkdir|delete|rename|upload`, `/files*`, custom `/api/*`) = **~95 endpoint families/handlers**. Not all individually verified.
 - **Endpoints/families with dedicated automated auth evidence:** health/public probes indirectly; DataApi auth/quota/concurrency/project scope/token admin; system read/admin mutations sampled; developer core read/write; mail account/message read/write permission checks; remote dashboard/disabled/HTTPS/invalid credential; pairing/share invalid-input rejection. **Not complete coverage.**
-- **Endpoints failing:** none observed in executed tests.
-- **Vulnerabilities fixed:** V-001 DeveloperApi write-auth enforcement.
-- **Tests added:** `AuthorizationMatrixTest`, `PublicRouteSecurityTest`, `MailApiAuthTest`, `SystemApiAuthTest`, `RemoteApiAuthTest` (plus prior Phase 9 `TokenStoreTest`, `WebhookDispatcherTest`, `DataApiTest` updates already in worktree).
-- **Remaining limitations:** exhaustive per-endpoint negative tests missing; full suite/assemble/lint not rerun after latest added tests in this message; Remote/Mail ownership and legacy/WebDAV/custom API boundaries need dedicated tests; webhook replay not generally enforced; quota stale reservation recovery missing.
+- **Endpoints failing:** none observed in compiled/executed tests on this host; HTTP/Robolectric assertions skipped here.
+- **Vulnerabilities fixed:** V-001 DeveloperApi write-auth enforcement; stale documentation claiming custom APIs are public corrected.
+- **Tests added in this pass:** broad AI route denials (`AiApiAuthTest`), developer secondary/id/action denials and corrected backup route names (`AuthorizationMatrixTest`), system notifications/id/action denials (`SystemApiAuthTest`), legacy custom API/WebDAV read-only denials (`LegacyApiAuthTest`), and pairing-disabled/immediate permission revocation (`RemoteApiAuthTest`).
+- **Remaining limitations:** exhaustive per-endpoint negative tests still missing; HTTP assertions must be run on x86_64; webhook replay is not generally enforced; lint remains blocked offline; full Remote/Mail cross-subject matrices remain.

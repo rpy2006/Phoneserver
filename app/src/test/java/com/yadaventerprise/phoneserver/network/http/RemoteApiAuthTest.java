@@ -8,6 +8,7 @@ import com.yadaventerprise.phoneserver.data.remote.RemoteSettingsStore;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.data.remote.RemotePairingRequest;
 import com.yadaventerprise.phoneserver.data.remote.RemotePairingStore;
+import com.yadaventerprise.phoneserver.data.remote.RemotePermissions;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSession;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSessionStore;
 import com.yadaventerprise.phoneserver.data.remote.RemoteUser;
@@ -218,9 +219,38 @@ public class RemoteApiAuthTest {
         assertTrue(delRoot.status == 400 || delRoot.status == 403);
     }
 
+    @Test public void pairingDisabledBlocksPublicPairingRoutes() throws Exception {
+        RemoteSettings s = RemoteSettingsStore.get(context).get();
+        s.allowPairing = false;
+        RemoteSettingsStore.get(context).save(s);
+        Resp request = call("POST", DataApi.BASE + "/remote/pairing/request", null,
+                new JSONObject().put("deviceName","Pixel").toString(), null);
+        assertEquals(403, request.status);
+        Resp status = call("POST", DataApi.BASE + "/remote/pairing/status", null,
+                new JSONObject().put("code","ANY").toString(), null);
+        assertEquals(403, status.status);
+    }
+
     @Test public void pairingStatusRejectsInvalidCode() throws Exception {
         Resp resp = call("POST", DataApi.BASE + "/remote/pairing/status", null, new JSONObject().put("code","INVALID").toString(), null);
         assertEquals(401, resp.status);
+    }
+
+    @Test public void remotePermissionRevocationIsImmediateWithoutSessionRevocation() throws Exception {
+        RemoteUserStore users = RemoteUserStore.get(context);
+        RemoteUser draft = new RemoteUser();
+        draft.username = "manager2"; draft.displayName = "Manager"; draft.role = "manager";
+        RemoteUser user = users.create(draft, "password12345");
+        Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
+                new JSONObject().put("username","manager2").put("password","password12345").toString(), null);
+        assertEquals(200, login.status);
+        String token = new JSONObject(login.body).getString("token");
+        assertEquals(200, call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null).status);
+        RemoteUser saved = users.get(user.id);
+        saved.grantedPermissions.clear();
+        saved.deniedPermissions.add(RemotePermissions.DASHBOARD);
+        users.save(saved);
+        assertEquals(403, call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null).status);
     }
 
     @Test public void pairingRejectAndUnknownActionsAreHandled() throws Exception {

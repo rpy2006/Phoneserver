@@ -1207,7 +1207,7 @@ curl -H "Authorization: Bearer pst_..." http://&lt;phone-ip&gt;:8080/api/v1/proj
       </ul>
 
       <h3 id="overview--104-testing">10.4 Testing</h3>
-      <p>No unit or instrumentation tests.</p>
+      <p>Robolectric unit tests cover storage, API authorization, HTTP handlers and security regressions. Run <code>sh gradlew testDebugUnitTest</code>.</p>
 
       <h3 id="overview--105-quick-manual-smoke-test">10.5 Smoke test</h3>
       <pre><code class="language-bash">curl http://&lt;phone-ip&gt;:8080/status
@@ -1781,7 +1781,7 @@ sh gradlew :app:assembleDebug</code></pre>
       </table></div>
 
       <h2 id="testing--results">Results</h2>
-      <pre><code>88 tests, 41 passed, 47 skipped, 0 failed</code></pre>
+      <pre><code>315 tests, 0 failures, 0 errors, 171 skipped</code></pre>
       <p>Robolectric tests skipped on Linux/aarch64 (no native binaries for that platform).</p>
 
       <h2 id="testing--relationship-to-the-specification">Spec coverage</h2>
@@ -2116,7 +2116,7 @@ Run:         Install APK, start server on port 8080
 Requires:    JDK 21, Android SDK in local.properties</pre>
 
       <h2 id="manifest--test-results">Test Results</h2>
-      <pre class="manifest">88 tests total — 41 passed, 47 skipped, 0 failed
+      <pre class="manifest">314 tests — 0 failures, 0 errors, 170 skipped
 
 Robolectric DB tests skipped on Linux/aarch64.</pre>
 

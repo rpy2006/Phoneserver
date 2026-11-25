@@ -327,13 +327,13 @@ ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest
 ANDROID_HOME=/tmp/android-sdk sh gradlew assembleDebug
 ```
 
-Last verification after Phase 6:
+Last verification:
 
 - `compileDebugJavaWithJavac` — **BUILD SUCCESSFUL**.
-- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 170 tests, 0 failures, 0 errors, 55 skipped.
-  Some Robolectric tests are skipped on this aarch64 host by
+- `testDebugUnitTest` — **BUILD SUCCESSFUL**, 315 tests, 0 failures, 0 errors, 171 skipped.
+  HTTP/Robolectric tests are skipped on this aarch64 host by
   `DataTestSupport.assumeRobolectricRuntimeSupported()`; they run on x86_64.
-- `assembleDebug` — see the build log; the APK packages the manifest,
+- `assembleDebug` — **BUILD SUCCESSFUL**; the APK packages the manifest,
   resources and dex.
 
 ## 10. Extension guide

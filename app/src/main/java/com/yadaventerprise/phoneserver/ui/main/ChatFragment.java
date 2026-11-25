@@ -25,6 +25,7 @@ import com.yadaventerprise.phoneserver.R;
 import com.yadaventerprise.phoneserver.ai.LlmEngine;
 import com.yadaventerprise.phoneserver.data.database.Records;
 import com.yadaventerprise.phoneserver.data.storage.ModelStore;
+import com.yadaventerprise.phoneserver.util.StartupTrace;
 
 public class ChatFragment extends Fragment {
 
@@ -48,6 +49,8 @@ public class ChatFragment extends Fragment {
     private final StringBuilder pendingTokens = new StringBuilder();
     private boolean flushScheduled = false;
     private boolean generating = false;
+    private boolean activated = false;
+    private boolean modelStatusRequested = false;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     /** Everything shown in the transcript, so it survives view recreation. */
@@ -88,9 +91,16 @@ public class ChatFragment extends Fragment {
         conversationText.setText(history);
         scrollToBottom();
 
-        setInputEnabled(!generating && LlmEngine.get().isModelLoaded());
+        setStatus("Open the AI tab to load the model");
+        setImportVisible(true);
+        setInputEnabled(false);
+        if (activated) refreshModelStatus();
+    }
 
-        refreshModelStatus();
+    public void activate() {
+        StartupTrace.write(getContext(), "ChatFragment.activate");
+        activated = true;
+        if (viewAlive) refreshModelStatus();
     }
 
     @Override
@@ -105,6 +115,7 @@ public class ChatFragment extends Fragment {
         viewAlive = false;
         mainHandler.removeCallbacks(flushRunnable);
         flushScheduled = false;
+        modelStatusRequested = false;
         modelStatusText = null;
         conversationText = null;
         conversationScroll = null;
@@ -116,6 +127,9 @@ public class ChatFragment extends Fragment {
     private void refreshModelStatus() {
         Context context = getContext();
         if (context == null) return;
+        if (modelStatusRequested) return;
+        modelStatusRequested = true;
+        StartupTrace.write(context, "ChatFragment.refresh:start");
 
         if (!LlmEngine.get().isNativeLibraryAvailable()) {
             setStatus("AI chat isn't available in this build (native engine not installed yet)");
@@ -169,6 +183,7 @@ public class ChatFragment extends Fragment {
                 }
             });
         }, "chat-model-autoload");
+        StartupTrace.write(context, "ChatFragment.refresh:autoload");
         loader.start();
     }
 

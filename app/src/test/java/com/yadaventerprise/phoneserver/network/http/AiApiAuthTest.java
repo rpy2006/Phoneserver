@@ -68,4 +68,28 @@ public class AiApiAuthTest {
         assertEquals(401, status("GET", DataApi.BASE + "/ai/history", null, null));
         assertEquals(401, status("DELETE", DataApi.BASE + "/ai/history", null, null));
     }
+
+    @Test public void aiRoutesRequireTheirDistinctPermissions() throws Exception {
+        TokenStore.Created ro = TokenStore.create(context, "ai-ro", null, false);
+        TokenPolicy p = new TokenPolicy();
+        p.tokenId = ro.record.id;
+        TokenPolicyStore.get(context).save(p);
+        Map<String,String> auth = bearer(ro.token);
+
+        assertEquals(403, status("GET", DataApi.BASE + "/ai", auth, null));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/settings", auth, null));
+        assertEquals(403, status("POST", DataApi.BASE + "/ai/settings", auth, "{}"));
+        assertEquals(403, status("POST", DataApi.BASE + "/ai/chat", auth, "{\"question\":\"hi\"}"));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/insights", auth, null));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/analytics", auth, null));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/security", auth, null));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/automation", auth, null));
+        assertEquals(403, status("POST", DataApi.BASE + "/ai/automation", auth, "{}"));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/actions", auth, null));
+        assertEquals(403, status("POST", DataApi.BASE + "/ai/actions", auth, "{}"));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/history", auth, null));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/ai/history", auth, null));
+        assertEquals(403, status("GET", DataApi.BASE + "/ai/catalog", auth, null));
+        assertEquals(404, status("GET", DataApi.BASE + "/ai/providers", auth, null));
+    }
 }

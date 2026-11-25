@@ -76,4 +76,38 @@ public class SystemApiAuthTest {
         assertEquals(401, status("GET", DataApi.BASE + "/system/monitor", null, null));
         assertEquals(401, status("POST", DataApi.BASE + "/system/start", null, "{}"));
     }
+
+    @Test public void systemPerIdRoutesRequireAdminForMutations() throws Exception {
+        Map<String,String> admin = new HashMap<>();
+        admin.put("x-auth-password", "admin");
+        assertEquals(201, status("POST", DataApi.BASE + "/system/webhooks", admin,
+                "{\"name\":\"w\",\"url\":\"https://example.com/hook\",\"events\":[\"server.started\"]}"));
+        String webhookId = com.yadaventerprise.phoneserver.data.webhooks.WebhookStore.get(context).all().get(0).id;
+        assertEquals(201, status("POST", DataApi.BASE + "/system/tasks", admin,
+                new org.json.JSONObject().put("name", "t").put("action", "webhook")
+                        .put("webhookId", webhookId).put("scheduleType", "recurring")
+                        .put("intervalMinutes", 1440).toString()));
+        String taskId = com.yadaventerprise.phoneserver.data.tasks.ScheduledTaskStore.get(context).all().get(0).id;
+
+        TokenStore.Created viewer = TokenStore.create(context, "sys-id-viewer", null, false);
+        TokenPolicy p = TokenPolicy.preset(TokenPolicy.ROLE_VIEWER);
+        p.tokenId = viewer.record.id;
+        p.permissions.add(TokenPolicy.SYSTEM_READ);
+        TokenPolicyStore.get(context).save(p);
+        Map<String,String> auth = bearer(viewer.token);
+
+        assertEquals(200, status("GET", DataApi.BASE + "/system/notifications", auth, null));
+        assertEquals(200, status("GET", DataApi.BASE + "/system/tasks/" + taskId, auth, null));
+        assertEquals(200, status("GET", DataApi.BASE + "/system/tasks/" + taskId + "/history", auth, null));
+        assertEquals(200, status("GET", DataApi.BASE + "/system/webhooks/" + webhookId, auth, null));
+        assertEquals(403, status("PATCH", DataApi.BASE + "/system/notifications", auth, "{}"));
+        assertEquals(403, status("PATCH", DataApi.BASE + "/system/tasks/" + taskId, auth, "{}"));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/system/tasks/" + taskId, auth, null));
+        assertEquals(403, status("POST", DataApi.BASE + "/system/tasks/" + taskId + "/run", auth, "{}"));
+        assertEquals(403, status("POST", DataApi.BASE + "/system/tasks/" + taskId + "/pause", auth, "{}"));
+        assertEquals(403, status("POST", DataApi.BASE + "/system/tasks/" + taskId + "/resume", auth, "{}"));
+        assertEquals(403, status("PATCH", DataApi.BASE + "/system/webhooks/" + webhookId, auth, "{}"));
+        assertEquals(403, status("DELETE", DataApi.BASE + "/system/webhooks/" + webhookId, auth, null));
+        assertEquals(403, status("POST", DataApi.BASE + "/system/webhooks/" + webhookId + "/test", auth, "{}"));
+    }
 }
