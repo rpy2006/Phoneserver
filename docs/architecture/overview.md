@@ -38,8 +38,8 @@ PhoneServer/
 ├── settings.gradle              # include ':app'
 ├── gradle.properties
 ├── README.md
-├── ARCHITECTURE.md              # this file
-├── SECURITY_AUDIT.md
+├── docs/architecture/overview.md # this file
+├── docs/security/audit.md
 ├── index.html / web/            # published docs site (not in the APK)
 └── app/
     ├── build.gradle
@@ -236,7 +236,7 @@ Configuration stays out of Java code:
 | Ad network data | encrypted `filesDir/adnet/adnet.json`, geo CSV and creative files |
 | Debug signing key | `app/debug.keystore` (debug-only, standard public password) |
 
-No secrets are committed to Java source. See `SECURITY_AUDIT.md` for the
+No secrets are committed to Java source. See `docs/security/audit.md` for the
 residual risks (plaintext access password in app-private preferences,
 `allowBackup`, cleartext HTTP, FileProvider root).
 

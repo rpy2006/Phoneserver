@@ -7,6 +7,7 @@ PhoneServer is a single-module Android app that runs an HTTP server on the devic
 - [Root README](../README.md)
 - [Published documentation site](../index.html)
 - [Changelog](changelog.md)
+- [Repository cleanup report](CLEANUP_REPORT.md)
 
 ## Get started
 
@@ -35,4 +36,8 @@ PhoneServer is a single-module Android app that runs an HTTP server on the devic
 
 - [Security overview](security/overview.md) — current controls and deployment guidance.
 - [Security audit](security/audit.md) — findings, fixes, and regression notes.
+- [Phase 9 authorization matrix](security/phase9-endpoint-authorization-matrix.md) — endpoint-family evidence and remaining verification gaps.
 - [Testing](development/testing.md) — commands, test layout, and manual checks.
+- [Startup investigation](development/BUG_REPORT.md) — unresolved startup process-death triage.
+- [Startup fixes](development/FIX_REPORT.md) — applied changes and verification status.
+- [Startup test evidence](development/TEST_REPORT.md) — build, unit-test, and on-device evidence.

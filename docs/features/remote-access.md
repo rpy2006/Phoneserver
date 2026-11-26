@@ -155,4 +155,4 @@ Sessions can be revoked in several ways:
   root; it does not grant access outside that root.
 
 For request and response details, see the [remote access API reference](../api/remote-api.md)
-and the bundled [OpenAPI document](openapi.json).
+and the bundled [OpenAPI document](../api/openapi.json).

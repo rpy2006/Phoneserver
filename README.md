@@ -33,7 +33,43 @@ See [installation](docs/getting-started/installation.md), [configuration](docs/g
 - A small on-device chat surface backed by the bundled `llama_bridge` native library; only `arm64-v8a` is bundled today.
 - Built-in offline developer docs with searchable navigation, an API explorer, and an OpenAPI document.
 
-Feature details live in [feature overview](docs/features/overview.md), [mail](docs/features/mail.md), and [ad network](docs/features/ad-network.md).
+Feature details live in [feature overview](docs/features/overview.md), [mail](docs/features/mail.md), [remote access](docs/features/remote-access.md), and [ad network](docs/features/ad-network.md).
+
+## Repository layout
+
+```text
+PhoneServer/
+├── app/                          # Android application module (:app)
+│   ├── build.gradle              # module dependencies, SDK levels, signing config
+│   ├── debug.keystore            # project-local debug signing key
+│   ├── proguard-rules.pro        # release shrinker rules
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml
+│       │   ├── assets/           # offline docs, ad-network pages, SDK script
+│       │   ├── java/com/yadaventerprise/phoneserver/
+│       │   │   ├── ads/ ai/ data/ mail/ model/
+│       │   │   ├── network/ security/ service/ util/
+│       │   │   └── ui/           # one package per screen/feature area
+│       │   ├── jniLibs/arm64-v8a/ # bundled llama_bridge native library
+│       │   └── res/              # layouts, drawables, menus, values, xml config
+│       └── test/                 # Robolectric/unit tests and shared test support
+├── docs/                         # canonical Markdown documentation
+│   ├── api/ architecture/ development/ features/
+│   ├── getting-started/ security/
+│   └── development/              # investigation reports and cleanup report
+├── gradle/                       # wrapper and version catalog
+├── web/data/                     # published-site data bundle
+├── index.html                    # published documentation site
+├── build.gradle                  # root Android Gradle Plugin declaration
+├── settings.gradle               # module inclusion
+├── gradle.properties             # Gradle/JVM settings
+├── gradlew / gradlew.bat         # Gradle wrapper launchers
+├── banner.png                    # README/site banner
+└── README.md                     # this file
+```
+
+Generated `build/`, `.gradle/`, and IDE cache directories are intentionally not part of the tracked project structure.
 
 ## Build and test
 
@@ -43,7 +79,7 @@ Use an Android SDK and a JDK supported by the Gradle wrapper. The test environme
 ANDROID_HOME=/tmp/android-sdk sh gradlew testDebugUnitTest assembleDebug --offline
 ```
 
-Latest documented result: `314` tests, `0` failures, `0` errors, `170` skipped. The skipped HTTP/Robolectric tests require a supported x86_64 host. The build emits a non-fatal warning that `libllama_bridge.so` cannot be stripped and is packaged as-is.
+Latest documented result: `315` tests, `0` failures, `0` errors, `171` skipped. The skipped HTTP/Robolectric tests require a supported x86_64 host. The build emits a non-fatal warning that `libllama_bridge.so` cannot be stripped and is packaged as-is.
 
 See [testing](docs/development/testing.md).
 
@@ -65,9 +101,10 @@ The canonical Markdown documentation is under [`docs/`](docs/README.md):
 |---|---|
 | Setup | [Installation](docs/getting-started/installation.md), [Configuration](docs/getting-started/configuration.md), [Email setup](docs/getting-started/email-setup.md) |
 | Architecture | [Overview](docs/architecture/overview.md), [Storage](docs/architecture/storage.md) |
-| Features | [Overview](docs/features/overview.md), [Mail](docs/features/mail.md), [Ad network](docs/features/ad-network.md) |
-| API | [HTTP API](docs/api/http-api.md), [Data API](docs/api/data-api.md), [OpenAPI](docs/api/openapi.json) |
-| Security | [Overview](docs/security/overview.md), [Audit](docs/security/audit.md) |
-| Development | [Testing](docs/development/testing.md), [Changelog](docs/changelog.md) |
+| Features | [Overview](docs/features/overview.md), [Mail](docs/features/mail.md), [Remote access](docs/features/remote-access.md), [Ad network](docs/features/ad-network.md), [Phase 8 backup](docs/features/phase8-backup-import-export.md) |
+| API | [HTTP API](docs/api/http-api.md), [Data API](docs/api/data-api.md), [Remote API](docs/api/remote-api.md), [OpenAPI](docs/api/openapi.json) |
+| Security | [Overview](docs/security/overview.md), [Audit](docs/security/audit.md), [Phase 9 authorization matrix](docs/security/phase9-endpoint-authorization-matrix.md) |
+| Development | [Testing](docs/development/testing.md), [Changelog](docs/changelog.md), [Cleanup report](docs/CLEANUP_REPORT.md) |
+| Investigations | [Startup bug](docs/development/BUG_REPORT.md), [Startup fixes](docs/development/FIX_REPORT.md), [Startup tests](docs/development/TEST_REPORT.md) |
 
 The published site is rendered from `index.html` and `web/data/docs.js`. Files under `app/src/main/assets/docs/` are bundled runtime copies used by the in-app docs viewer.
