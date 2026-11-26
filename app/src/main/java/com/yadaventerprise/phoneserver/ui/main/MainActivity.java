@@ -56,19 +56,24 @@ public class MainActivity extends AppCompatActivity {
         navDrawer = findViewById(R.id.nav_drawer);
         StartupTrace.write(this, "MainActivity.onCreate:views");
 
+        StartupTrace.write(this, "MainActivity.onCreate:restoreStart");
         for (int page = MainPagerAdapter.PAGE_HOME; page <= MainPagerAdapter.PAGE_SETTINGS; page++) {
             Fragment existing = getSupportFragmentManager().findFragmentByTag(pageTag(page));
             if (existing instanceof ChatFragment) chatFragment = (ChatFragment) existing;
             pages[page] = existing;
         }
+        StartupTrace.write(this, "MainActivity.onCreate:restoreDone");
 
+        StartupTrace.write(this, "MainActivity.onCreate:listenersStart");
         bottomNav.setOnItemSelectedListener(item -> {
             if (suppressNavCallback) return true;
             int page = navIdToPage(item.getItemId());
             if (page >= 0) showPage(page);
             return true;
         });
+        StartupTrace.write(this, "MainActivity.onCreate:bottomListenerSet");
 
+        StartupTrace.write(this, "MainActivity.onCreate:drawerListenerStart");
         navDrawer.setNavigationItemSelectedListener(item -> {
             int id = item.getItemId();
             int page = drawerNavIdToPage(id);
@@ -82,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
             drawerLayout.closeDrawer(GravityCompat.START);
             return true;
         });
+        StartupTrace.write(this, "MainActivity.onCreate:drawerListenerSet");
         StartupTrace.write(this, "MainActivity.onCreate:listeners");
 
         int restoredPage = savedInstanceState != null
@@ -102,17 +108,22 @@ public class MainActivity extends AppCompatActivity {
         StartupTrace.write(this, "MainActivity.showPage:start:" + page);
 
         if (pages[page] == null) {
+            StartupTrace.write(this, "MainActivity.showPage:createStart:" + page);
             Fragment fragment = MainPagerAdapter.createFragment(page);
+            StartupTrace.write(this, "MainActivity.showPage:createDone:" + page);
             pages[page] = fragment;
             if (fragment instanceof ChatFragment) chatFragment = (ChatFragment) fragment;
         }
         currentPage = page;
 
+        StartupTrace.write(this, "MainActivity.showPage:navStart:" + page);
         suppressNavCallback = true;
         bottomNav.setSelectedItemId(pageToNavId(page));
         navDrawer.setCheckedItem(pageToDrawerNavId(page));
         suppressNavCallback = false;
+        StartupTrace.write(this, "MainActivity.showPage:navDone:" + page);
 
+        StartupTrace.write(this, "MainActivity.showPage:transactionStart:" + page);
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         for (int index = MainPagerAdapter.PAGE_HOME; index <= MainPagerAdapter.PAGE_SETTINGS; index++) {
             Fragment fragment = pages[index];
@@ -128,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         transaction.commit();
+        StartupTrace.write(this, "MainActivity.showPage:transactionCommitted:" + page);
 
         if (page == MainPagerAdapter.PAGE_CHAT && !initialPageSelection && chatFragment != null) {
             chatFragment.activate();
