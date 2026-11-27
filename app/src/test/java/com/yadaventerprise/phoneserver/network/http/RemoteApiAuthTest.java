@@ -121,7 +121,7 @@ public class RemoteApiAuthTest {
         Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
                 new JSONObject().put("username","alice").put("password","password12345").toString(), null);
         assertEquals(200, login.status);
-        String token = new JSONObject(login.body).getJSONObject("session").getString("token");
+        String token = new JSONObject(login.body).getString("token");
         Resp ok = call("GET", DataApi.BASE + "/remote/dashboard", bearer(token), null, null);
         assertEquals(200, ok.status);
         Resp logout = call("POST", DataApi.BASE + "/remote/auth/logout", bearer(token), "{}", null);
@@ -153,7 +153,7 @@ public class RemoteApiAuthTest {
         Resp login = call("POST", DataApi.BASE + "/remote/auth/login", null,
                 new JSONObject().put("username","viewer").put("password","password12345").toString(), null);
         assertEquals(200, login.status);
-        String token = new JSONObject(login.body).getJSONObject("session").getString("token");
+        String token = new JSONObject(login.body).getString("token");
         Resp del = call("POST", DataApi.BASE + "/remote/files/delete", bearer(token),
                 new JSONObject().put("path","nope.txt").toString(), null);
         assertEquals(403, del.status);

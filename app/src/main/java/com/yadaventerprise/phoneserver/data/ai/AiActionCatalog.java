@@ -111,7 +111,6 @@ public final class AiActionCatalog {
     }
 
     public static String requiredPermission(String type) {
-        if (BACKUP_CREATE.equals(type) || FILES_CREATE_FOLDER.equals(type)) return TokenPolicy.BACKUPS_WRITE.equals(requiredPermissionForWrite(type)) ? TokenPolicy.BACKUPS_WRITE : TokenPolicy.FILES_WRITE;
         if (BACKUP_CREATE.equals(type)) return TokenPolicy.BACKUPS_WRITE;
         if (FILES_CREATE_FOLDER.equals(type)) return TokenPolicy.FILES_WRITE;
         if (SHARING_REVOKE.equals(type)) return TokenPolicy.SHARING_WRITE;
@@ -127,7 +126,6 @@ public final class AiActionCatalog {
         return TokenPolicy.AI_ACTIONS;
     }
 
-    private static String requiredPermissionForWrite(String type) { return requiredPermission(type); }
     public static String requiredPermission(JSONObject action) { return action == null ? TokenPolicy.AI_ACTIONS : requiredPermission(action.optString("type", "")); }
     public static boolean requiresConfirmation(JSONObject action) { return action != null && requiresConfirmation(action.optString("type", "")); }
     public static boolean requiresConfirmation(String type) {

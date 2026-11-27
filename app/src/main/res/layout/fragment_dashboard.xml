@@ -140,6 +140,99 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical" />
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:background="@drawable/bg_home_card"
+                        android:padding="18dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Production Readiness"
+                                android:textColor="@color/home_text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/production_status_pill"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Offline"
+                                android:textColor="@color/home_text_secondary"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/production_health_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="-- / 100"
+                            android:textColor="@color/home_text_primary"
+                            android:textSize="24sp"
+                            android:textStyle="bold"
+                            android:layout_marginTop="8dp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:layout_marginTop="8dp">
+
+                            <TextView
+                                android:id="@+id/production_errors_value"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Requests: 0 · Errors: 0"
+                                android:textColor="@color/home_text_secondary"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/production_network_value"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Network: unavailable"
+                                android:textColor="@color/home_text_secondary"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/production_security_value"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Security events (1h): 0"
+                                android:textColor="@color/home_text_secondary"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/production_backup_value"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Backup integrity: not checked"
+                                android:textColor="@color/home_text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/production_warnings_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="No warnings"
+                            android:textColor="@color/home_text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginTop="8dp" />
+                    </LinearLayout>
+
                     <!-- Traffic Overview -->
                     <LinearLayout
                         android:layout_width="match_parent"

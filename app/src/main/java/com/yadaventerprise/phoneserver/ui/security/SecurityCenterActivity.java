@@ -46,6 +46,8 @@ public class SecurityCenterActivity extends AppCompatActivity {
     private TextView scanButton;
     private Switch autoBlockSwitch;
     private Switch accessLogSwitch;
+    private Switch authAlertsSwitch;
+    private Switch suspiciousAlertsSwitch;
     private RecyclerView recycler;
     private SecurityFindingAdapter adapter;
     private boolean updatingSwitches;
@@ -66,6 +68,8 @@ public class SecurityCenterActivity extends AppCompatActivity {
         scanButton = findViewById(R.id.scan_button);
         autoBlockSwitch = findViewById(R.id.switch_auto_block);
         accessLogSwitch = findViewById(R.id.switch_access_log);
+        authAlertsSwitch = findViewById(R.id.switch_auth_alerts);
+        suspiciousAlertsSwitch = findViewById(R.id.switch_suspicious_alerts);
         recycler = findViewById(R.id.findings_recycler);
 
         adapter = new SecurityFindingAdapter();
@@ -111,6 +115,24 @@ public class SecurityCenterActivity extends AppCompatActivity {
                 SecuritySettingsStore.get(SecurityCenterActivity.this).save(settings);
             }
         });
+        authAlertsSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (updatingSwitches) return;
+                SecuritySettings settings = SecuritySettingsStore.get(SecurityCenterActivity.this).get();
+                settings.authFailureAlerts = isChecked;
+                SecuritySettingsStore.get(SecurityCenterActivity.this).save(settings);
+            }
+        });
+        suspiciousAlertsSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (updatingSwitches) return;
+                SecuritySettings settings = SecuritySettingsStore.get(SecurityCenterActivity.this).get();
+                settings.suspiciousActivityAlerts = isChecked;
+                SecuritySettingsStore.get(SecurityCenterActivity.this).save(settings);
+            }
+        });
     }
 
     @Override
@@ -124,6 +146,8 @@ public class SecurityCenterActivity extends AppCompatActivity {
         updatingSwitches = true;
         autoBlockSwitch.setChecked(settings.autoBlockEnabled);
         accessLogSwitch.setChecked(settings.accessLogEnabled);
+        authAlertsSwitch.setChecked(settings.authFailureAlerts);
+        suspiciousAlertsSwitch.setChecked(settings.suspiciousActivityAlerts);
         updatingSwitches = false;
 
         new Thread(() -> {

@@ -144,7 +144,7 @@ enforces project ownership, permissions and token policy.
 | Backups | `GET/POST /api/v1/projects/{id}/backups`, restore/import/download |
 | Tokens | `GET/POST /api/v1/tokens`, `PATCH/DELETE /api/v1/tokens/{id}` |
 | Stats | `GET /api/v1/stats`, `GET /api/v1/operations` |
-| System management | `GET /api/v1/system/monitor`, `/diagnostics`, `/logs`, `/maintenance`; `PATCH /api/v1/system/automation`; `GET/POST/DELETE /api/v1/system/tasks`, `/webhooks`; `POST /api/v1/system/start\|stop\|restart` |
+| System management | `GET /api/v1/system/monitor`, `/diagnostics`, `/diagnostics/report`, `/reliability`, `/crashes`, `/security-events`, `/logs`, `/maintenance`; `PATCH /api/v1/system/automation`; `GET/POST/DELETE /api/v1/system/tasks`, `/webhooks`; `POST /api/v1/system/start\|stop\|restart` |
 
 System-management reads require `system.read`; mutations require the admin
 password or an admin token. See [Data API](data-api.md#system-management-systemread-or-admin)

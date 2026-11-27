@@ -16,9 +16,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import com.yadaventerprise.phoneserver.R;
+import com.yadaventerprise.phoneserver.data.reliability.ReliabilityStatus;
 import com.yadaventerprise.phoneserver.data.servers.ServerProfileStore;
 import com.yadaventerprise.phoneserver.data.stats.DeviceStats;
 import com.yadaventerprise.phoneserver.data.stats.ServerStats;
+import com.yadaventerprise.phoneserver.data.system.DiagnosticsCenter;
 import com.yadaventerprise.phoneserver.data.stats.StatsSnapshot;
 import com.yadaventerprise.phoneserver.model.ServerProfile;
 import com.yadaventerprise.phoneserver.network.remote.RemoteApiClient;
@@ -97,6 +99,8 @@ public class DashboardFragment extends Fragment {
         TrafficChartView trafficChart;
         TextView clientsTotalText, clientsActiveText;
         TextView dashboardSubtitle;
+        TextView productionStatus, productionHealth, productionErrors, productionNetwork;
+        TextView productionSecurity, productionBackup, productionWarnings;
     }
 
     @Nullable
@@ -126,6 +130,13 @@ public class DashboardFragment extends Fragment {
         refs.clientsTotalText = view.findViewById(R.id.clients_total_text);
         refs.clientsActiveText = view.findViewById(R.id.clients_active_text);
         refs.dashboardSubtitle = view.findViewById(R.id.dashboard_subtitle);
+        refs.productionStatus = view.findViewById(R.id.production_status_pill);
+        refs.productionHealth = view.findViewById(R.id.production_health_value);
+        refs.productionErrors = view.findViewById(R.id.production_errors_value);
+        refs.productionNetwork = view.findViewById(R.id.production_network_value);
+        refs.productionSecurity = view.findViewById(R.id.production_security_value);
+        refs.productionBackup = view.findViewById(R.id.production_backup_value);
+        refs.productionWarnings = view.findViewById(R.id.production_warnings_text);
 
         view.findViewById(R.id.menu_button).setOnClickListener(v -> openDrawer());
         view.findViewById(R.id.manage_all_button).setOnClickListener(v ->
@@ -437,6 +448,7 @@ public class DashboardFragment extends Fragment {
                 "API Calls", onlineServers + " server" + (onlineServers == 1 ? "" : "s"));
 
         refs.dashboardSubtitle.setText(onlineServers + " of " + cardHolders.size() + " servers online");
+        renderProductionStatus();
 
         // Traffic Overview card
         refs.trafficTotal.setText(ServerStats.formatBytes(totalUp + totalDown));
@@ -453,6 +465,32 @@ public class DashboardFragment extends Fragment {
 
         // Recent Activity card
         renderActivity(mergedActivity);
+    }
+
+    private void renderProductionStatus() {
+        Context context = getContext();
+        if (context == null || refs == null) return;
+        ReliabilityStatus status = DiagnosticsCenter.collectStatus(context);
+        refs.productionStatus.setText(status.status.toUpperCase(Locale.US));
+        int statusColor = "healthy".equals(status.status) ? R.color.home_accent
+                : "offline".equals(status.status) ? R.color.home_text_secondary : R.color.offline_red;
+        refs.productionStatus.setTextColor(context.getColor(statusColor));
+        refs.productionHealth.setText(status.healthScore + " / 100 · " + status.status);
+        refs.productionErrors.setText("Requests: " + status.requestCount
+                + " · Errors: " + status.errorCount
+                + " · Avg: " + status.averageLatencyMillis + " ms");
+        refs.productionNetwork.setText(status.networkSupported
+                ? "Network: ↑" + ServerStats.formatBytes(status.networkTxBytes)
+                + " ↓" + ServerStats.formatBytes(status.networkRxBytes)
+                : "Network: unavailable");
+        refs.productionSecurity.setText("Security events (1h): " + status.securityEventsLastHour);
+        refs.productionBackup.setText("Backup integrity: see diagnostics report");
+        StringBuilder warnings = new StringBuilder();
+        for (String warning : status.warnings) {
+            if (warnings.length() > 0) warnings.append(" · ");
+            warnings.append(warning);
+        }
+        refs.productionWarnings.setText(warnings.length() == 0 ? "No warnings" : warnings.toString());
     }
 
     private void bindStatCard(int includeId, int iconRes, String value, String label, String sub) {

@@ -4,11 +4,16 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import androidx.core.app.NotificationManagerCompat;
+import com.yadaventerprise.phoneserver.data.reliability.DiagnosticRedactor;
+import com.yadaventerprise.phoneserver.data.security.SecurityEvent;
+import com.yadaventerprise.phoneserver.data.security.SecurityEventStore;
 import com.yadaventerprise.phoneserver.data.security.TokenPolicy;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.data.storage.ProjectStore;
 import com.yadaventerprise.phoneserver.data.system.AutomationSettings;
 import com.yadaventerprise.phoneserver.data.system.AutomationSettingsStore;
+import com.yadaventerprise.phoneserver.data.system.CrashDiagnosticStore;
+import com.yadaventerprise.phoneserver.data.system.DiagnosticsCenter;
 import com.yadaventerprise.phoneserver.data.system.MaintenanceReport;
 import com.yadaventerprise.phoneserver.data.system.SystemDiagnostics;
 import com.yadaventerprise.phoneserver.data.system.SystemLogCollector;
@@ -71,7 +76,28 @@ public final class SystemApi {
             case "diagnostics":
                 DataApi.requireMethod(method, "GET");
                 DataApi.requirePermission(auth, TokenPolicy.SYSTEM_READ);
-                DataApi.sendJson(context, req, out, 200, SystemDiagnostics.collect(context));
+                if (parts.size() > 2 && "report".equals(parts.get(2))) {
+                    DataApi.sendJson(context, req, out, 200, DiagnosticsCenter.collect(context, 200));
+                } else {
+                    DataApi.sendJson(context, req, out, 200, SystemDiagnostics.collect(context));
+                }
+                return;
+            case "reliability":
+                DataApi.requireMethod(method, "GET");
+                DataApi.requirePermission(auth, TokenPolicy.SYSTEM_READ);
+                DataApi.sendJson(context, req, out, 200, DiagnosticsCenter.collectStatus(context).toJson());
+                return;
+            case "crashes":
+                DataApi.requireMethod(method, "GET");
+                DataApi.requirePermission(auth, TokenPolicy.SYSTEM_READ);
+                DataApi.sendJson(context, req, out, 200,
+                        wrap("crashes", CrashDiagnosticStore.get(context).toJson(100)));
+                return;
+            case "security-events":
+                DataApi.requireMethod(method, "GET");
+                DataApi.requirePermission(auth, TokenPolicy.SYSTEM_READ);
+                DataApi.sendJson(context, req, out, 200,
+                        wrap("events", securityEventsJson(context)));
                 return;
             case "automation":
                 handleAutomation(context, req, out, auth, method);
@@ -350,6 +376,20 @@ public final class SystemApi {
         for (SystemLogCollector.SystemLogEntry entry
                 : SystemLogCollector.collect(context, query)) array.put(entry.toJson());
         return wrap("entries", array);
+    }
+
+    private static JSONArray securityEventsJson(Context context) throws Exception {
+        SecurityEventStore.Query query = new SecurityEventStore.Query();
+        query.limit = 200;
+        JSONArray array = new JSONArray();
+        for (SecurityEvent event : SecurityEventStore.get(context).read(query)) {
+            JSONObject json = event.toJson();
+            json.put("ip", DiagnosticRedactor.maskIp(event.ip));
+            json.put("detail", DiagnosticRedactor.sanitize(event.detail));
+            json.put("path", DiagnosticRedactor.sanitize(event.path));
+            array.put(json);
+        }
+        return array;
     }
 
     private static JSONObject automationJson(Context context) throws Exception {

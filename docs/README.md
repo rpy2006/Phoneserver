@@ -38,6 +38,7 @@ PhoneServer is a single-module Android app that runs an HTTP server on the devic
 - [Security audit](security/audit.md) — findings, fixes, and regression notes.
 - [Phase 9 authorization matrix](security/phase9-endpoint-authorization-matrix.md) — endpoint-family evidence and remaining verification gaps.
 - [Testing](development/testing.md) — commands, test layout, and manual checks.
+- [Phase 11 report](development/PHASE11_REPORT.md) — production-readiness implementation, verification evidence and limits.
 - [Startup investigation](development/BUG_REPORT.md) — unresolved startup process-death triage.
 - [Startup fixes](development/FIX_REPORT.md) — applied changes and verification status.
 - [Startup test evidence](development/TEST_REPORT.md) — build, unit-test, and on-device evidence.

@@ -181,6 +181,10 @@ mutation requires the admin password or an admin token. CPU is reported as
 |---|---|---|
 | `GET` | `/system/monitor` | Live server/resource summary, content counts and recent activity |
 | `GET` | `/system/diagnostics` | Server, resource, content, security and health-check snapshot |
+| `GET` | `/system/diagnostics/report` | Redacted reliability report with crash, backup and security diagnostics |
+| `GET` | `/system/reliability` | Live health score, request outcomes, resource and network status |
+| `GET` | `/system/crashes` | Bounded, redacted crash/startup diagnostic records |
+| `GET` | `/system/security-events` | Redacted durable auth/block/rate-limit event history |
 | `GET/PATCH` | `/system/automation` | Watchdog, boot start, notification and retention settings |
 | `GET/PATCH` | `/system/notifications` | Notification channel availability and alert preferences |
 | `GET/POST` | `/system/tasks` | List or create scheduled backup/webhook tasks |

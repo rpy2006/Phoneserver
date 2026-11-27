@@ -285,6 +285,26 @@
                         </LinearLayout>
                         <Switch android:id="@+id/switch_access_log" android:layout_width="wrap_content" android:layout_height="wrap_content" android:track="@drawable/switch_track" />
                     </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Alert on auth failures" android:textColor="@color/home_text_primary" android:textSize="14sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Send configured webhook alerts for failed logins" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <Switch android:id="@+id/switch_auth_alerts" android:layout_width="wrap_content" android:layout_height="wrap_content" android:track="@drawable/switch_track" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/home_divider" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" />
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Alert on suspicious activity" android:textColor="@color/home_text_primary" android:textSize="14sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Send configured webhook alerts for suspicious paths" android:textColor="@color/home_text_secondary" android:textSize="12sp" android:layout_marginTop="1dp" />
+                        </LinearLayout>
+                        <Switch android:id="@+id/switch_suspicious_alerts" android:layout_width="wrap_content" android:layout_height="wrap_content" android:track="@drawable/switch_track" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <TextView

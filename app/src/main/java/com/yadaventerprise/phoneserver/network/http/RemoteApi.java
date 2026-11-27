@@ -17,6 +17,7 @@ import com.yadaventerprise.phoneserver.data.remote.RemoteSettings;
 import com.yadaventerprise.phoneserver.data.remote.RemoteSettingsStore;
 import com.yadaventerprise.phoneserver.data.remote.RemoteUser;
 import com.yadaventerprise.phoneserver.data.remote.RemoteUserStore;
+import com.yadaventerprise.phoneserver.data.security.IntrusionDetector;
 import com.yadaventerprise.phoneserver.data.storage.ContentStore;
 import com.yadaventerprise.phoneserver.service.ServerService;
 import com.yadaventerprise.phoneserver.util.MimeTypes;
@@ -163,6 +164,8 @@ public final class RemoteApi {
             }
             RemoteAuditStore.get(context).append(RemoteAuditEntry.AUTH_FAILED, username, username,
                     req.remoteIp, "remote login rejected", false);
+            IntrusionDetector.recordAuthFailure(context, req.remoteIp, req.method, req.path,
+                    "remote login rejected");
             if (attempts.locked(System.currentTimeMillis())) {
                 throw DataException.forbidden("too many login attempts; try again later");
             }

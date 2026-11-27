@@ -171,7 +171,7 @@ public final class SystemMaintenance {
     }
 
     private static long logBytes(Context context) {
-        long total = SystemEventStore.get(context).fileBytes();
+        long total = SystemEventStore.get(context).fileBytes() + CrashDiagnosticStore.get(context).fileBytes();
         File access = SecurityPaths.accessLog(context);
         if (access.exists()) total += access.length();
         File accessRotated = new File(access.getPath() + ".1");

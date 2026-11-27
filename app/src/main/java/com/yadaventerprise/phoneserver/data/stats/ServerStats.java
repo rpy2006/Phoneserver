@@ -44,6 +44,12 @@ public class ServerStats {
     private final AtomicLong bytesUp = new AtomicLong(0);   // received from clients (uploads, request bodies)
     private final AtomicLong bytesDown = new AtomicLong(0); // sent to clients (downloads, response bodies)
     private final AtomicLong requestCount = new AtomicLong(0);
+    private final AtomicLong errorCount = new AtomicLong(0);
+    private final AtomicLong clientErrorCount = new AtomicLong(0);
+    private final AtomicLong serverErrorCount = new AtomicLong(0);
+    private final AtomicLong blockedCount = new AtomicLong(0);
+    private final AtomicLong totalLatencyMillis = new AtomicLong(0);
+    private final AtomicLong maxLatencyMillis = new AtomicLong(0);
 
     private final Map<String, Integer> pathCounts = new ConcurrentHashMap<>();
     private final Map<String, ClientInfo> clients = new ConcurrentHashMap<>();
@@ -58,6 +64,12 @@ public class ServerStats {
         bytesUp.set(0);
         bytesDown.set(0);
         requestCount.set(0);
+        errorCount.set(0);
+        clientErrorCount.set(0);
+        serverErrorCount.set(0);
+        blockedCount.set(0);
+        totalLatencyMillis.set(0);
+        maxLatencyMillis.set(0);
         pathCounts.clear();
         clients.clear();
         synchronized (recentActivity) {
@@ -87,6 +99,46 @@ public class ServerStats {
         if (isNewClient) {
             logActivity("client", "New client connected: " + ip);
         }
+    }
+
+    public void recordOutcome(int responseStatus, boolean blocked, long latencyMillis) {
+        long latency = Math.max(0, latencyMillis);
+        if (responseStatus >= 400) errorCount.incrementAndGet();
+        if (responseStatus >= 400 && responseStatus < 500) clientErrorCount.incrementAndGet();
+        if (responseStatus >= 500) serverErrorCount.incrementAndGet();
+        if (blocked) blockedCount.incrementAndGet();
+        if (responseStatus > 0) {
+            totalLatencyMillis.addAndGet(latency);
+            long previous;
+            do {
+                previous = maxLatencyMillis.get();
+                if (latency <= previous) break;
+            } while (!maxLatencyMillis.compareAndSet(previous, latency));
+        }
+    }
+
+    public long getErrorCount() {
+        return errorCount.get();
+    }
+
+    public long getClientErrorCount() {
+        return clientErrorCount.get();
+    }
+
+    public long getServerErrorCount() {
+        return serverErrorCount.get();
+    }
+
+    public long getBlockedCount() {
+        return blockedCount.get();
+    }
+
+    public long getAverageLatencyMillis() {
+        return requestCount.get() == 0 ? 0 : totalLatencyMillis.get() / requestCount.get();
+    }
+
+    public long getMaxLatencyMillis() {
+        return maxLatencyMillis.get();
     }
 
     public void logUpload(String filename, int sizeBytes) {

@@ -1,6 +1,7 @@
 package com.yadaventerprise.phoneserver.data.security;
 
 import android.content.Context;
+import com.yadaventerprise.phoneserver.data.reliability.SecurityAlertPolicy;
 import com.yadaventerprise.phoneserver.data.webhooks.WebhookDispatcher;
 import java.net.URLDecoder;
 import java.util.ArrayDeque;
@@ -41,18 +42,22 @@ public final class IntrusionDetector {
                 ip, method, path, (detail == null ? "failed authentication" : detail)
                         + " (" + count + " failures in " + settings.failedLoginWindowMinutes + " min)");
         event.autoBlocked = autoBlocked;
-        SecurityEventStore.get(context).append(event);
-        JSONObject hookData = new JSONObject();
-        try {
-            hookData.put("ip", ip);
-            hookData.put("method", method);
-            hookData.put("path", path);
-            hookData.put("detail", detail);
-            hookData.put("count", count);
-            hookData.put("blocked", autoBlocked);
-        } catch (Exception ignored) {
+        applyAlertPolicy(context, settings, event);
+        SecurityEventStore store = SecurityEventStore.get(context);
+        store.append(event);
+        if (event.alerted) {
+            JSONObject hookData = new JSONObject();
+            try {
+                hookData.put("ip", event.ip);
+                hookData.put("method", event.method);
+                hookData.put("path", event.path);
+                hookData.put("detail", event.detail);
+                hookData.put("count", count);
+                hookData.put("blocked", autoBlocked);
+            } catch (Exception ignored) {
+            }
+            WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_AUTH_FAILURE, hookData);
         }
-        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_AUTH_FAILURE, hookData);
         authFailures.remove(ip);
         return autoBlocked;
     }
@@ -73,17 +78,20 @@ public final class IntrusionDetector {
                 autoBlocked ? SecurityEvent.SEVERITY_HIGH : SecurityEvent.SEVERITY_MEDIUM,
                 ip, method, path, detail == null ? "suspicious request path" : detail);
         event.autoBlocked = autoBlocked;
+        applyAlertPolicy(context, settings, event);
         SecurityEventStore.get(context).append(event);
-        JSONObject hookData = new JSONObject();
-        try {
-            hookData.put("ip", ip);
-            hookData.put("method", method);
-            hookData.put("path", path);
-            hookData.put("detail", detail);
-            hookData.put("blocked", autoBlocked);
-        } catch (Exception ignored) {
+        if (event.alerted) {
+            JSONObject hookData = new JSONObject();
+            try {
+                hookData.put("ip", event.ip);
+                hookData.put("method", event.method);
+                hookData.put("path", event.path);
+                hookData.put("detail", event.detail);
+                hookData.put("blocked", autoBlocked);
+            } catch (Exception ignored) {
+            }
+            WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_SUSPICIOUS, hookData);
         }
-        WebhookDispatcher.emit(context, WebhookDispatcher.EVENT_SUSPICIOUS, hookData);
     }
 
     public static void recordRateLimit(Context context, String ip, String method, String path) {
@@ -98,6 +106,17 @@ public final class IntrusionDetector {
         if (!allowEvent(ip)) return;
         SecurityEventStore.get(context).append(event(SecurityEvent.TYPE_BLOCKED_REQUEST,
                 SecurityEvent.SEVERITY_LOW, ip, method, path, "request from blocked IP"));
+    }
+
+    private static void applyAlertPolicy(Context context, SecuritySettings settings, SecurityEvent event) {
+        SecurityAlertPolicy policy = new SecurityAlertPolicy();
+        policy.authFailureAlerts = settings.authFailureAlerts;
+        policy.suspiciousActivityAlerts = settings.suspiciousActivityAlerts;
+        policy.minimumSeverity = settings.alertMinimumSeverity;
+        policy.maxAlertsPerHour = settings.maxAlertsPerHour;
+        int recent = SecurityEventStore.get(context).countAlertsSince(
+                System.currentTimeMillis() - 60L * 60L * 1000L);
+        event.alerted = policy.shouldAlert(event.type, event.severity, recent);
     }
 
     private static boolean allowEvent(String ip) {

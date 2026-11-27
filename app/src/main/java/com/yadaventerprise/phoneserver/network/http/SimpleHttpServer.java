@@ -426,6 +426,9 @@ public class SimpleHttpServer {
         } catch (IOException e) {
             Log.e(TAG, "Client handling error", e);
         } finally {
+            int outcomeStatus = req == null ? 0 : (req.blocked ? 403 : req.responseStatus);
+            ServerStats.get().recordOutcome(outcomeStatus, req != null && req.blocked,
+                    System.currentTimeMillis() - started);
             logAccess(req, out, started);
             CURRENT_REQUEST.remove();
             clientSlots.release();

@@ -2,6 +2,7 @@ package com.yadaventerprise.phoneserver.data.stats;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.net.TrafficStats;
 import android.os.Process;
 
 /**
@@ -56,5 +57,25 @@ public class DeviceStats {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    public static NetworkReading getNetworkReading() {
+        NetworkReading reading = new NetworkReading();
+        try {
+            long rx = TrafficStats.getTotalRxBytes();
+            long tx = TrafficStats.getTotalTxBytes();
+            reading.supported = rx >= 0 && tx >= 0;
+            reading.rxBytes = Math.max(0, rx);
+            reading.txBytes = Math.max(0, tx);
+        } catch (Exception e) {
+            reading.supported = false;
+        }
+        return reading;
+    }
+
+    public static final class NetworkReading {
+        public boolean supported;
+        public long rxBytes;
+        public long txBytes;
     }
 }

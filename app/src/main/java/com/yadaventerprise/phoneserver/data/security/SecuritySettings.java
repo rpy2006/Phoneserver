@@ -11,6 +11,10 @@ public class SecuritySettings {
     public int failedLoginWindowMinutes = 10;
     public int blockDurationMinutes = 15;
     public int suspiciousPathThreshold = 3;
+    public boolean authFailureAlerts = true;
+    public boolean suspiciousActivityAlerts = true;
+    public String alertMinimumSeverity = "medium";
+    public int maxAlertsPerHour = 20;
 
     public SecuritySettings copy() {
         SecuritySettings copy = new SecuritySettings();
@@ -20,6 +24,10 @@ public class SecuritySettings {
         copy.failedLoginWindowMinutes = failedLoginWindowMinutes;
         copy.blockDurationMinutes = blockDurationMinutes;
         copy.suspiciousPathThreshold = suspiciousPathThreshold;
+        copy.authFailureAlerts = authFailureAlerts;
+        copy.suspiciousActivityAlerts = suspiciousActivityAlerts;
+        copy.alertMinimumSeverity = alertMinimumSeverity;
+        copy.maxAlertsPerHour = maxAlertsPerHour;
         return copy;
     }
 
@@ -31,6 +39,10 @@ public class SecuritySettings {
         json.put("failedLoginWindowMinutes", failedLoginWindowMinutes);
         json.put("blockDurationMinutes", blockDurationMinutes);
         json.put("suspiciousPathThreshold", suspiciousPathThreshold);
+        json.put("authFailureAlerts", authFailureAlerts);
+        json.put("suspiciousActivityAlerts", suspiciousActivityAlerts);
+        json.put("alertMinimumSeverity", alertMinimumSeverity);
+        json.put("maxAlertsPerHour", maxAlertsPerHour);
         return json;
     }
 
@@ -42,6 +54,11 @@ public class SecuritySettings {
         settings.failedLoginWindowMinutes = clamp(json.optInt("failedLoginWindowMinutes", 10), 1, 1440);
         settings.blockDurationMinutes = clamp(json.optInt("blockDurationMinutes", 15), 1, 10080);
         settings.suspiciousPathThreshold = clamp(json.optInt("suspiciousPathThreshold", 3), 1, 50);
+        settings.authFailureAlerts = json.optBoolean("authFailureAlerts", true);
+        settings.suspiciousActivityAlerts = json.optBoolean("suspiciousActivityAlerts", true);
+        String severity = json.optString("alertMinimumSeverity", "medium").toLowerCase();
+        settings.alertMinimumSeverity = severity.equals("low") || severity.equals("high") ? severity : "medium";
+        settings.maxAlertsPerHour = clamp(json.optInt("maxAlertsPerHour", 20), 1, 500);
         return settings;
     }
 

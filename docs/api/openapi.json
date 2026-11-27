@@ -97,6 +97,90 @@
         }
       }
     },
+    "/system/diagnostics/report": {
+      "get": {
+        "operationId": "getReliabilityDiagnosticsReport",
+        "summary": "Redacted reliability, crash, backup and security diagnostics",
+        "responses": {
+          "200": {
+            "description": "Reliability diagnostics report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/reliability": {
+      "get": {
+        "operationId": "getReliabilityStatus",
+        "summary": "Live health score, request outcomes and resource status",
+        "responses": {
+          "200": {
+            "description": "Reliability status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/crashes": {
+      "get": {
+        "operationId": "getCrashDiagnostics",
+        "summary": "Bounded redacted crash and startup diagnostics",
+        "responses": {
+          "200": {
+            "description": "Crash diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/system/security-events": {
+      "get": {
+        "operationId": "getSecurityEventsReliability",
+        "summary": "Redacted durable security event history",
+        "responses": {
+          "200": {
+            "description": "Security events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/system/automation": {
       "get": {
         "operationId": "getAutomationSettings",

@@ -522,6 +522,10 @@ public final class DataApi {
         endpoints.put("GET  " + BASE + "/system");
         endpoints.put("GET " + BASE + "/system/monitor");
         endpoints.put("GET " + BASE + "/system/diagnostics");
+        endpoints.put("GET " + BASE + "/system/diagnostics/report");
+        endpoints.put("GET " + BASE + "/system/reliability");
+        endpoints.put("GET " + BASE + "/system/crashes");
+        endpoints.put("GET " + BASE + "/system/security-events");
         endpoints.put("GET/PATCH " + BASE + "/system/automation");
         endpoints.put("GET/POST " + BASE + "/system/tasks");
         endpoints.put("GET/PATCH/POST/DELETE " + BASE + "/system/tasks/{id}");

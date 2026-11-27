@@ -129,6 +129,16 @@ public final class SecurityEventStore {
         return count;
     }
 
+    public int countAlertsSince(long sinceMillis) {
+        Query query = new Query();
+        query.limit = MAX_READ;
+        int count = 0;
+        for (SecurityEvent event : read(query)) {
+            if (event.alerted && event.time >= sinceMillis) count++;
+        }
+        return count;
+    }
+
     public void clear() {
         synchronized (lock) {
             //noinspection ResultOfMethodCallIgnored

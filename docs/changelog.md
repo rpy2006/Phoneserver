@@ -6,6 +6,13 @@
 - [Root README](../README.md)
 - [Testing](development/testing.md)
 
+## Phase 11
+- Added real request outcome counters, latency metrics, health scoring and network sampling.
+- Added redacted crash/startup diagnostics and a combined reliability report endpoint.
+- Added durable auth-failure alerting controls and remote login failure ingestion.
+- Added backup validation/delete hardening and a Production Readiness dashboard card.
+- See [Phase 11 report](development/PHASE11_REPORT.md) for evidence and known limits.
+
 ## Phase 7
 - Added opt-in remote access with an enable switch, HTTPS requirement, login lockout, role-based permissions and one-time bearer sessions.
 - Added QR/code device pairing with owner approval, one-time device tokens, device monitoring with heartbeat-based metrics and staleness flags, and session revocation.

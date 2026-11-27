@@ -267,8 +267,11 @@ public final class BackupManager {
             validateManifest(manifest, projectId);
             updateValid(context, backupId, true);
             return manifest;
-        } catch (IOException e) {
-            updateValid(context, backupId, false);
+        } catch (Exception e) {
+            if (!(e instanceof DataException && ((DataException) e).httpStatus() == 400)) {
+                updateValid(context, backupId, false);
+            }
+            if (e instanceof DataException) throw (DataException) e;
             String msg = e.getMessage() == null ? "backup archive failed validation" : e.getMessage();
             throw new DataException("backup archive failed validation: " + msg, 422);
         } finally {
@@ -325,10 +328,8 @@ public final class BackupManager {
             java.util.Collections.sort(preview.files);
             java.util.Collections.sort(preview.folders);
             java.util.Collections.sort(preview.databases);
-            updateValid(context, backupId, true);
             return preview;
         } catch (Exception e) {
-            updateValid(context, backupId, false);
             preview.valid = false;
             preview.error = safeMessage(e);
             return preview;
@@ -339,10 +340,13 @@ public final class BackupManager {
 
     public static void delete(Context context, String projectId, String backupId) throws DataException {
         require(context, projectId, backupId);
-        File file = new File(StorageLayout.ensure(
-                ContentStoreBridge.layout(context).backupsDir(projectId)), backupId + ".zip");
-        if (file.exists() && !file.delete()) {
-            throw new DataException("could not delete backup file", 500);
+        File dir = StorageLayout.ensure(ContentStoreBridge.layout(context).backupsDir(projectId));
+        String[] names = {backupId + ".psbak", backupId + ".zip.enc", backupId + ".zip"};
+        for (String name : names) {
+            File file = new File(dir, name);
+            if (file.exists() && file.isFile() && !file.delete()) {
+                throw new DataException("could not delete backup file", 500);
+            }
         }
         SystemDatabase.get(context).getWritableDatabase()
                 .delete("backups", "id=?", new String[]{backupId});

@@ -22,6 +22,7 @@ public class SecurityEvent {
     public String path = "";
     public String detail = "";
     public boolean autoBlocked;
+    public boolean alerted;
 
     public JSONObject toJson() throws JSONException {
         JSONObject json = new JSONObject();
@@ -33,6 +34,7 @@ public class SecurityEvent {
         json.put("path", path);
         json.put("detail", detail);
         json.put("autoBlocked", autoBlocked);
+        json.put("alerted", alerted);
         return json;
     }
 
@@ -46,6 +48,7 @@ public class SecurityEvent {
         event.path = json.optString("path", "");
         event.detail = json.optString("detail", "");
         event.autoBlocked = json.optBoolean("autoBlocked", false);
+        event.alerted = json.optBoolean("alerted", false);
         return event;
     }
 }
